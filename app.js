@@ -1084,6 +1084,10 @@ function syncDraftStepsFromDom() {
 function deleteCurrentMeal() {
   const mealId = state.editingMealId;
   if (!mealId || mealId === "new") return;
+  const meal = getMeal(mealId);
+  const mealTitle = meal?.title || "denne middagen";
+  const confirmed = window.confirm(`Er du sikker på at du vil slette "${mealTitle}"? Middagen fjernes også fra ukeplaner der den er brukt.`);
+  if (!confirmed) return;
   const plansByWeek = Object.fromEntries(Object.entries(state.plansByWeek || {}).map(([week, plan]) => [
     week,
     Object.fromEntries(Object.entries(plan).map(([day, plannedId]) => [day, plannedId === mealId ? "" : plannedId])),
