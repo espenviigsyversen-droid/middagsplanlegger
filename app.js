@@ -507,9 +507,10 @@ function leftoversLabel(value) {
 }
 
 function renderShell(viewHtml) {
+  const isRecipeView = state.activeView === "recipe";
   app.innerHTML = `
-    <div class="app-shell">
-      <header class="topbar">
+    <div class="app-shell ${isRecipeView ? "recipe-mode" : ""}">
+      ${isRecipeView ? "" : `<header class="topbar">
         <div class="topbar-inner">
           <div class="brand">
             <div class="brand-mark">M</div>
@@ -520,7 +521,7 @@ function renderShell(viewHtml) {
           </div>
           <div class="sync-pill"><span class="sync-dot"></span> ${escapeHtml(syncStatusText())}</div>
         </div>
-      </header>
+      </header>`}
       <main class="content">${viewHtml}</main>
       <nav class="bottom-nav">
         <div class="bottom-nav-inner">
@@ -777,28 +778,22 @@ function renderMealDetail() {
   const ingredients = normalizeIngredients(meal.ingredients, meal.keyIngredients);
   const wakeSupported = "wakeLock" in navigator;
   const wakeText = state.keepScreenAwake ? "Skjermen holdes på" : "Hold skjermen på";
+  const leftoversText = leftoversLabel(meal.leftovers);
 
   return `
     <section class="recipe-detail">
       <div class="recipe-hero">
         <div>
-          <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}</div>
           <h2>${escapeHtml(meal.title)}</h2>
           <p>${escapeHtml(meal.description || "Ingen beskrivelse er lagt inn ennå.")}</p>
         </div>
         <div class="recipe-actions">
+          <button class="button ghost" data-close-meal>Tilbake</button>
           <button class="button secondary wake-button ${state.keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${wakeText}</button>
           <button class="button secondary" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
-          <button class="button ghost" data-close-meal>Tilbake</button>
         </div>
       </div>
       ${wakeSupported ? "" : '<p class="wake-note">Denne nettleseren støtter ikke å holde skjermen våken fra web-appen.</p>'}
-      <div class="recipe-meta-grid">
-        <div><span>Tilberedning</span><strong>${escapeHtml(prepTimeLabel(meal.prepTime))}</strong></div>
-        <div><span>Rester</span><strong>${escapeHtml(leftoversLabel(meal.leftovers))}</strong></div>
-        <div><span>Variasjon</span><strong>Min. ${meal.minDaysBetween} dager mellom</strong></div>
-        <div><span>Passer til</span><strong>${escapeHtml(suitabilityText(meal))}</strong></div>
-      </div>
       <div class="recipe-columns">
         <section class="recipe-section">
           <h3>Ingredienser</h3>
@@ -823,6 +818,7 @@ function renderMealDetail() {
               </article>
             `).join("")}
           </div>
+          <p class="recipe-note">${escapeHtml(leftoversText)}</p>
         </section>
       </div>
     </section>

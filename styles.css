@@ -645,6 +645,10 @@ button {
   margin-bottom: 16px;
 }
 
+.recipe-mode .content {
+  padding-top: 14px;
+}
+
 .recipe-detail {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -656,7 +660,8 @@ button {
 
 .recipe-hero {
   padding: 18px;
-  background: var(--surface-strong);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -664,7 +669,7 @@ button {
 }
 
 .recipe-hero h2 {
-  margin: 12px 0 8px;
+  margin: 0 0 8px;
   font-size: clamp(1.4rem, 3vw, 2rem);
   line-height: 1.12;
 }
@@ -681,6 +686,7 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  min-width: 260px;
 }
 
 .wake-button.active {
@@ -701,34 +707,6 @@ button {
   color: var(--muted);
   background: #fbfaf7;
   font-size: 0.9rem;
-}
-
-.recipe-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.recipe-meta-grid div {
-  padding: 14px 16px;
-  display: grid;
-  gap: 4px;
-  border-right: 1px solid var(--line);
-}
-
-.recipe-meta-grid div:last-child {
-  border-right: 0;
-}
-
-.recipe-meta-grid span {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.recipe-meta-grid strong {
-  font-size: 0.96rem;
 }
 
 .recipe-columns {
@@ -801,6 +779,13 @@ button {
 .recipe-step p {
   margin: 6px 0 0;
   line-height: 1.55;
+}
+
+.recipe-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .meal-editor-head {
@@ -938,7 +923,6 @@ button {
   .filters,
   .form-row,
   .checkbox-grid,
-  .recipe-meta-grid,
   .recipe-columns {
     grid-template-columns: 1fr;
   }
@@ -962,13 +946,9 @@ button {
     display: grid;
   }
 
-  .recipe-meta-grid div {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .recipe-meta-grid div:last-child {
-    border-bottom: 0;
+  .recipe-actions {
+    justify-content: flex-start;
+    min-width: 0;
   }
 
   .planner-row {
