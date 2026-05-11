@@ -161,6 +161,7 @@ const defaultState = {
   draftIngredients: null,
   draftSteps: null,
   selectedMealId: null,
+  selectedRecipeContext: null,
   keepScreenAwake: false,
   previousView: "meals",
   weekOffset: 0,
@@ -200,6 +201,7 @@ const defaultState = {
   },
   lockedPlansByWeek: {},
   dayTypesByWeek: {},
+  servingsByWeek: {},
 };
 
 let state = loadState();
@@ -212,7 +214,7 @@ let syncStatus = "Kobler til synk";
 
 function loadState() {
   const saved = localStorage.getItem("middagsapp-state");
-  if (!saved) return structuredClone(defaultState);
+  if (!saved) return normalizeState(structuredClone(defaultState));
   try {
     return normalizeState({ ...structuredClone(defaultState), ...JSON.parse(saved) });
   } catch {
@@ -240,6 +242,7 @@ function normalizeState(nextState) {
   };
   nextState.meals = nextState.meals.map((meal) => ({
     ...meal,
+    baseServings: Math.max(1, Number(meal.baseServings) || 4),
     ingredients: normalizeIngredients(meal.ingredients, meal.keyIngredients),
     suitability: Array.isArray(meal.suitability) ? meal.suitability : [],
   }));
@@ -247,6 +250,7 @@ function normalizeState(nextState) {
   nextState.plansByWeek = nextState.plansByWeek || {};
   nextState.lockedPlansByWeek = nextState.lockedPlansByWeek || {};
   nextState.dayTypesByWeek = nextState.dayTypesByWeek || {};
+  nextState.servingsByWeek = nextState.servingsByWeek || {};
   if (!nextState.plansByWeek[currentWeekKey]) {
     nextState.plansByWeek[currentWeekKey] = { ...emptyWeekPlan(), ...(nextState.plan || {}) };
   }
@@ -255,6 +259,9 @@ function normalizeState(nextState) {
   }
   if (!nextState.dayTypesByWeek[currentWeekKey]) {
     nextState.dayTypesByWeek[currentWeekKey] = emptyWeekDayTypes();
+  }
+  if (!nextState.servingsByWeek[currentWeekKey]) {
+    nextState.servingsByWeek[currentWeekKey] = emptyWeekServings();
   }
   nextState.plan = undefined;
   nextState.lockedPlan = undefined;
@@ -320,6 +327,7 @@ function syncPayload() {
     plansByWeek: state.plansByWeek,
     lockedPlansByWeek: state.lockedPlansByWeek,
     dayTypesByWeek: state.dayTypesByWeek,
+    servingsByWeek: state.servingsByWeek,
   };
 }
 
@@ -331,6 +339,7 @@ function applyRemotePayload(payload) {
     plansByWeek: payload.plansByWeek,
     lockedPlansByWeek: payload.lockedPlansByWeek,
     dayTypesByWeek: payload.dayTypesByWeek,
+    servingsByWeek: payload.servingsByWeek,
   };
   const uiState = {
     activeView: state.activeView,
@@ -339,6 +348,7 @@ function applyRemotePayload(payload) {
     draftIngredients: state.draftIngredients,
     draftSteps: state.draftSteps,
     selectedMealId: state.selectedMealId,
+    selectedRecipeContext: state.selectedRecipeContext,
     keepScreenAwake: state.keepScreenAwake,
     previousView: state.previousView,
     weekOffset: state.weekOffset,
@@ -435,6 +445,10 @@ function emptyWeekDayTypes() {
   return { 0: "weekday", 1: "weekday", 2: "weekday", 3: "weekday", 4: "weekday", 5: "weekend", 6: "weekend" };
 }
 
+function emptyWeekServings() {
+  return { 0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 4, 6: 4 };
+}
+
 function currentPlan() {
   return { ...emptyWeekPlan(), ...(state.plansByWeek?.[getWeekKey()] || {}) };
 }
@@ -445,6 +459,10 @@ function currentLocks() {
 
 function currentDayTypes() {
   return { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[getWeekKey()] || {}) };
+}
+
+function currentServings() {
+  return { ...emptyWeekServings(), ...(state.servingsByWeek?.[getWeekKey()] || {}) };
 }
 
 function weekRangeLabel() {
@@ -465,6 +483,11 @@ function setCurrentLocks(lockedPlan) {
 function setCurrentDayTypes(dayTypes) {
   const weekKey = getWeekKey();
   setState({ dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: dayTypes } });
+}
+
+function setCurrentServings(servings) {
+  const weekKey = getWeekKey();
+  setState({ servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: servings } });
 }
 
 function formatDate(date) {
@@ -506,6 +529,46 @@ function leftoversLabel(value) {
     possible: "Kan gi rester",
     likely: "Gir ofte rester",
   }[value] || "Ikke satt";
+}
+
+function mealBaseServings(meal) {
+  return Math.max(1, Number(meal?.baseServings) || 4);
+}
+
+function recipeTargetServings() {
+  const context = state.selectedRecipeContext;
+  if (!context) return null;
+  const value = Number(state.servingsByWeek?.[context.weekKey]?.[context.dayIndex]);
+  return value > 0 ? value : null;
+}
+
+function parseAmount(value) {
+  const text = String(value || "").trim().replace(",", ".");
+  if (!text) return null;
+  const fraction = text.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+    return denominator ? numerator / denominator : null;
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
+  return Number(text);
+}
+
+function formatAmount(value) {
+  const rounded = Math.round(value * 4) / 4;
+  const decimals = Number.isInteger(rounded) ? 0 : rounded < 10 ? 2 : 1;
+  return rounded.toLocaleString("no-NO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function scaleAmount(amount, baseServings, targetServings) {
+  if (!targetServings || targetServings === baseServings) return amount;
+  const parsed = parseAmount(amount);
+  if (parsed === null) return amount;
+  return formatAmount((parsed * targetServings) / baseServings);
 }
 
 function renderShell(viewHtml) {
@@ -563,7 +626,7 @@ function renderCalendar() {
             <p class="meal-description">${escapeHtml(meal.description || "Ingen beskrivelse lagt inn.")}</p>
           </div>
           <div class="day-actions calendar-actions">
-            <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}">Oppskrift</button>
+            <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>
           </div>
         ` : `
           <div class="empty-day">Ikke planlagt</div>
@@ -596,11 +659,13 @@ function renderPlanner() {
   const plan = currentPlan();
   const lockedPlan = currentLocks();
   const dayTypes = currentDayTypes();
+  const servings = currentServings();
   const rows = dayNames.map((day, index) => {
     const mealId = plan[index] || "";
     const meal = getMeal(mealId);
     const locked = Boolean(lockedPlan[index]);
     const dayType = dayTypes[index] || "weekday";
+    const dayServings = Math.max(1, Number(servings[index]) || 4);
     return `
       <div class="planner-row">
         <div class="planner-day-block">
@@ -612,6 +677,10 @@ function renderPlanner() {
           <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${day}">
             ${suitabilityEntries().map(([value, label]) => `<option value="${value}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
           </select>
+          <label class="inline-field">
+            <span>Personer</span>
+            <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
+          </label>
           <select class="select" data-plan-day="${index}">
             <option value="">Ikke planlagt</option>
             ${mealSelectOptions(mealId)}
@@ -620,7 +689,7 @@ function renderPlanner() {
         </div>
         <div class="planner-actions">
           <button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>
-          ${mealId ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}">Oppskrift</button>` : ""}
+          ${mealId ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
         </div>
       </div>
     `;
@@ -781,6 +850,14 @@ function renderMealDetail() {
   const wakeSupported = "wakeLock" in navigator;
   const wakeText = state.keepScreenAwake ? "Skjermen holdes på" : "Hold skjermen på";
   const leftoversText = leftoversLabel(meal.leftovers);
+  const baseServings = mealBaseServings(meal);
+  const targetServings = recipeTargetServings();
+  const displayServings = targetServings || baseServings;
+  const servingText = targetServings
+    ? targetServings === baseServings
+      ? `Oppskrift til ${displayServings} personer.`
+      : `Justert til ${displayServings} personer fra en oppskrift på ${baseServings}.`
+    : `Oppskriften er lagt inn for ${baseServings} personer.`;
 
   return `
     <section class="recipe-detail">
@@ -788,6 +865,7 @@ function renderMealDetail() {
         <div>
           <h2>${escapeHtml(meal.title)}</h2>
           <p>${escapeHtml(meal.description || "Ingen beskrivelse er lagt inn ennå.")}</p>
+          <p class="recipe-serving-note">${escapeHtml(servingText)}</p>
         </div>
         <div class="recipe-actions">
           <button class="button ghost" data-close-meal>Tilbake</button>
@@ -803,7 +881,7 @@ function renderMealDetail() {
             <div class="ingredient-table">
               ${ingredients.map((item) => `
                 <div class="ingredient-row">
-                  <span>${escapeHtml([item.amount, item.unit].filter(Boolean).join(" "))}</span>
+                  <span>${escapeHtml([scaleAmount(item.amount, baseServings, targetServings), item.unit].filter(Boolean).join(" "))}</span>
                   <strong>${escapeHtml(item.name)}</strong>
                 </div>
               `).join("")}
@@ -832,6 +910,7 @@ function emptyMeal() {
     id: "",
     title: "",
     description: "",
+    baseServings: 4,
     categories: ["kjott"],
     kidFriendly: false,
     favorite: false,
@@ -864,6 +943,12 @@ function renderMealEditor() {
             <label for="mealTitle">Navn</label>
             <input id="mealTitle" class="input" name="title" required value="${escapeHtml(meal.title)}">
           </div>
+          <div class="setting">
+            <label for="mealBaseServings">Porsjoner</label>
+            <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${mealBaseServings(meal)}">
+          </div>
+        </div>
+        <div class="form-row">
           <div class="setting">
             <label for="mealPrep">Tilberedningstid</label>
             <select id="mealPrep" class="select" name="prepTime">
@@ -977,11 +1062,11 @@ function getDraftSteps(meal) {
 function renderIngredientEditorRow(item, index) {
   return `
     <div class="ingredient-editor-row" data-ingredient-row="${index}">
-      <input class="input" data-ingredient-field="amount" data-ingredient-index="${index}" value="${escapeHtml(item.amount)}" placeholder="500">
+      <input class="input" data-ingredient-field="amount" data-ingredient-index="${index}" value="${escapeHtml(item.amount)}" placeholder="Mengde">
       <select class="select" data-ingredient-field="unit" data-ingredient-index="${index}" aria-label="Enhet">
         ${getUnitOptions().map((unit) => `<option value="${escapeHtml(unit)}" ${item.unit === unit ? "selected" : ""}>${unit ? escapeHtml(unit) : "Enhet"}</option>`).join("")}
       </select>
-      <input class="input" data-ingredient-field="name" data-ingredient-index="${index}" value="${escapeHtml(item.name)}" placeholder="Kjøttdeig">
+      <input class="input" data-ingredient-field="name" data-ingredient-index="${index}" value="${escapeHtml(item.name)}" placeholder="Ingrediensnavn">
       <button class="icon-button" type="button" data-remove-ingredient="${index}" title="Fjern ingrediens">×</button>
     </div>
   `;
@@ -1013,6 +1098,7 @@ function saveMealFromForm(form) {
     id,
     title,
     description: String(formData.get("description") || "").trim(),
+    baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
     categories: categories.length ? categories : ["kjott"],
     suitability: formData.getAll("suitability"),
     kidFriendly: formData.has("kidFriendly"),
@@ -1080,6 +1166,7 @@ function syncDraftMealFromDom() {
   state.draftMeal = {
     title: String(formData.get("title") || "").trim(),
     description: String(formData.get("description") || "").trim(),
+    baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
     categories: formData.getAll("categories"),
     kidFriendly: formData.has("kidFriendly"),
     favorite: formData.has("favorite"),
@@ -1432,6 +1519,10 @@ function updateDayType(dayIndex, dayType) {
   setCurrentDayTypes({ ...currentDayTypes(), [dayIndex]: dayType });
 }
 
+function updateDayServings(dayIndex, servings) {
+  setCurrentServings({ ...currentServings(), [dayIndex]: Math.max(1, Number(servings) || 1) });
+}
+
 function fillWeek() {
   const plan = currentPlan();
   const lockedPlan = currentLocks();
@@ -1469,7 +1560,7 @@ function addMealToNextFreeDay(mealId) {
 
 function bindEvents() {
   app.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => setState({ activeView: button.dataset.view, selectedMealId: null, editingMealId: null, keepScreenAwake: false }));
+    button.addEventListener("click", () => setState({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false }));
   });
 
   app.querySelectorAll("[data-plan-day]").forEach((select) => {
@@ -1478,6 +1569,10 @@ function bindEvents() {
 
   app.querySelectorAll("[data-day-type]").forEach((select) => {
     select.addEventListener("change", () => updateDayType(Number(select.dataset.dayType), select.value));
+  });
+
+  app.querySelectorAll("[data-day-servings]").forEach((input) => {
+    input.addEventListener("change", () => updateDayServings(Number(input.dataset.dayServings), input.value));
   });
 
   app.querySelectorAll("[data-random-day]").forEach((button) => {
@@ -1497,6 +1592,7 @@ function bindEvents() {
       plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: emptyWeekPlan() },
       lockedPlansByWeek: { ...(state.lockedPlansByWeek || {}), [weekKey]: emptyWeekLocks() },
       dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: emptyWeekDayTypes() },
+      servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings() },
     });
   });
 
@@ -1523,7 +1619,7 @@ function bindEvents() {
   });
 
   app.querySelectorAll("[data-edit-meal]").forEach((button) => {
-    button.addEventListener("click", () => setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, keepScreenAwake: false }));
+    button.addEventListener("click", () => setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false }));
   });
 
   app.querySelectorAll("[data-cancel-edit]").forEach((button) => {
@@ -1531,17 +1627,19 @@ function bindEvents() {
   });
 
   app.querySelectorAll("[data-view-meal]").forEach((button) => {
+    const dayIndex = button.dataset.recipeDay === undefined ? null : Number(button.dataset.recipeDay);
     button.addEventListener("click", () => setState({
       activeView: "recipe",
       previousView: state.activeView === "recipe" ? state.previousView : state.activeView,
       selectedMealId: button.dataset.viewMeal,
+      selectedRecipeContext: dayIndex === null ? null : { weekKey: getWeekKey(), dayIndex },
       editingMealId: null,
       keepScreenAwake: false,
     }));
   });
 
   app.querySelector("[data-close-meal]")?.addEventListener("click", () => {
-    setState({ activeView: state.previousView || "meals", selectedMealId: null, keepScreenAwake: false });
+    setState({ activeView: state.previousView || "meals", selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
   });
 
   app.querySelector("[data-toggle-wake]")?.addEventListener("click", () => {
