@@ -174,6 +174,7 @@ const defaultState = {
   },
   family: {
     name: "Familien",
+    familySize: 5,
     kidFriendlyPerWeek: 2,
     leftovers: true,
     reuseIngredients: true,
@@ -223,6 +224,13 @@ function loadState() {
 }
 
 function normalizeState(nextState) {
+  nextState.family = {
+    ...defaultState.family,
+    ...(nextState.family || {}),
+  };
+  nextState.family.familySize = Math.max(1, Number(nextState.family.familySize) || 5);
+  nextState.family.kidFriendlyPerWeek = Math.max(0, Number(nextState.family.kidFriendlyPerWeek) || 0);
+  nextState.family.quickDays = Array.isArray(nextState.family.quickDays) ? nextState.family.quickDays : defaultState.family.quickDays;
   nextState.metadata = {
     categoryLabels,
     ...(nextState.metadata || {}),
@@ -446,7 +454,8 @@ function emptyWeekDayTypes() {
 }
 
 function emptyWeekServings() {
-  return { 0: 4, 1: 4, 2: 4, 3: 4, 4: 4, 5: 4, 6: 4 };
+  const familySize = Math.max(1, Number(state?.family?.familySize) || 5);
+  return { 0: familySize, 1: familySize, 2: familySize, 3: familySize, 4: familySize, 5: familySize, 6: familySize };
 }
 
 function currentPlan() {
@@ -1223,6 +1232,10 @@ function renderSetup() {
         <div class="setting">
           <label for="familyName">Familienavn</label>
           <input id="familyName" class="input" data-family="name" value="${escapeHtml(state.family.name)}">
+        </div>
+        <div class="setting">
+          <label for="familySize">Personer i familien</label>
+          <input id="familySize" class="input" type="number" min="1" max="30" data-family="familySize" value="${Math.max(1, Number(state.family.familySize) || 5)}">
         </div>
         <div class="setting">
           <label for="kidCount">Barnevennlige middager per uke</label>
