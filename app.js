@@ -458,7 +458,7 @@ function renderShell(viewHtml) {
             <div class="brand-mark">M</div>
             <div>
               <h1 class="brand-title">${state.family.name} sin middagsplan</h1>
-              <p class="brand-subtitle">Første prototype med lokal lagring</p>
+              <p class="brand-subtitle">Planlegg uka med gode middager</p>
             </div>
           </div>
           <div class="sync-pill"><span class="sync-dot"></span> Klar for Firebase-synk</div>
