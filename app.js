@@ -32,6 +32,15 @@ const firebaseConfig = {
 
 const FIREBASE_SDK_VERSION = "12.13.0";
 const FAMILY_ID = "familien";
+const syncedStateKeys = new Set([
+  "family",
+  "meals",
+  "metadata",
+  "plansByWeek",
+  "lockedPlansByWeek",
+  "dayTypesByWeek",
+  "servingsByWeek",
+]);
 
 const defaultMeals = [
   {
@@ -156,6 +165,8 @@ const defaultMeals = [
 
 const defaultState = {
   activeView: "calendar",
+  clientUpdatedAt: 0,
+  pendingLocalSync: false,
   editingMealId: null,
   draftMeal: null,
   draftIngredients: null,
@@ -208,8 +219,11 @@ const defaultState = {
 let state = loadState();
 const app = document.querySelector("#app");
 let wakeLock = null;
-let remoteDocRef = null;
-let remoteSaveTimer = null;
+const remoteRefs = {};
+const remoteSaveTimers = {};
+const pendingRemoteScopes = new Set();
+const pendingMealDeleteIds = new Set();
+const pendingWeekKeys = new Set();
 let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
 
@@ -269,7 +283,7 @@ function normalizeState(nextState) {
     nextState.dayTypesByWeek[currentWeekKey] = emptyWeekDayTypes();
   }
   if (!nextState.servingsByWeek[currentWeekKey]) {
-    nextState.servingsByWeek[currentWeekKey] = emptyWeekServings();
+    nextState.servingsByWeek[currentWeekKey] = emptyWeekServings(nextState.family.familySize);
   }
   nextState.plan = undefined;
   nextState.lockedPlan = undefined;
@@ -319,12 +333,21 @@ function saveState() {
   localStorage.setItem("middagsapp-state", JSON.stringify(state));
 }
 
+function patchTouchesSyncedData(patch) {
+  return Object.keys(patch).some((key) => syncedStateKeys.has(key));
+}
+
 function setState(patch) {
+  const previousState = state;
   state = { ...state, ...patch };
+  if (patchTouchesSyncedData(patch)) {
+    state.clientUpdatedAt = Date.now();
+    state.pendingLocalSync = true;
+  }
   saveState();
   render();
   syncWakeLock();
-  scheduleRemoteSave();
+  scheduleRemoteSaveForPatch(patch, previousState);
 }
 
 function syncPayload() {
@@ -336,10 +359,88 @@ function syncPayload() {
     lockedPlansByWeek: state.lockedPlansByWeek,
     dayTypesByWeek: state.dayTypesByWeek,
     servingsByWeek: state.servingsByWeek,
+    clientUpdatedAt: state.clientUpdatedAt || 0,
   };
 }
 
+function weekPayload(weekKey) {
+  return {
+    plan: { ...emptyWeekPlan(), ...(state.plansByWeek?.[weekKey] || {}) },
+    lockedPlan: { ...emptyWeekLocks(), ...(state.lockedPlansByWeek?.[weekKey] || {}) },
+    dayTypes: { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[weekKey] || {}) },
+    servings: { ...emptyWeekServings(state.family.familySize), ...(state.servingsByWeek?.[weekKey] || {}) },
+    clientUpdatedAt: state.clientUpdatedAt || 0,
+  };
+}
+
+function syncedScopesForPatch(patch) {
+  const scopes = new Set();
+  if ("family" in patch) scopes.add("profile");
+  if ("metadata" in patch) scopes.add("metadata");
+  if ("meals" in patch) scopes.add("meals");
+  if ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch) scopes.add("weeks");
+  return [...scopes];
+}
+
+function changedWeekKeys(patch, previousState) {
+  const keys = new Set();
+  ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servingsByWeek"].forEach((field) => {
+    if (!(field in patch)) return;
+    const previous = previousState?.[field] || {};
+    const current = state[field] || {};
+    Object.keys({ ...previous, ...current }).forEach((weekKey) => {
+      if (JSON.stringify(previous[weekKey] || {}) !== JSON.stringify(current[weekKey] || {})) {
+        keys.add(weekKey);
+      }
+    });
+  });
+  if (!keys.size && ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch)) {
+    keys.add(getWeekKey());
+  }
+  return [...keys];
+}
+
+function scheduleRemoteSaveForPatch(patch, previousState) {
+  const scopes = syncedScopesForPatch(patch);
+  if (!scopes.length) return;
+  if (scopes.includes("meals")) {
+    const currentMealIds = new Set((state.meals || []).map((meal) => meal.id));
+    (previousState?.meals || []).forEach((meal) => {
+      if (meal.id && !currentMealIds.has(meal.id)) pendingMealDeleteIds.add(meal.id);
+    });
+  }
+  if (scopes.includes("weeks")) {
+    changedWeekKeys(patch, previousState).forEach((weekKey) => pendingWeekKeys.add(weekKey));
+  }
+  scheduleRemoteSave(700, scopes);
+}
+
+function applyRemoteStatePatch(patch) {
+  const uiState = {
+    activeView: state.activeView,
+    editingMealId: state.editingMealId,
+    draftMeal: state.draftMeal,
+    draftIngredients: state.draftIngredients,
+    draftSteps: state.draftSteps,
+    selectedMealId: state.selectedMealId,
+    selectedRecipeContext: state.selectedRecipeContext,
+    keepScreenAwake: state.keepScreenAwake,
+    previousView: state.previousView,
+    weekOffset: state.weekOffset,
+    filters: state.filters,
+  };
+  state = normalizeState({ ...structuredClone(defaultState), ...state, ...patch, ...uiState });
+  saveState();
+  render();
+}
+
 function applyRemotePayload(payload) {
+  const remoteClientUpdatedAt = Number(payload.clientUpdatedAt || 0);
+  const localClientUpdatedAt = Number(state.clientUpdatedAt || 0);
+  if (state.pendingLocalSync && remoteClientUpdatedAt < localClientUpdatedAt) {
+    setTimeout(() => scheduleRemoteSave(0), 0);
+    return;
+  }
   const remoteState = {
     family: payload.family,
     meals: payload.meals,
@@ -348,6 +449,8 @@ function applyRemotePayload(payload) {
     lockedPlansByWeek: payload.lockedPlansByWeek,
     dayTypesByWeek: payload.dayTypesByWeek,
     servingsByWeek: payload.servingsByWeek,
+    clientUpdatedAt: remoteClientUpdatedAt,
+    pendingLocalSync: false,
   };
   const uiState = {
     activeView: state.activeView,
@@ -453,8 +556,8 @@ function emptyWeekDayTypes() {
   return { 0: "weekday", 1: "weekday", 2: "weekday", 3: "weekday", 4: "weekday", 5: "weekend", 6: "weekend" };
 }
 
-function emptyWeekServings() {
-  const familySize = Math.max(1, Number(state?.family?.familySize) || 5);
+function emptyWeekServings(familySize = 5) {
+  familySize = Math.max(1, Number(familySize) || 5);
   return { 0: familySize, 1: familySize, 2: familySize, 3: familySize, 4: familySize, 5: familySize, 6: familySize };
 }
 
@@ -471,7 +574,7 @@ function currentDayTypes() {
 }
 
 function currentServings() {
-  return { ...emptyWeekServings(), ...(state.servingsByWeek?.[getWeekKey()] || {}) };
+  return { ...emptyWeekServings(state.family.familySize), ...(state.servingsByWeek?.[getWeekKey()] || {}) };
 }
 
 function weekRangeLabel() {
@@ -1605,7 +1708,7 @@ function bindEvents() {
       plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: emptyWeekPlan() },
       lockedPlansByWeek: { ...(state.lockedPlansByWeek || {}), [weekKey]: emptyWeekLocks() },
       dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: emptyWeekDayTypes() },
-      servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings() },
+      servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings(state.family.familySize) },
     });
   });
 
@@ -1828,32 +1931,26 @@ async function initFirebaseSync() {
     ]);
 
     const { getAuth, onAuthStateChanged, signInAnonymously } = authModule;
-    const { getFirestore, doc, onSnapshot, setDoc, serverTimestamp } = firestoreModule;
+    const { getFirestore, doc, collection, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp } = firestoreModule;
     const firebaseApp = initializeApp(firebaseConfig);
     const auth = getAuth(firebaseApp);
     const db = getFirestore(firebaseApp);
-    remoteDocRef = doc(db, "families", FAMILY_ID, "app", "state");
+    remoteRefs.legacyState = doc(db, "families", FAMILY_ID, "app", "state");
+    remoteRefs.profile = doc(db, "families", FAMILY_ID, "app", "profile");
+    remoteRefs.metadata = doc(db, "families", FAMILY_ID, "app", "metadata");
+    remoteRefs.meals = collection(db, "families", FAMILY_ID, "meals");
+    remoteRefs.weeks = collection(db, "families", FAMILY_ID, "weeks");
+    window.middagsplanDoc = doc;
     window.middagsplanSetDoc = setDoc;
+    window.middagsplanDeleteDoc = deleteDoc;
     window.middagsplanServerTimestamp = serverTimestamp;
 
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
       if (!user) return;
       syncStatus = "Synk aktiv";
       render();
-      onSnapshot(remoteDocRef, (snapshot) => {
-        if (snapshot.exists()) {
-          applyingRemoteState = true;
-          applyRemotePayload(snapshot.data());
-          applyingRemoteState = false;
-          syncStatus = "Synket";
-          render();
-        } else {
-          scheduleRemoteSave(0);
-        }
-      }, () => {
-        syncStatus = "Synk feilet";
-        render();
-      });
+      await migrateLegacyStateIfNeeded(getDoc);
+      startSplitSyncListeners(onSnapshot);
     });
 
     await signInAnonymously(auth);
@@ -1863,17 +1960,140 @@ async function initFirebaseSync() {
   }
 }
 
-function scheduleRemoteSave(delay = 700) {
-  if (!remoteDocRef || applyingRemoteState) return;
-  clearTimeout(remoteSaveTimer);
-  remoteSaveTimer = setTimeout(async () => {
+async function migrateLegacyStateIfNeeded(getDoc) {
+  const profileSnapshot = await getDoc(remoteRefs.profile);
+  if (profileSnapshot.exists()) return;
+  const legacySnapshot = await getDoc(remoteRefs.legacyState);
+  if (legacySnapshot.exists()) {
+    applyingRemoteState = true;
+    applyRemotePayload(legacySnapshot.data());
+    applyingRemoteState = false;
+  }
+  await saveAllRemoteState();
+}
+
+function startSplitSyncListeners(onSnapshot) {
+  onSnapshot(remoteRefs.profile, (snapshot) => {
+    if (!snapshot.exists()) {
+      scheduleRemoteSave(0, ["profile"]);
+      return;
+    }
+    applyRemoteDocument("profile", snapshot.data(), (data) => {
+      applyRemoteStatePatch({ family: data.family, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
+    });
+  }, markSyncFailed);
+
+  onSnapshot(remoteRefs.metadata, (snapshot) => {
+    if (!snapshot.exists()) {
+      scheduleRemoteSave(0, ["metadata"]);
+      return;
+    }
+    applyRemoteDocument("metadata", snapshot.data(), (data) => {
+      applyRemoteStatePatch({ metadata: data.metadata, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
+    });
+  }, markSyncFailed);
+
+  onSnapshot(remoteRefs.meals, (snapshot) => {
+    if (snapshot.empty) {
+      if ((state.meals || []).length) {
+        scheduleRemoteSave(0, ["meals"]);
+      } else {
+        pendingRemoteScopes.delete("meals");
+        applyRemoteStatePatch({ meals: [], pendingLocalSync: pendingRemoteScopes.size > 0 });
+        markSynced();
+      }
+      return;
+    }
+    const maxClientUpdatedAt = Math.max(...snapshot.docs.map((mealDoc) => Number(mealDoc.data().clientUpdatedAt || 0)));
+    if (remoteDocumentIsOlder("meals", maxClientUpdatedAt)) return;
+    const meals = snapshot.docs.map((mealDoc) => {
+      const { clientUpdatedAt, updatedAt, ...meal } = mealDoc.data();
+      return { ...meal, id: meal.id || mealDoc.id };
+    });
+    applyingRemoteState = true;
+    pendingRemoteScopes.delete("meals");
+    applyRemoteStatePatch({ meals, clientUpdatedAt: maxClientUpdatedAt, pendingLocalSync: pendingRemoteScopes.size > 0 });
+    applyingRemoteState = false;
+    markSynced();
+  }, markSyncFailed);
+
+  onSnapshot(remoteRefs.weeks, (snapshot) => {
+    if (snapshot.empty) {
+      pendingWeekKeys.add(getWeekKey());
+      scheduleRemoteSave(0, ["weeks"]);
+      return;
+    }
+    const maxClientUpdatedAt = Math.max(...snapshot.docs.map((weekDoc) => Number(weekDoc.data().clientUpdatedAt || 0)));
+    if (remoteDocumentIsOlder("weeks", maxClientUpdatedAt)) return;
+    const plansByWeek = { ...(state.plansByWeek || {}) };
+    const lockedPlansByWeek = { ...(state.lockedPlansByWeek || {}) };
+    const dayTypesByWeek = { ...(state.dayTypesByWeek || {}) };
+    const servingsByWeek = { ...(state.servingsByWeek || {}) };
+    snapshot.docs.forEach((weekDoc) => {
+      const data = weekDoc.data();
+      plansByWeek[weekDoc.id] = { ...emptyWeekPlan(), ...(data.plan || {}) };
+      lockedPlansByWeek[weekDoc.id] = { ...emptyWeekLocks(), ...(data.lockedPlan || {}) };
+      dayTypesByWeek[weekDoc.id] = { ...emptyWeekDayTypes(), ...(data.dayTypes || {}) };
+      servingsByWeek[weekDoc.id] = { ...emptyWeekServings(state.family.familySize), ...(data.servings || {}) };
+    });
+    applyingRemoteState = true;
+    pendingRemoteScopes.delete("weeks");
+    applyRemoteStatePatch({ plansByWeek, lockedPlansByWeek, dayTypesByWeek, servingsByWeek, clientUpdatedAt: maxClientUpdatedAt, pendingLocalSync: pendingRemoteScopes.size > 0 });
+    applyingRemoteState = false;
+    markSynced();
+  }, markSyncFailed);
+}
+
+function applyRemoteDocument(scope, data, apply) {
+  const remoteClientUpdatedAt = Number(data.clientUpdatedAt || 0);
+  if (remoteDocumentIsOlder(scope, remoteClientUpdatedAt)) return;
+  applyingRemoteState = true;
+  pendingRemoteScopes.delete(scope);
+  apply(data);
+  applyingRemoteState = false;
+  markSynced();
+}
+
+function remoteDocumentIsOlder(scope, remoteClientUpdatedAt) {
+  const localClientUpdatedAt = Number(state.clientUpdatedAt || 0);
+  if (pendingRemoteScopes.has(scope) && remoteClientUpdatedAt < localClientUpdatedAt) {
+    if (scope === "weeks") {
+      Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
+    }
+    setTimeout(() => scheduleRemoteSave(0, [scope]), 0);
+    return true;
+  }
+  return false;
+}
+
+function markSynced() {
+  syncStatus = "Synket";
+  render();
+}
+
+function markSyncFailed() {
+  syncStatus = "Synk feilet";
+  render();
+}
+
+async function saveAllRemoteState() {
+  Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
+  await saveRemoteScopes(["profile", "metadata", "meals", "weeks"]);
+}
+
+function scheduleRemoteSave(delay = 700, scopes = ["profile", "metadata", "meals", "weeks"]) {
+  if (!remoteRefs.profile || applyingRemoteState) return;
+  scopes.forEach((scope) => pendingRemoteScopes.add(scope));
+  const key = [...new Set(scopes)].sort().join("-");
+  clearTimeout(remoteSaveTimers[key]);
+  remoteSaveTimers[key] = setTimeout(async () => {
     try {
       syncStatus = "Synker";
       render();
-      await window.middagsplanSetDoc(remoteDocRef, {
-        ...syncPayload(),
-        updatedAt: window.middagsplanServerTimestamp(),
-      }, { merge: true });
+      await saveRemoteScopes(scopes);
+      scopes.forEach((scope) => pendingRemoteScopes.delete(scope));
+      state.pendingLocalSync = pendingRemoteScopes.size > 0;
+      saveState();
       syncStatus = "Synket";
       render();
     } catch {
@@ -1881,6 +2101,44 @@ function scheduleRemoteSave(delay = 700) {
       render();
     }
   }, delay);
+}
+
+async function saveRemoteScopes(scopes) {
+  const uniqueScopes = [...new Set(scopes)];
+  const updatedAt = window.middagsplanServerTimestamp();
+  const clientUpdatedAt = state.clientUpdatedAt || Date.now();
+  const writes = [];
+
+  if (uniqueScopes.includes("profile")) {
+    writes.push(window.middagsplanSetDoc(remoteRefs.profile, { family: state.family, clientUpdatedAt, updatedAt }, { merge: true }));
+  }
+
+  if (uniqueScopes.includes("metadata")) {
+    writes.push(window.middagsplanSetDoc(remoteRefs.metadata, { metadata: state.metadata, clientUpdatedAt, updatedAt }, { merge: true }));
+  }
+
+  if (uniqueScopes.includes("meals")) {
+    const currentMealIds = new Set((state.meals || []).map((meal) => meal.id));
+    pendingMealDeleteIds.forEach((mealId) => {
+      if (!currentMealIds.has(mealId)) {
+        writes.push(window.middagsplanDeleteDoc(window.middagsplanDoc(remoteRefs.meals, mealId)));
+      }
+    });
+    (state.meals || []).forEach((meal) => {
+      writes.push(window.middagsplanSetDoc(window.middagsplanDoc(remoteRefs.meals, meal.id), { ...meal, clientUpdatedAt, updatedAt }, { merge: true }));
+    });
+    pendingMealDeleteIds.clear();
+  }
+
+  if (uniqueScopes.includes("weeks")) {
+    if (!pendingWeekKeys.size) pendingWeekKeys.add(getWeekKey());
+    pendingWeekKeys.forEach((weekKey) => {
+      writes.push(window.middagsplanSetDoc(window.middagsplanDoc(remoteRefs.weeks, weekKey), { ...weekPayload(weekKey), updatedAt }, { merge: true }));
+    });
+    pendingWeekKeys.clear();
+  }
+
+  await Promise.all(writes);
 }
 
 render();
