@@ -553,22 +553,21 @@ function renderCalendar() {
             <div class="day-name">${day}</div>
             <div class="day-date">${formatDate(dates[index])}</div>
           </div>
-          <button class="icon-button" data-random-day="${index}" title="Foreslå middag">${icon("swap")}</button>
         </div>
         ${meal ? `
-          <div>
+          <div class="calendar-meal">
             <p class="meal-title">${escapeHtml(meal.title)}</p>
-            <p class="meal-description">${escapeHtml(meal.description)}</p>
+            <p class="meal-description">${escapeHtml(meal.description || "Ingen beskrivelse lagt inn.")}</p>
           </div>
-          <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}</div>
-        ` : '<div class="empty-day">Ikke planlagt</div>'}
-        <div class="day-actions">
-          <select class="select" data-plan-day="${index}" aria-label="Velg middag for ${day}">
-            <option value="">Velg middag</option>
-            ${mealSelectOptions(meal?.id)}
-          </select>
-          ${meal ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}">Oppskrift</button>` : ""}
-        </div>
+          <div class="day-actions calendar-actions">
+            <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}">Oppskrift</button>
+          </div>
+        ` : `
+          <div class="empty-day">Ikke planlagt</div>
+          <div class="day-actions calendar-actions">
+            <button class="button secondary compact" data-view="planner">Planlegg</button>
+          </div>
+        `}
       </article>
     `;
   }).join("");
@@ -577,7 +576,7 @@ function renderCalendar() {
     <section class="view-header">
       <div>
         <h2 class="view-title">Denne ukens middager</h2>
-        <p class="view-lead">${weekRangeLabel()}. Planlegg rett fra kalenderen. Senere kobles dette til sanntidssynk, slik at alle i familien ser samme uke.</p>
+        <p class="view-lead">${weekRangeLabel()}. En enkel oversikt over hva som er planlagt denne uken.</p>
       </div>
       <div class="toolbar">
         <button class="button secondary" data-week="-1">Forrige</button>

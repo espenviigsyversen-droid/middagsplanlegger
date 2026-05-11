@@ -208,7 +208,7 @@ button {
 }
 
 .day-card {
-  min-height: 230px;
+  min-height: 176px;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -242,6 +242,11 @@ button {
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.45;
+}
+
+.calendar-meal {
+  display: grid;
+  gap: 4px;
 }
 
 .empty-day {
@@ -291,6 +296,14 @@ button {
 .day-actions .select {
   min-width: 0;
   flex: 1;
+}
+
+.calendar-actions {
+  justify-content: flex-start;
+}
+
+.calendar-actions .button {
+  width: auto;
 }
 
 .icon-button {
@@ -1017,6 +1030,10 @@ button {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
+  }
+
+  .calendar-actions {
+    display: flex;
   }
 
   .day-actions .button {
