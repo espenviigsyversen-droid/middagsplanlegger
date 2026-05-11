@@ -157,6 +157,7 @@ const defaultMeals = [
 const defaultState = {
   activeView: "calendar",
   editingMealId: null,
+  draftMeal: null,
   draftIngredients: null,
   draftSteps: null,
   selectedMealId: null,
@@ -334,6 +335,7 @@ function applyRemotePayload(payload) {
   const uiState = {
     activeView: state.activeView,
     editingMealId: state.editingMealId,
+    draftMeal: state.draftMeal,
     draftIngredients: state.draftIngredients,
     draftSteps: state.draftSteps,
     selectedMealId: state.selectedMealId,
@@ -845,8 +847,9 @@ function emptyMeal() {
 
 function renderMealEditor() {
   const isNew = state.editingMealId === "new";
-  const meal = isNew ? emptyMeal() : getMeal(state.editingMealId);
-  if (!meal) return "";
+  const baseMeal = isNew ? emptyMeal() : getMeal(state.editingMealId);
+  if (!baseMeal) return "";
+  const meal = getDraftMeal(baseMeal);
   const ingredients = getDraftIngredients(meal);
   const steps = getDraftSteps(meal);
   return `
@@ -956,6 +959,10 @@ function leftoverOption(value, label, selected) {
   return `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
 }
 
+function getDraftMeal(meal) {
+  return state.draftMeal ? { ...meal, ...state.draftMeal } : meal;
+}
+
 function getDraftIngredients(meal) {
   if (Array.isArray(state.draftIngredients)) return state.draftIngredients;
   const ingredients = normalizeIngredients(meal.ingredients, meal.keyIngredients);
@@ -1021,7 +1028,7 @@ function saveMealFromForm(form) {
   const meals = isNew
     ? [...state.meals, meal]
     : state.meals.map((item) => item.id === meal.id ? meal : item);
-  setState({ meals, editingMealId: null, draftIngredients: null, draftSteps: null, selectedMealId: meal.id });
+  setState({ meals, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: meal.id });
 }
 
 function makeMealId(title) {
@@ -1066,6 +1073,23 @@ function syncDraftIngredientsFromDom() {
     }));
 }
 
+function syncDraftMealFromDom() {
+  const form = app.querySelector("[data-meal-form]");
+  if (!form) return;
+  const formData = new FormData(form);
+  state.draftMeal = {
+    title: String(formData.get("title") || "").trim(),
+    description: String(formData.get("description") || "").trim(),
+    categories: formData.getAll("categories"),
+    kidFriendly: formData.has("kidFriendly"),
+    favorite: formData.has("favorite"),
+    leftovers: String(formData.get("leftovers") || "none"),
+    prepTime: String(formData.get("prepTime") || "quick"),
+    minDaysBetween: Number(formData.get("minDaysBetween") || 14),
+    suitability: formData.getAll("suitability"),
+  };
+}
+
 function collectStepRows() {
   return [...app.querySelectorAll("[data-step-row]")]
     .map((row) => row.querySelector("[data-step-field]")?.value.trim() || "")
@@ -1075,6 +1099,12 @@ function collectStepRows() {
 function syncDraftStepsFromDom() {
   state.draftSteps = [...app.querySelectorAll("[data-step-row]")]
     .map((row) => row.querySelector("[data-step-field]")?.value.trim() || "");
+}
+
+function syncMealEditorDraftFromDom() {
+  syncDraftMealFromDom();
+  syncDraftIngredientsFromDom();
+  syncDraftStepsFromDom();
 }
 
 function deleteCurrentMeal() {
@@ -1089,7 +1119,7 @@ function deleteCurrentMeal() {
     Object.fromEntries(Object.entries(plan).map(([day, plannedId]) => [day, plannedId === mealId ? "" : plannedId])),
   ]));
   const meals = state.meals.filter((meal) => meal.id !== mealId);
-  setState({ meals, plansByWeek, editingMealId: null, draftIngredients: null, draftSteps: null, selectedMealId: null });
+  setState({ meals, plansByWeek, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null });
 }
 
 function renderSetup() {
@@ -1493,11 +1523,11 @@ function bindEvents() {
   });
 
   app.querySelectorAll("[data-edit-meal]").forEach((button) => {
-    button.addEventListener("click", () => setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftIngredients: null, draftSteps: null, selectedMealId: null, keepScreenAwake: false }));
+    button.addEventListener("click", () => setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, keepScreenAwake: false }));
   });
 
   app.querySelectorAll("[data-cancel-edit]").forEach((button) => {
-    button.addEventListener("click", () => setState({ editingMealId: null, draftIngredients: null, draftSteps: null }));
+    button.addEventListener("click", () => setState({ editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null }));
   });
 
   app.querySelectorAll("[data-view-meal]").forEach((button) => {
@@ -1526,34 +1556,32 @@ function bindEvents() {
   app.querySelector("[data-delete-meal]")?.addEventListener("click", deleteCurrentMeal);
 
   app.querySelector("[data-add-ingredient]")?.addEventListener("click", () => {
-    syncDraftIngredientsFromDom();
+    syncMealEditorDraftFromDom();
     const draftIngredients = [...(state.draftIngredients || []), { amount: "", unit: "", name: "" }];
-    setState({ draftIngredients });
+    setState({ draftMeal: state.draftMeal, draftIngredients, draftSteps: state.draftSteps });
   });
 
   app.querySelectorAll("[data-remove-ingredient]").forEach((button) => {
     button.addEventListener("click", () => {
-      syncDraftIngredientsFromDom();
+      syncMealEditorDraftFromDom();
       const index = Number(button.dataset.removeIngredient);
       const draftIngredients = (state.draftIngredients || []).filter((_, itemIndex) => itemIndex !== index);
-      setState({ draftIngredients: draftIngredients.length ? draftIngredients : [{ amount: "", unit: "", name: "" }] });
+      setState({ draftMeal: state.draftMeal, draftIngredients: draftIngredients.length ? draftIngredients : [{ amount: "", unit: "", name: "" }], draftSteps: state.draftSteps });
     });
   });
 
   app.querySelector("[data-add-step]")?.addEventListener("click", () => {
-    syncDraftIngredientsFromDom();
-    syncDraftStepsFromDom();
+    syncMealEditorDraftFromDom();
     const draftSteps = [...(state.draftSteps || []), ""];
-    setState({ draftIngredients: state.draftIngredients, draftSteps });
+    setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps });
   });
 
   app.querySelectorAll("[data-remove-step]").forEach((button) => {
     button.addEventListener("click", () => {
-      syncDraftIngredientsFromDom();
-      syncDraftStepsFromDom();
+      syncMealEditorDraftFromDom();
       const index = Number(button.dataset.removeStep);
       const draftSteps = (state.draftSteps || []).filter((_, itemIndex) => itemIndex !== index);
-      setState({ draftIngredients: state.draftIngredients, draftSteps: draftSteps.length ? draftSteps : [""] });
+      setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps: draftSteps.length ? draftSteps : [""] });
     });
   });
 
