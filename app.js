@@ -21,6 +21,18 @@ const defaultSuitabilityLabels = {
   celebration: "Bursdag/selskap",
 };
 
+const firebaseConfig = {
+  apiKey: "AIzaSyAMPfQ9gX9rbuvcPsVjYVtq5IT_orjDBPs",
+  authDomain: "home-tasks-app-18de3.firebaseapp.com",
+  projectId: "home-tasks-app-18de3",
+  storageBucket: "home-tasks-app-18de3.firebasestorage.app",
+  messagingSenderId: "253720858709",
+  appId: "1:253720858709:web:8c5d8d0d13574e33c384dc",
+};
+
+const FIREBASE_SDK_VERSION = "12.13.0";
+const FAMILY_ID = "familien";
+
 const defaultMeals = [
   {
     id: "tikka",
@@ -192,6 +204,10 @@ const defaultState = {
 let state = loadState();
 const app = document.querySelector("#app");
 let wakeLock = null;
+let remoteDocRef = null;
+let remoteSaveTimer = null;
+let applyingRemoteState = false;
+let syncStatus = "Kobler til synk";
 
 function loadState() {
   const saved = localStorage.getItem("middagsapp-state");
@@ -292,6 +308,47 @@ function setState(patch) {
   saveState();
   render();
   syncWakeLock();
+  scheduleRemoteSave();
+}
+
+function syncPayload() {
+  return {
+    family: state.family,
+    meals: state.meals,
+    metadata: state.metadata,
+    plansByWeek: state.plansByWeek,
+    lockedPlansByWeek: state.lockedPlansByWeek,
+    dayTypesByWeek: state.dayTypesByWeek,
+  };
+}
+
+function applyRemotePayload(payload) {
+  const remoteState = {
+    family: payload.family,
+    meals: payload.meals,
+    metadata: payload.metadata,
+    plansByWeek: payload.plansByWeek,
+    lockedPlansByWeek: payload.lockedPlansByWeek,
+    dayTypesByWeek: payload.dayTypesByWeek,
+  };
+  const uiState = {
+    activeView: state.activeView,
+    editingMealId: state.editingMealId,
+    draftIngredients: state.draftIngredients,
+    draftSteps: state.draftSteps,
+    selectedMealId: state.selectedMealId,
+    keepScreenAwake: state.keepScreenAwake,
+    previousView: state.previousView,
+    weekOffset: state.weekOffset,
+    filters: state.filters,
+  };
+  state = normalizeState({ ...structuredClone(defaultState), ...state, ...remoteState, ...uiState });
+  saveState();
+  render();
+}
+
+function syncStatusText() {
+  return syncStatus;
 }
 
 function escapeHtml(value) {
@@ -461,7 +518,7 @@ function renderShell(viewHtml) {
               <p class="brand-subtitle">Planlegg uka med gode middager</p>
             </div>
           </div>
-          <div class="sync-pill"><span class="sync-dot"></span> Klar for Firebase-synk</div>
+          <div class="sync-pill"><span class="sync-dot"></span> ${escapeHtml(syncStatusText())}</div>
         </div>
       </header>
       <main class="content">${viewHtml}</main>
@@ -1624,4 +1681,69 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+async function initFirebaseSync() {
+  try {
+    const [{ initializeApp }, authModule, firestoreModule] = await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`),
+    ]);
+
+    const { getAuth, onAuthStateChanged, signInAnonymously } = authModule;
+    const { getFirestore, doc, onSnapshot, setDoc, serverTimestamp } = firestoreModule;
+    const firebaseApp = initializeApp(firebaseConfig);
+    const auth = getAuth(firebaseApp);
+    const db = getFirestore(firebaseApp);
+    remoteDocRef = doc(db, "families", FAMILY_ID, "app", "state");
+    window.middagsplanSetDoc = setDoc;
+    window.middagsplanServerTimestamp = serverTimestamp;
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) return;
+      syncStatus = "Synk aktiv";
+      render();
+      onSnapshot(remoteDocRef, (snapshot) => {
+        if (snapshot.exists()) {
+          applyingRemoteState = true;
+          applyRemotePayload(snapshot.data());
+          applyingRemoteState = false;
+          syncStatus = "Synket";
+          render();
+        } else {
+          scheduleRemoteSave(0);
+        }
+      }, () => {
+        syncStatus = "Synk feilet";
+        render();
+      });
+    });
+
+    await signInAnonymously(auth);
+  } catch {
+    syncStatus = "Lokal lagring";
+    render();
+  }
+}
+
+function scheduleRemoteSave(delay = 700) {
+  if (!remoteDocRef || applyingRemoteState) return;
+  clearTimeout(remoteSaveTimer);
+  remoteSaveTimer = setTimeout(async () => {
+    try {
+      syncStatus = "Synker";
+      render();
+      await window.middagsplanSetDoc(remoteDocRef, {
+        ...syncPayload(),
+        updatedAt: window.middagsplanServerTimestamp(),
+      }, { merge: true });
+      syncStatus = "Synket";
+      render();
+    } catch {
+      syncStatus = "Synk feilet";
+      render();
+    }
+  }, delay);
+}
+
 render();
+initFirebaseSync();
