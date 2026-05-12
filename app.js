@@ -926,34 +926,63 @@ function renderPlanner() {
     const dayMode = dayModes[index] || "home";
     const isAway = dayMode === "away";
     const dayNote = dayNotes[index] || "";
+    const typeLabel = getSuitabilityLabels()[dayType] || dayType;
     return `
       <div class="planner-row">
         <div class="planner-day-block">
-          <div class="planner-day">${day}</div>
-          <div class="day-date">${formatDate(dates[index])}</div>
+          <div>
+            <div class="planner-day">${day}</div>
+            <div class="day-date">${formatDate(dates[index])}</div>
+          </div>
           <button class="toggle-chip ${locked ? "active" : ""}" data-lock-day="${index}">${locked ? "Låst" : "Åpen"}</button>
         </div>
-        <div class="planner-meal-block">
-          <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${day}">
-            <option value="home" ${dayMode === "home" ? "selected" : ""}>Middag hjemme</option>
-            <option value="away" ${dayMode === "away" ? "selected" : ""}>Spise borte</option>
-          </select>
+        <div class="planner-summary ${isAway || meal ? "" : "empty"}">
           ${isAway ? `
-            <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="Hvor spiser dere? f.eks. hos svigefar">
+            <strong>Spise borte</strong>
+            <span>${escapeHtml(dayNote || "Legg inn hvor dere skal spise.")}</span>
+          ` : meal ? `
+            <strong>${escapeHtml(meal.title)}</strong>
+            <span>${escapeHtml(meal.description || suggestionReason(meal, index))}</span>
           ` : `
-          <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${day}">
-            ${suitabilityEntries().map(([value, label]) => `<option value="${value}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-          </select>
-          <label class="inline-field">
-            <span>Personer</span>
-            <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
-          </label>
-          <select class="select" data-plan-day="${index}">
-            <option value="">Ikke planlagt</option>
-            ${mealSelectOptions(mealId)}
-          </select>
-          ${meal ? `<div class="planner-preview"><strong>${escapeHtml(meal.title)}</strong><span>${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}</span><em>${escapeHtml(suggestionReason(meal, index))}</em></div>` : '<div class="planner-preview muted">Ingen middag valgt</div>'}
+            <strong>Ikke planlagt</strong>
+            <span>Velg en middag eller trykk Forslag.</span>
           `}
+        </div>
+        <div class="planner-meal-block">
+          <div class="planner-controls">
+            <label class="planner-control">
+              <span>Plan</span>
+              <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${day}">
+                <option value="home" ${dayMode === "home" ? "selected" : ""}>Middag hjemme</option>
+                <option value="away" ${dayMode === "away" ? "selected" : ""}>Spise borte</option>
+              </select>
+            </label>
+          ${isAway ? `
+            <label class="planner-control wide">
+              <span>Hvor</span>
+              <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="Hvor spiser dere? f.eks. hos svigefar">
+            </label>
+          ` : `
+            <label class="planner-control">
+              <span>Type</span>
+              <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${day}">
+                ${suitabilityEntries().map(([value, label]) => `<option value="${value}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="planner-control persons">
+              <span>Personer</span>
+              <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
+            </label>
+            <label class="planner-control wide">
+              <span>Middag</span>
+              <select class="select" data-plan-day="${index}">
+                <option value="">Ikke planlagt</option>
+                ${mealSelectOptions(mealId)}
+              </select>
+            </label>
+            ${meal ? `<p class="planner-reason">${escapeHtml(typeLabel)} · ${escapeHtml(suggestionReason(meal, index))}</p>` : ""}
+          `}
+          </div>
         </div>
         <div class="planner-actions">
           ${isAway ? "" : `<button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>`}
@@ -970,12 +999,16 @@ function renderPlanner() {
         <p class="view-lead">${weekRangeLabel()}. Fyll inn manuelt eller la den enkle rådgiveren foreslå middager som passer med raske dager, rester og variasjon.</p>
       </div>
       <div class="toolbar">
-        <button class="button secondary" data-week="-1">Forrige</button>
-        <button class="button secondary" data-week="0">Denne uken</button>
-        <button class="button secondary" data-week="1">Neste</button>
-        <button class="button" data-fill-week>${icon("add")} Fyll ledige dager</button>
-        <button class="button secondary" data-replace-open-week>Bytt åpne forslag</button>
-        <button class="button secondary" data-clear-week>Tøm uke</button>
+        <div class="toolbar-group">
+          <button class="button secondary" data-week="-1">Forrige</button>
+          <button class="button secondary" data-week="0">Denne uken</button>
+          <button class="button secondary" data-week="1">Neste</button>
+        </div>
+        <div class="toolbar-group">
+          <button class="button" data-fill-week>${icon("add")} Fyll ledige dager</button>
+          <button class="button secondary" data-replace-open-week>Bytt åpne forslag</button>
+          <button class="button secondary quiet" data-clear-week>Tøm uke</button>
+        </div>
       </div>
     </section>
     <div class="grid two">

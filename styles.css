@@ -149,6 +149,13 @@ button {
   align-items: center;
 }
 
+.toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 .button {
   min-height: 42px;
   border-radius: 8px;
@@ -168,6 +175,10 @@ button {
   color: var(--text);
   border: 1px solid var(--line);
   box-shadow: none;
+}
+
+.button.secondary.quiet {
+  color: var(--muted);
 }
 
 .button.compact {
@@ -374,10 +385,10 @@ button {
 
 .planner-row {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfaf7;
@@ -389,7 +400,9 @@ button {
 
 .planner-day-block {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 5px;
+  align-items: start;
 }
 
 .planner-day-block .toggle-chip {
@@ -401,6 +414,54 @@ button {
 .planner-meal-block {
   display: grid;
   gap: 8px;
+}
+
+.planner-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.planner-summary strong {
+  font-size: 1.04rem;
+  line-height: 1.25;
+}
+
+.planner-summary span {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.planner-summary.empty {
+  border: 1px dashed var(--line);
+  background: transparent;
+}
+
+.planner-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.planner-control {
+  display: grid;
+  gap: 5px;
+}
+
+.planner-control span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.planner-control.wide {
+  grid-column: 1 / -1;
+}
+
+.planner-control.persons {
+  max-width: 120px;
 }
 
 .inline-field {
@@ -446,15 +507,28 @@ button {
   line-height: 1.35;
 }
 
+.planner-reason {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 .compact-select {
   min-height: 38px;
   background-color: var(--surface-strong);
 }
 
 .planner-actions {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  min-width: 98px;
+  min-width: 0;
+}
+
+.planner-actions .button {
+  flex: 1 1 150px;
 }
 
 .planner-actions .button:disabled {
@@ -1071,6 +1145,15 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .toolbar,
+  .toolbar-group {
+    width: 100%;
+  }
+
+  .toolbar-group .button {
+    flex: 1 1 130px;
+  }
+
   .planner-day-block {
     grid-template-columns: 1fr auto;
     align-items: center;
@@ -1089,8 +1172,15 @@ button {
     grid-template-columns: 1fr minmax(72px, 110px);
   }
 
+  .planner-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-control.persons {
+    max-width: none;
+  }
+
   .planner-actions {
-    grid-template-columns: 1fr 1fr;
     min-width: 0;
   }
 
