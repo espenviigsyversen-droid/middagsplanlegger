@@ -2,7 +2,7 @@ const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag",
 const categoryLabels = {
   fisk: "Fisk",
   vegetar: "Vegetar",
-  kjott: "Kjott",
+  kjott: "Kjøtt",
   pasta: "Pasta",
   suppe: "Suppe",
 };
@@ -275,9 +275,13 @@ function normalizeState(nextState) {
       ...(nextState.metadata?.suitabilityLabels || {}),
     },
   };
+  if (nextState.metadata.categoryLabels.kjott === "Kjott") {
+    nextState.metadata.categoryLabels.kjott = "Kjøtt";
+  }
   nextState.mealPreferences = normalizeMealPreferences(nextState.mealPreferences, nextState.metadata.categoryLabels);
   nextState.meals = nextState.meals.map((meal) => ({
     ...meal,
+    recipeUrl: String(meal.recipeUrl || "").trim(),
     baseServings: Math.max(1, Number(meal.baseServings) || 4),
     ingredients: normalizeIngredients(meal.ingredients, meal.keyIngredients),
     suitability: Array.isArray(meal.suitability) ? meal.suitability : [],
@@ -730,6 +734,13 @@ function leftoversLabel(value) {
   }[value] || "Ikke satt";
 }
 
+function normalizedRecipeUrl(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^https?:\/\//i.test(text)) return text;
+  return `https://${text}`;
+}
+
 function mealBaseServings(meal) {
   return Math.max(1, Number(meal?.baseServings) || 4);
 }
@@ -1140,6 +1151,7 @@ function renderMealDetail() {
         <div class="recipe-actions">
           <button class="button ghost" data-close-meal>Tilbake</button>
           <button class="button secondary wake-button ${state.keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${wakeText}</button>
+          ${meal.recipeUrl ? `<a class="button secondary" href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
           <button class="button secondary" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
         </div>
       </div>
@@ -1180,6 +1192,7 @@ function emptyMeal() {
     id: "",
     title: "",
     description: "",
+    recipeUrl: "",
     baseServings: 4,
     categories: ["kjott"],
     kidFriendly: false,
@@ -1229,6 +1242,10 @@ function renderMealEditor() {
         <div class="setting">
           <label for="mealDescription">Beskrivelse</label>
           <textarea id="mealDescription" class="textarea" name="description">${escapeHtml(meal.description)}</textarea>
+        </div>
+        <div class="setting">
+          <label for="mealRecipeUrl">Lenke til oppskrift</label>
+          <input id="mealRecipeUrl" class="input" type="text" inputmode="url" name="recipeUrl" value="${escapeHtml(meal.recipeUrl || "")}" placeholder="https://...">
         </div>
         <div class="form-row">
           <div class="setting">
@@ -1368,6 +1385,7 @@ function saveMealFromForm(form) {
     id,
     title,
     description: String(formData.get("description") || "").trim(),
+    recipeUrl: normalizedRecipeUrl(formData.get("recipeUrl")),
     baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
     categories: categories.length ? categories : ["kjott"],
     suitability: formData.getAll("suitability"),
@@ -1436,6 +1454,7 @@ function syncDraftMealFromDom() {
   state.draftMeal = {
     title: String(formData.get("title") || "").trim(),
     description: String(formData.get("description") || "").trim(),
+    recipeUrl: String(formData.get("recipeUrl") || "").trim(),
     baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
     categories: formData.getAll("categories"),
     kidFriendly: formData.has("kidFriendly"),
@@ -1631,8 +1650,9 @@ function renderCategoriesSetup() {
     <section class="panel setup-section">
       <div class="metadata-list">
         ${categoryEntries().map(([key, label]) => `
-          <div class="metadata-row">
-            <span class="chip ${key}">${escapeHtml(label)}</span>
+          <div class="metadata-row editable">
+            <input class="input" data-category-label="${escapeHtml(key)}" value="${escapeHtml(label)}" aria-label="Kategorinavn ${escapeHtml(label)}">
+            <button class="button secondary compact" data-save-category="${escapeHtml(key)}">Lagre</button>
             <button class="icon-button" data-remove-category="${escapeHtml(key)}" title="Fjern kategori">×</button>
           </div>
         `).join("")}
@@ -1740,6 +1760,14 @@ function addCategoryFromForm(form) {
       },
     },
   });
+}
+
+function updateCategoryLabel(key) {
+  const input = app.querySelector(`[data-category-label="${CSS.escape(key)}"]`);
+  const label = String(input?.value || "").trim();
+  if (!label) return;
+  const labels = { ...getCategoryLabels(), [key]: label };
+  setState({ metadata: { ...state.metadata, categoryLabels: labels } });
 }
 
 function addUnitFromForm(form) {
@@ -2176,6 +2204,10 @@ function bindEvents() {
 
   app.querySelectorAll("[data-remove-category]").forEach((button) => {
     button.addEventListener("click", () => removeCategory(button.dataset.removeCategory));
+  });
+
+  app.querySelectorAll("[data-save-category]").forEach((button) => {
+    button.addEventListener("click", () => updateCategoryLabel(button.dataset.saveCategory));
   });
 
   app.querySelectorAll("[data-remove-unit]").forEach((button) => {
