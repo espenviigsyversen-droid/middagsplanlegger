@@ -20,6 +20,11 @@ const defaultSuitabilityLabels = {
   guests: "Gjester",
   celebration: "Bursdag/selskap",
 };
+const defaultPlanModeOptions = {
+  home: { label: "Middag hjemme", type: "home" },
+  away: { label: "Spise borte", type: "away" },
+  leftovers: { label: "Rester", type: "leftovers" },
+};
 
 const firebaseConfig = {
   apiKey: "AIzaSyAMPfQ9gX9rbuvcPsVjYVtq5IT_orjDBPs",
@@ -186,6 +191,7 @@ const defaultState = {
     units: defaultUnitOptions,
     prepTimeLabels: defaultPrepTimeLabels,
     suitabilityLabels: defaultSuitabilityLabels,
+    planModeOptions: defaultPlanModeOptions,
   },
   family: {
     name: "Familien",
@@ -275,6 +281,7 @@ function normalizeState(nextState) {
       ...defaultSuitabilityLabels,
       ...(nextState.metadata?.suitabilityLabels || {}),
     },
+    planModeOptions: normalizePlanModeOptions(nextState.metadata?.planModeOptions),
   };
   if (nextState.metadata.categoryLabels.kjott === "Kjott") {
     nextState.metadata.categoryLabels.kjott = "Kjøtt";
@@ -366,6 +373,47 @@ function getSuitabilityLabels() {
 
 function suitabilityEntries() {
   return Object.entries(getSuitabilityLabels());
+}
+
+function normalizePlanModeOptions(options = {}) {
+  const normalized = {
+    ...defaultPlanModeOptions,
+    ...Object.fromEntries(Object.entries(options || {}).map(([key, option]) => [
+      key,
+      {
+        label: String(option?.label || defaultPlanModeOptions[key]?.label || key).trim(),
+        type: ["home", "away", "leftovers"].includes(option?.type) ? option.type : "leftovers",
+      },
+    ])),
+  };
+  if (!Object.values(normalized).some((option) => option.type === "home")) {
+    normalized.home = defaultPlanModeOptions.home;
+  }
+  return normalized;
+}
+
+function getPlanModeOptions() {
+  return state.metadata?.planModeOptions || defaultPlanModeOptions;
+}
+
+function planModeEntries() {
+  return Object.entries(getPlanModeOptions());
+}
+
+function planModeOption(value) {
+  return getPlanModeOptions()[value] || defaultPlanModeOptions.home;
+}
+
+function planModeLabel(value) {
+  return planModeOption(value).label || value;
+}
+
+function planModeType(value) {
+  return planModeOption(value).type || "home";
+}
+
+function dayPlansMeal(value) {
+  return planModeType(value) === "home";
 }
 
 function normalizeIngredients(ingredients, fallbackNames = []) {
@@ -827,7 +875,7 @@ function renderCalendar() {
   const todayCard = renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex);
   const cards = dayNames.map((day, index) => {
     const meal = getMeal(plan[index]);
-    const isAway = dayModes[index] === "away";
+    const isPlannedMeal = dayPlansMeal(dayModes[index]);
     const note = dayNotes[index] || "";
     return `
       <article class="day-card">
@@ -837,9 +885,9 @@ function renderCalendar() {
             <div class="day-date">${formatDate(dates[index])}</div>
           </div>
         </div>
-        ${isAway ? `
+        ${!isPlannedMeal ? `
           <div class="calendar-meal">
-            <p class="meal-title">Spise borte</p>
+            <p class="meal-title">${escapeHtml(planModeLabel(dayModes[index]))}</p>
             <p class="meal-description">${escapeHtml(note || "Ingen detaljer lagt inn.")}</p>
           </div>
         ` : meal ? `
@@ -886,10 +934,10 @@ function renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex) {
   const index = todayIndex >= 0 ? todayIndex : 0;
   const day = todayIndex >= 0 ? "I dag" : dayNames[index];
   const meal = getMeal(plan[index]);
-  const isAway = dayModes[index] === "away";
+  const isPlannedMeal = dayPlansMeal(dayModes[index]);
   const note = dayNotes[index] || "";
-  const title = isAway ? "Spise borte" : meal ? meal.title : "Ikke planlagt";
-  const description = isAway
+  const title = !isPlannedMeal ? planModeLabel(dayModes[index]) : meal ? meal.title : "Ikke planlagt";
+  const description = !isPlannedMeal
     ? (note || "Ingen detaljer lagt inn.")
     : meal
       ? (meal.description || "Ingen beskrivelse lagt inn.")
@@ -902,7 +950,7 @@ function renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex) {
         <p>${escapeHtml(description)}</p>
       </div>
       <div class="today-actions">
-        ${meal && !isAway ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
+        ${meal && isPlannedMeal ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
         <button class="button secondary compact" data-view="planner">Planlegger</button>
       </div>
     </section>
@@ -924,7 +972,7 @@ function renderPlanner() {
     const dayType = dayTypes[index] || "weekday";
     const dayServings = Math.max(1, Number(servings[index]) || 4);
     const dayMode = dayModes[index] || "home";
-    const isAway = dayMode === "away";
+    const isPlannedMeal = dayPlansMeal(dayMode);
     const dayNote = dayNotes[index] || "";
     const typeLabel = getSuitabilityLabels()[dayType] || dayType;
     return `
@@ -936,9 +984,9 @@ function renderPlanner() {
           </div>
           <button class="toggle-chip ${locked ? "active" : ""}" data-lock-day="${index}">${locked ? "Låst" : "Åpen"}</button>
         </div>
-        <div class="planner-summary ${isAway || meal ? "" : "empty"}">
-          ${isAway ? `
-            <strong>Spise borte</strong>
+        <div class="planner-summary ${!isPlannedMeal || meal ? "" : "empty"}">
+          ${!isPlannedMeal ? `
+            <strong>${escapeHtml(planModeLabel(dayMode))}</strong>
             <span>${escapeHtml(dayNote || "Legg inn hvor dere skal spise.")}</span>
           ` : meal ? `
             <strong>${escapeHtml(meal.title)}</strong>
@@ -953,14 +1001,13 @@ function renderPlanner() {
             <label class="planner-control">
               <span>Plan</span>
               <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${day}">
-                <option value="home" ${dayMode === "home" ? "selected" : ""}>Middag hjemme</option>
-                <option value="away" ${dayMode === "away" ? "selected" : ""}>Spise borte</option>
+                ${planModeEntries().map(([value, option]) => `<option value="${escapeHtml(value)}" ${dayMode === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
               </select>
             </label>
-          ${isAway ? `
+          ${!isPlannedMeal ? `
             <label class="planner-control wide">
-              <span>Hvor</span>
-              <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="Hvor spiser dere? f.eks. hos svigefar">
+              <span>Notat</span>
+              <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="F.eks. rester fra taco eller middag hos svigefar">
             </label>
           ` : `
             <label class="planner-control">
@@ -985,8 +1032,8 @@ function renderPlanner() {
           </div>
         </div>
         <div class="planner-actions">
-          ${isAway ? "" : `<button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>`}
-          ${mealId && !isAway ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
+          ${!isPlannedMeal ? "" : `<button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>`}
+          ${mealId && isPlannedMeal ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
         </div>
       </div>
     `;
@@ -1598,6 +1645,10 @@ function renderSetup() {
           <span>Passer til</span>
           <strong>${suitabilityEntries().length}</strong>
         </button>
+        <button class="setup-menu-item" data-view="plan-modes">
+          <span>Plan</span>
+          <strong>${planModeEntries().length}</strong>
+        </button>
       </div>
     </section>
     <section class="panel setup-section">
@@ -1778,6 +1829,48 @@ function renderSuitabilitySetup() {
   `;
 }
 
+function renderPlanModesSetup() {
+  return `
+    <section class="view-header">
+      <div>
+        <h2 class="view-title">Plan</h2>
+        <p class="view-lead">Planvalg brukes i ukeplanen. Typen forteller appen om dagen skal ha oppskrift, være spise-borte-dag eller være rester.</p>
+      </div>
+      <button class="button secondary" data-view="setup">Tilbake</button>
+    </section>
+    <section class="panel setup-section">
+      <div class="metadata-list">
+        ${planModeEntries().map(([key, option]) => `
+          <div class="metadata-row plan-mode-row">
+            <input class="input" data-plan-mode-label="${escapeHtml(key)}" value="${escapeHtml(option.label)}" aria-label="Plannavn ${escapeHtml(option.label)}">
+            <select class="select" data-plan-mode-type="${escapeHtml(key)}" aria-label="Plantype ${escapeHtml(option.label)}">
+              ${planModeTypeOptions(option.type)}
+            </select>
+            <button class="button secondary compact" data-save-plan-mode="${escapeHtml(key)}">Lagre</button>
+            <button class="icon-button" data-remove-plan-mode="${escapeHtml(key)}" title="Fjern planvalg" ${option.type === "home" ? "disabled" : ""}>×</button>
+          </div>
+        `).join("")}
+      </div>
+      <form class="metadata-add plan-mode-add" data-plan-mode-form>
+        <input class="input" name="planModeName" placeholder="Nytt planvalg, f.eks. Lunsj ute">
+        <select class="select" name="planModeType">
+          ${planModeTypeOptions("leftovers")}
+        </select>
+        <button class="button secondary" type="submit">Legg til planvalg</button>
+      </form>
+      <p class="field-hint">Tips: Bruk typen “Rester” for dager der dere spiser mat som allerede er laget. Da hopper rådgiveren over dagen.</p>
+    </section>
+  `;
+}
+
+function planModeTypeOptions(selected) {
+  return [
+    ["home", "Vanlig middag"],
+    ["away", "Spise borte"],
+    ["leftovers", "Rester / ingen ny middag"],
+  ].map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
 function addCategoryFromForm(form) {
   const formData = new FormData(form);
   const label = String(formData.get("categoryName") || "").trim();
@@ -1832,6 +1925,26 @@ function addSuitabilityFromForm(form) {
   setState({ metadata: { ...state.metadata, suitabilityLabels: { ...labels, [key]: label } } });
 }
 
+function addPlanModeFromForm(form) {
+  const formData = new FormData(form);
+  const label = String(formData.get("planModeName") || "").trim();
+  if (!label) return;
+  const options = getPlanModeOptions();
+  const key = uniqueMetadataKey(makeSlug(label), options);
+  const type = String(formData.get("planModeType") || "leftovers");
+  setState({ metadata: { ...state.metadata, planModeOptions: { ...options, [key]: { label, type } } } });
+}
+
+function updatePlanMode(key) {
+  const labelInput = app.querySelector(`[data-plan-mode-label="${CSS.escape(key)}"]`);
+  const typeSelect = app.querySelector(`[data-plan-mode-type="${CSS.escape(key)}"]`);
+  const label = String(labelInput?.value || "").trim();
+  const type = String(typeSelect?.value || "leftovers");
+  if (!label) return;
+  const options = { ...getPlanModeOptions(), [key]: { label, type } };
+  setState({ metadata: { ...state.metadata, planModeOptions: options } });
+}
+
 function removeCategory(key) {
   const labels = { ...getCategoryLabels() };
   delete labels[key];
@@ -1876,6 +1989,17 @@ function removeSuitability(key) {
     suitability: (meal.suitability || []).filter((item) => item !== key),
   }));
   setState({ metadata: { ...state.metadata, suitabilityLabels: labels }, meals });
+}
+
+function removePlanMode(key) {
+  const options = { ...getPlanModeOptions() };
+  if (options[key]?.type === "home") return;
+  delete options[key];
+  const dayModesByWeek = Object.fromEntries(Object.entries(state.dayModesByWeek || {}).map(([weekKey, modes]) => [
+    weekKey,
+    Object.fromEntries(Object.entries(modes || {}).map(([dayIndex, mode]) => [dayIndex, mode === key ? "home" : mode])),
+  ]));
+  setState({ metadata: { ...state.metadata, planModeOptions: options }, dayModesByWeek });
 }
 
 function makeSlug(value) {
@@ -2071,7 +2195,7 @@ function updateDayType(dayIndex, dayType) {
 function updateDayMode(dayIndex, mode) {
   const dayModes = { ...currentDayModes(), [dayIndex]: mode };
   const patch = { dayModesByWeek: { ...(state.dayModesByWeek || {}), [getWeekKey()]: dayModes } };
-  if (mode === "away") {
+  if (!dayPlansMeal(mode)) {
     patch.plansByWeek = { ...(state.plansByWeek || {}), [getWeekKey()]: { ...currentPlan(), [dayIndex]: "" } };
   }
   setState(patch);
@@ -2090,7 +2214,7 @@ function fillWeek() {
   const lockedPlan = currentLocks();
   const dayModes = currentDayModes();
   dayNames.forEach((_, index) => {
-    if (!plan[index] && !lockedPlan[index] && dayModes[index] !== "away") {
+    if (!plan[index] && !lockedPlan[index] && dayPlansMeal(dayModes[index])) {
       plan[index] = pickSuggestion(index, plan);
     }
   });
@@ -2102,13 +2226,13 @@ function replaceOpenWeek() {
   const lockedPlan = currentLocks();
   const dayModes = currentDayModes();
   dayNames.forEach((_, index) => {
-    if (!lockedPlan[index] && dayModes[index] !== "away") {
+    if (!lockedPlan[index] && dayPlansMeal(dayModes[index])) {
       plan[index] = "";
     }
   });
   state.plansByWeek = { ...(state.plansByWeek || {}), [getWeekKey()]: plan };
   dayNames.forEach((_, index) => {
-    if (!lockedPlan[index] && dayModes[index] !== "away") {
+    if (!lockedPlan[index] && dayPlansMeal(dayModes[index])) {
       plan[index] = pickSuggestion(index, plan);
       state.plansByWeek[getWeekKey()] = plan;
     }
@@ -2285,6 +2409,11 @@ function bindEvents() {
     addSuitabilityFromForm(event.currentTarget);
   });
 
+  app.querySelector("[data-plan-mode-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    addPlanModeFromForm(event.currentTarget);
+  });
+
   app.querySelector("[data-meal-preferences-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveMealPreferencesFromForm(event.currentTarget);
@@ -2308,6 +2437,14 @@ function bindEvents() {
 
   app.querySelectorAll("[data-remove-suitability]").forEach((button) => {
     button.addEventListener("click", () => removeSuitability(button.dataset.removeSuitability));
+  });
+
+  app.querySelectorAll("[data-save-plan-mode]").forEach((button) => {
+    button.addEventListener("click", () => updatePlanMode(button.dataset.savePlanMode));
+  });
+
+  app.querySelectorAll("[data-remove-plan-mode]").forEach((button) => {
+    button.addEventListener("click", () => removePlanMode(button.dataset.removePlanMode));
   });
 
   app.querySelector("[data-refresh-app]")?.addEventListener("click", refreshApp);
@@ -2344,6 +2481,7 @@ function render() {
     units: renderUnitsSetup,
     "prep-times": renderPrepTimesSetup,
     suitability: renderSuitabilitySetup,
+    "plan-modes": renderPlanModesSetup,
   };
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
