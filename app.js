@@ -1601,14 +1601,37 @@ async function refreshApp() {
   window.location.reload();
 }
 
-function pickSuggestion(dayIndex) {
-  const plan = currentPlan();
+function dateForWeekDay(weekKey, dayIndex) {
+  const date = new Date(`${weekKey}T00:00:00`);
+  date.setDate(date.getDate() + Number(dayIndex));
+  return date;
+}
+
+function daysBetweenDates(a, b) {
+  return Math.abs(Math.round((a.getTime() - b.getTime()) / 86400000));
+}
+
+function plannedTooClose(meal, dayIndex, planOverride) {
+  const minDays = Math.max(1, Number(meal.minDaysBetween) || 1);
+  const targetWeekKey = getWeekKey();
+  const targetDate = dateForWeekDay(targetWeekKey, dayIndex);
+  const allPlans = { ...(state.plansByWeek || {}), [targetWeekKey]: planOverride };
+  return Object.entries(allPlans).some(([weekKey, plan]) => Object.entries(plan || {}).some(([plannedDayIndex, mealId]) => {
+    if (mealId !== meal.id) return false;
+    if (weekKey === targetWeekKey && Number(plannedDayIndex) === dayIndex) return false;
+    return daysBetweenDates(targetDate, dateForWeekDay(weekKey, plannedDayIndex)) < minDays;
+  }));
+}
+
+function pickSuggestion(dayIndex, planOverride = currentPlan()) {
+  const plan = planOverride;
   const used = new Set(Object.entries(plan).filter(([index]) => Number(index) !== dayIndex).map(([, mealId]) => mealId));
   const day = dayNames[dayIndex];
   const wantsQuick = state.family.quickDays.includes(day);
   const dayType = currentDayTypes()[dayIndex] || "weekday";
   const candidates = state.meals
     .filter((meal) => !used.has(meal.id))
+    .filter((meal) => !plannedTooClose(meal, dayIndex, plan))
     .map((meal) => {
       let score = 0;
       if (meal.favorite) score += 20;
@@ -1644,7 +1667,7 @@ function fillWeek() {
   const lockedPlan = currentLocks();
   dayNames.forEach((_, index) => {
     if (!plan[index] && !lockedPlan[index]) {
-      plan[index] = pickSuggestion(index);
+      plan[index] = pickSuggestion(index, plan);
     }
   });
   setCurrentPlan(plan);
@@ -1661,7 +1684,7 @@ function replaceOpenWeek() {
   state.plansByWeek = { ...(state.plansByWeek || {}), [getWeekKey()]: plan };
   dayNames.forEach((_, index) => {
     if (!lockedPlan[index]) {
-      plan[index] = pickSuggestion(index);
+      plan[index] = pickSuggestion(index, plan);
       state.plansByWeek[getWeekKey()] = plan;
     }
   });
