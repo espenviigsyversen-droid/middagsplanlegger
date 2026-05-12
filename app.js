@@ -34,6 +34,7 @@ const FIREBASE_SDK_VERSION = "12.13.0";
 const FAMILY_ID = "familien";
 const syncedStateKeys = new Set([
   "family",
+  "mealPreferences",
   "meals",
   "metadata",
   "plansByWeek",
@@ -193,6 +194,14 @@ const defaultState = {
     reuseIngredients: true,
     quickDays: ["Tirsdag", "Torsdag"],
   },
+  mealPreferences: {
+    categoryGoals: {
+      fisk: { minPerWeek: 1, maxPerWeek: null, minEveryWeeks: 2 },
+      vegetar: { minPerWeek: 1, maxPerWeek: null, minEveryWeeks: null },
+      kjott: { minPerWeek: null, maxPerWeek: 3, minEveryWeeks: null },
+      suppe: { minPerWeek: null, maxPerWeek: 1, minEveryWeeks: null },
+    },
+  },
   meals: defaultMeals,
   plan: {
     0: "laks",
@@ -266,6 +275,7 @@ function normalizeState(nextState) {
       ...(nextState.metadata?.suitabilityLabels || {}),
     },
   };
+  nextState.mealPreferences = normalizeMealPreferences(nextState.mealPreferences, nextState.metadata.categoryLabels);
   nextState.meals = nextState.meals.map((meal) => ({
     ...meal,
     baseServings: Math.max(1, Number(meal.baseServings) || 4),
@@ -300,6 +310,29 @@ function normalizeState(nextState) {
   nextState.plan = undefined;
   nextState.lockedPlan = undefined;
   return nextState;
+}
+
+function normalizeMealPreferences(preferences = {}, labels = categoryLabels) {
+  const goals = preferences.categoryGoals || {};
+  return {
+    categoryGoals: Object.fromEntries(Object.keys(labels).map((key) => [
+      key,
+      normalizeCategoryGoal(goals[key]),
+    ])),
+  };
+}
+
+function normalizeCategoryGoal(goal = {}) {
+  return {
+    minPerWeek: nullablePositiveNumber(goal.minPerWeek),
+    maxPerWeek: nullablePositiveNumber(goal.maxPerWeek),
+    minEveryWeeks: nullablePositiveNumber(goal.minEveryWeeks),
+  };
+}
+
+function nullablePositiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function getCategoryLabels() {
@@ -365,6 +398,7 @@ function setState(patch) {
 function syncPayload() {
   return {
     family: state.family,
+    mealPreferences: state.mealPreferences,
     meals: state.meals,
     metadata: state.metadata,
     plansByWeek: state.plansByWeek,
@@ -392,6 +426,7 @@ function weekPayload(weekKey) {
 function syncedScopesForPatch(patch) {
   const scopes = new Set();
   if ("family" in patch) scopes.add("profile");
+  if ("mealPreferences" in patch) scopes.add("preferences");
   if ("metadata" in patch) scopes.add("metadata");
   if ("meals" in patch) scopes.add("meals");
   if ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch || "dayModesByWeek" in patch || "dayNotesByWeek" in patch) scopes.add("weeks");
@@ -459,6 +494,7 @@ function applyRemotePayload(payload) {
   }
   const remoteState = {
     family: payload.family,
+    mealPreferences: payload.mealPreferences,
     meals: payload.meals,
     metadata: payload.metadata,
     plansByWeek: payload.plansByWeek,
@@ -952,7 +988,21 @@ function advisorSummary() {
   const quickDays = state.family.quickDays.join(", ");
   const lockedCount = Object.values(lockedPlan).filter(Boolean).length;
   const activeTypes = [...new Set(Object.values(dayTypes).map((type) => getSuitabilityLabels()[type] || type))].join(", ");
-  return `Rådgiveren fyller bare åpne dager og lar låste dager stå. Den matcher dagstype mot "Passer til", prioriterer raske middager på ${quickDays}, og unngår duplikater i samme uke. Dagstyper denne uken: ${activeTypes}. Barnevennlige middager: ${kidCount}/${state.family.kidFriendlyPerWeek}. Låste dager: ${lockedCount}.`;
+  const categoryStatus = categoryPreferenceStatus(plan);
+  return `Rådgiveren fyller bare åpne dager og lar låste dager stå. Den matcher dagstype mot "Passer til", prioriterer raske middager på ${quickDays}, og unngår duplikater i samme uke. Dagstyper denne uken: ${activeTypes}. Barnevennlige middager: ${kidCount}/${state.family.kidFriendlyPerWeek}. Låste dager: ${lockedCount}.${categoryStatus ? ` Middagspreferanser: ${categoryStatus}.` : ""}`;
+}
+
+function categoryPreferenceStatus(plan) {
+  const counts = categoryCountsForPlan(plan);
+  return categoryEntries().map(([category, label]) => {
+    const goal = preferenceGoalFor(category);
+    const count = counts[category] || 0;
+    const parts = [];
+    if (goal.minPerWeek) parts.push(`${count}/${goal.minPerWeek}`);
+    if (goal.maxPerWeek) parts.push(`maks ${goal.maxPerWeek}`);
+    if (!parts.length) return "";
+    return `${label} ${parts.join(", ")}`;
+  }).filter(Boolean).join(" · ");
 }
 
 function suggestionReason(meal, dayIndex) {
@@ -1466,6 +1516,16 @@ function renderSetup() {
       </div>
     </section>
     <section class="panel setup-section">
+      <h2>Middagspreferanser</h2>
+      <p class="status-note">Sett myke mål for ukene. Rådgiveren prøver å treffe disse, men kan fortsatt velge praktisk hvis få middager passer.</p>
+      <div class="setup-menu">
+        <button class="setup-menu-item" data-view="meal-preferences">
+          <span>Ukemål for kategorier</span>
+          <strong>${activePreferenceGoalCount()}</strong>
+        </button>
+      </div>
+    </section>
+    <section class="panel setup-section">
       <h2>Metadata</h2>
       <div class="setup-menu">
         <button class="setup-menu-item" data-view="categories">
@@ -1492,6 +1552,71 @@ function renderSetup() {
       <button class="button" data-refresh-app>Oppdater app</button>
     </section>
   `;
+}
+
+function activePreferenceGoalCount() {
+  return Object.values(state.mealPreferences?.categoryGoals || {})
+    .reduce((count, goal) => count + ["minPerWeek", "maxPerWeek", "minEveryWeeks"].filter((field) => goal?.[field]).length, 0);
+}
+
+function preferenceGoalFor(category) {
+  return normalizeCategoryGoal(state.mealPreferences?.categoryGoals?.[category]);
+}
+
+function renderMealPreferencesSetup() {
+  return `
+    <section class="view-header">
+      <div>
+        <h2 class="view-title">Middagspreferanser</h2>
+        <p class="view-lead">Definer hva dere helst vil ha i en vanlig uke. Tomme felt betyr ingen regel.</p>
+      </div>
+      <button class="button secondary" data-view="setup">Tilbake</button>
+    </section>
+    <section class="panel setup-section">
+      <form class="preference-list" data-meal-preferences-form>
+        ${categoryEntries().map(([key, label]) => {
+          const goal = preferenceGoalFor(key);
+          return `
+            <div class="preference-row">
+              <div>
+                <span class="chip ${key}">${escapeHtml(label)}</span>
+                <p>Brukes når planleggeren foreslår middager.</p>
+              </div>
+              <div class="preference-fields">
+                <label>
+                  <span>Min. per uke</span>
+                  <input class="input" type="number" min="0" max="7" name="${escapeHtml(key)}:minPerWeek" value="${goal.minPerWeek ?? ""}" placeholder="0">
+                </label>
+                <label>
+                  <span>Maks per uke</span>
+                  <input class="input" type="number" min="0" max="7" name="${escapeHtml(key)}:maxPerWeek" value="${goal.maxPerWeek ?? ""}" placeholder="Tomt">
+                </label>
+                <label>
+                  <span>Minst hver</span>
+                  <input class="input" type="number" min="0" max="12" name="${escapeHtml(key)}:minEveryWeeks" value="${goal.minEveryWeeks ?? ""}" placeholder="uker">
+                </label>
+              </div>
+            </div>
+          `;
+        }).join("")}
+        <p class="field-hint">Eksempel: Fisk med “Min. per uke 1” og “Minst hver 2” betyr at rådgiveren prioriterer fisk hvis det mangler fisk denne uken eller forrige uke.</p>
+        <button class="button" type="submit">Lagre preferanser</button>
+      </form>
+    </section>
+  `;
+}
+
+function saveMealPreferencesFromForm(form) {
+  const formData = new FormData(form);
+  const categoryGoals = {};
+  categoryEntries().forEach(([key]) => {
+    categoryGoals[key] = normalizeCategoryGoal({
+      minPerWeek: formData.get(`${key}:minPerWeek`),
+      maxPerWeek: formData.get(`${key}:maxPerWeek`),
+      minEveryWeeks: formData.get(`${key}:minEveryWeeks`),
+    });
+  });
+  setState({ mealPreferences: { categoryGoals } });
 }
 
 function renderCategoriesSetup() {
@@ -1604,8 +1729,17 @@ function addCategoryFromForm(form) {
   if (!label) return;
   const key = makeSlug(label);
   const labels = getCategoryLabels();
-  const nextLabels = { ...labels, [uniqueMetadataKey(key, labels)]: label };
-  setState({ metadata: { ...state.metadata, categoryLabels: nextLabels } });
+  const nextKey = uniqueMetadataKey(key, labels);
+  const nextLabels = { ...labels, [nextKey]: label };
+  setState({
+    metadata: { ...state.metadata, categoryLabels: nextLabels },
+    mealPreferences: {
+      categoryGoals: {
+        ...(state.mealPreferences?.categoryGoals || {}),
+        [nextKey]: normalizeCategoryGoal(),
+      },
+    },
+  });
 }
 
 function addUnitFromForm(form) {
@@ -1638,12 +1772,14 @@ function addSuitabilityFromForm(form) {
 function removeCategory(key) {
   const labels = { ...getCategoryLabels() };
   delete labels[key];
+  const categoryGoals = { ...(state.mealPreferences?.categoryGoals || {}) };
+  delete categoryGoals[key];
   const fallback = Object.keys(labels)[0] || "annet";
   const meals = state.meals.map((meal) => {
     const categories = meal.categories.filter((category) => category !== key);
     return { ...meal, categories: categories.length ? categories : [fallback] };
   });
-  setState({ metadata: { ...state.metadata, categoryLabels: labels }, meals });
+  setState({ metadata: { ...state.metadata, categoryLabels: labels }, mealPreferences: { categoryGoals }, meals });
 }
 
 function removeUnit(unit) {
@@ -1719,6 +1855,55 @@ function daysBetweenDates(a, b) {
   return Math.abs(Math.round((a.getTime() - b.getTime()) / 86400000));
 }
 
+function weekKeyOffset(weekKey, offsetWeeks) {
+  const date = new Date(`${weekKey}T00:00:00`);
+  date.setDate(date.getDate() + offsetWeeks * 7);
+  return date.toISOString().slice(0, 10);
+}
+
+function planHasCategory(plan, category) {
+  return Object.values(plan || {}).some((mealId) => {
+    const meal = getMeal(mealId);
+    return meal && (meal.categories || []).includes(category);
+  });
+}
+
+function categoryCountsForPlan(plan, excludeDayIndex = null) {
+  const counts = {};
+  Object.entries(plan || {}).forEach(([index, mealId]) => {
+    if (excludeDayIndex !== null && Number(index) === excludeDayIndex) return;
+    const meal = getMeal(mealId);
+    (meal?.categories || []).forEach((category) => {
+      counts[category] = (counts[category] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+function categoryDueThisWeek(category, intervalWeeks, plan, excludeDayIndex) {
+  const interval = Number(intervalWeeks);
+  if (!interval || interval < 2) return false;
+  if ((categoryCountsForPlan(plan, excludeDayIndex)[category] || 0) > 0) return false;
+  const currentWeekKey = getWeekKey();
+  for (let offset = 1; offset < interval; offset += 1) {
+    if (planHasCategory(state.plansByWeek?.[weekKeyOffset(currentWeekKey, -offset)], category)) return false;
+  }
+  return true;
+}
+
+function categoryPreferenceScore(meal, plan, dayIndex) {
+  const counts = categoryCountsForPlan(plan, dayIndex);
+  return (meal.categories || []).reduce((score, category) => {
+    const goal = preferenceGoalFor(category);
+    const current = counts[category] || 0;
+    let nextScore = score;
+    if (goal.minPerWeek && current < goal.minPerWeek) nextScore += 45;
+    if (goal.maxPerWeek && current >= goal.maxPerWeek) nextScore -= 90;
+    if (categoryDueThisWeek(category, goal.minEveryWeeks, plan, dayIndex)) nextScore += 35;
+    return nextScore;
+  }, 0);
+}
+
 function plannedTooClose(meal, dayIndex, planOverride) {
   const minDays = Math.max(1, Number(meal.minDaysBetween) || 1);
   const targetWeekKey = getWeekKey();
@@ -1747,6 +1932,7 @@ function pickSuggestion(dayIndex, planOverride = currentPlan()) {
       if (wantsQuick && meal.prepTime === "quick") score += 25;
       if (state.family.leftovers && meal.leftovers === "likely") score += 6;
       if ((meal.suitability || []).includes(dayType)) score += 35;
+      score += categoryPreferenceScore(meal, plan, dayIndex);
       return { meal, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -1983,6 +2169,11 @@ function bindEvents() {
     addSuitabilityFromForm(event.currentTarget);
   });
 
+  app.querySelector("[data-meal-preferences-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveMealPreferencesFromForm(event.currentTarget);
+  });
+
   app.querySelectorAll("[data-remove-category]").forEach((button) => {
     button.addEventListener("click", () => removeCategory(button.dataset.removeCategory));
   });
@@ -2028,6 +2219,7 @@ function render() {
     meals: renderMeals,
     recipe: renderMealDetail,
     setup: renderSetup,
+    "meal-preferences": renderMealPreferencesSetup,
     categories: renderCategoriesSetup,
     units: renderUnitsSetup,
     "prep-times": renderPrepTimesSetup,
@@ -2093,6 +2285,7 @@ async function initFirebaseSync() {
     const db = getFirestore(firebaseApp);
     remoteRefs.legacyState = doc(db, "families", FAMILY_ID, "app", "state");
     remoteRefs.profile = doc(db, "families", FAMILY_ID, "app", "profile");
+    remoteRefs.preferences = doc(db, "families", FAMILY_ID, "app", "preferences");
     remoteRefs.metadata = doc(db, "families", FAMILY_ID, "app", "metadata");
     remoteRefs.meals = collection(db, "families", FAMILY_ID, "meals");
     remoteRefs.weeks = collection(db, "families", FAMILY_ID, "weeks");
@@ -2146,6 +2339,16 @@ function startSplitSyncListeners(onSnapshot) {
     }
     applyRemoteDocument("metadata", snapshot.data(), (data) => {
       applyRemoteStatePatch({ metadata: data.metadata, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
+    });
+  }, markSyncFailed);
+
+  onSnapshot(remoteRefs.preferences, (snapshot) => {
+    if (!snapshot.exists()) {
+      scheduleRemoteSave(0, ["preferences"]);
+      return;
+    }
+    applyRemoteDocument("preferences", snapshot.data(), (data) => {
+      applyRemoteStatePatch({ mealPreferences: data.mealPreferences, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
     });
   }, markSyncFailed);
 
@@ -2238,10 +2441,10 @@ function markSyncFailed() {
 
 async function saveAllRemoteState() {
   Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-  await saveRemoteScopes(["profile", "metadata", "meals", "weeks"]);
+  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks"]);
 }
 
-function scheduleRemoteSave(delay = 700, scopes = ["profile", "metadata", "meals", "weeks"]) {
+function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks"]) {
   if (!remoteRefs.profile || applyingRemoteState) return;
   scopes.forEach((scope) => pendingRemoteScopes.add(scope));
   const key = [...new Set(scopes)].sort().join("-");
@@ -2271,6 +2474,10 @@ async function saveRemoteScopes(scopes) {
 
   if (uniqueScopes.includes("profile")) {
     writes.push(window.middagsplanSetDoc(remoteRefs.profile, { family: state.family, clientUpdatedAt, updatedAt }, { merge: true }));
+  }
+
+  if (uniqueScopes.includes("preferences")) {
+    writes.push(window.middagsplanSetDoc(remoteRefs.preferences, { mealPreferences: state.mealPreferences, clientUpdatedAt, updatedAt }, { merge: true }));
   }
 
   if (uniqueScopes.includes("metadata")) {
