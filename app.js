@@ -32,6 +32,7 @@ const firebaseConfig = {
 
 const FIREBASE_SDK_VERSION = "12.13.0";
 const FAMILY_ID = "familien";
+const VARIATION_LOOKBACK_WEEKS = 4;
 const syncedStateKeys = new Set([
   "family",
   "mealPreferences",
@@ -1000,7 +1001,7 @@ function advisorSummary() {
   const lockedCount = Object.values(lockedPlan).filter(Boolean).length;
   const activeTypes = [...new Set(Object.values(dayTypes).map((type) => getSuitabilityLabels()[type] || type))].join(", ");
   const categoryStatus = categoryPreferenceStatus(plan);
-  return `Rådgiveren fyller bare åpne dager og lar låste dager stå. Den matcher dagstype mot "Passer til", prioriterer raske middager på ${quickDays}, og unngår duplikater i samme uke. Dagstyper denne uken: ${activeTypes}. Barnevennlige middager: ${kidCount}/${state.family.kidFriendlyPerWeek}. Låste dager: ${lockedCount}.${categoryStatus ? ` Middagspreferanser: ${categoryStatus}.` : ""}`;
+  return `Rådgiveren fyller bare åpne dager og lar låste dager stå. Den matcher dagstype mot "Passer til", prioriterer raske middager på ${quickDays}, unngår duplikater i samme uke og prøver å variere mot de siste ${VARIATION_LOOKBACK_WEEKS} ukene. Dagstyper denne uken: ${activeTypes}. Barnevennlige middager: ${kidCount}/${state.family.kidFriendlyPerWeek}. Låste dager: ${lockedCount}.${categoryStatus ? ` Middagspreferanser: ${categoryStatus}.` : ""}`;
 }
 
 function categoryPreferenceStatus(plan) {
@@ -1024,6 +1025,7 @@ function suggestionReason(meal, dayIndex) {
   if (state.family.quickDays.includes(dayNames[dayIndex]) && meal.prepTime === "quick") parts.push("rask dag");
   if (meal.kidFriendly) parts.push("barnevennlig");
   if (meal.favorite) parts.push("favoritt");
+  if (recentMealDistanceDays(meal.id, dateForWeekDay(getWeekKey(), dayIndex)) === null) parts.push("ikke brukt nylig");
   return parts.length ? `Foreslått fordi den er ${parts.join(", ")}.` : `Valgt for ${typeLabel.toLowerCase()}.`;
 }
 
@@ -1932,6 +1934,58 @@ function categoryPreferenceScore(meal, plan, dayIndex) {
   }, 0);
 }
 
+function recentMealDistanceDays(mealId, targetDate, lookbackWeeks = VARIATION_LOOKBACK_WEEKS) {
+  const currentWeekKey = getWeekKey();
+  let closestDays = null;
+  for (let offset = 1; offset <= lookbackWeeks; offset += 1) {
+    const weekKey = weekKeyOffset(currentWeekKey, -offset);
+    Object.entries(state.plansByWeek?.[weekKey] || {}).forEach(([plannedDayIndex, plannedMealId]) => {
+      if (plannedMealId !== mealId) return;
+      const distance = daysBetweenDates(targetDate, dateForWeekDay(weekKey, plannedDayIndex));
+      closestDays = closestDays === null ? distance : Math.min(closestDays, distance);
+    });
+  }
+  return closestDays;
+}
+
+function recentCategoryCount(categories, lookbackWeeks = 2) {
+  const currentWeekKey = getWeekKey();
+  let count = 0;
+  for (let offset = 1; offset <= lookbackWeeks; offset += 1) {
+    const weekKey = weekKeyOffset(currentWeekKey, -offset);
+    Object.values(state.plansByWeek?.[weekKey] || {}).forEach((mealId) => {
+      const plannedMeal = getMeal(mealId);
+      if (plannedMeal && (plannedMeal.categories || []).some((category) => categories.includes(category))) {
+        count += 1;
+      }
+    });
+  }
+  return count;
+}
+
+function rotationScore(meal, dayIndex) {
+  const targetDate = dateForWeekDay(getWeekKey(), dayIndex);
+  const daysSince = recentMealDistanceDays(meal.id, targetDate);
+  let score = 0;
+  if (daysSince === null) {
+    score += 18;
+  } else if (daysSince <= 7) {
+    score -= 95;
+  } else if (daysSince <= 14) {
+    score -= 58;
+  } else if (daysSince <= 21) {
+    score -= 30;
+  } else if (daysSince <= 28) {
+    score -= 14;
+  }
+
+  const recentCategoryUses = recentCategoryCount(meal.categories || []);
+  if (recentCategoryUses >= 6) score -= 22;
+  else if (recentCategoryUses >= 4) score -= 14;
+  else if (recentCategoryUses >= 2) score -= 6;
+  return score;
+}
+
 function plannedTooClose(meal, dayIndex, planOverride) {
   const minDays = Math.max(1, Number(meal.minDaysBetween) || 1);
   const targetWeekKey = getWeekKey();
@@ -1961,6 +2015,7 @@ function pickSuggestion(dayIndex, planOverride = currentPlan()) {
       if (state.family.leftovers && meal.leftovers === "likely") score += 6;
       if ((meal.suitability || []).includes(dayType)) score += 35;
       score += categoryPreferenceScore(meal, plan, dayIndex);
+      score += rotationScore(meal, dayIndex);
       return { meal, score };
     })
     .sort((a, b) => b.score - a.score);
