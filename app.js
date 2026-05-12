@@ -40,6 +40,8 @@ const syncedStateKeys = new Set([
   "lockedPlansByWeek",
   "dayTypesByWeek",
   "servingsByWeek",
+  "dayModesByWeek",
+  "dayNotesByWeek",
 ]);
 
 const defaultMeals = [
@@ -214,6 +216,8 @@ const defaultState = {
   lockedPlansByWeek: {},
   dayTypesByWeek: {},
   servingsByWeek: {},
+  dayModesByWeek: {},
+  dayNotesByWeek: {},
 };
 
 let state = loadState();
@@ -273,6 +277,8 @@ function normalizeState(nextState) {
   nextState.lockedPlansByWeek = nextState.lockedPlansByWeek || {};
   nextState.dayTypesByWeek = nextState.dayTypesByWeek || {};
   nextState.servingsByWeek = nextState.servingsByWeek || {};
+  nextState.dayModesByWeek = nextState.dayModesByWeek || {};
+  nextState.dayNotesByWeek = nextState.dayNotesByWeek || {};
   if (!nextState.plansByWeek[currentWeekKey]) {
     nextState.plansByWeek[currentWeekKey] = { ...emptyWeekPlan(), ...(nextState.plan || {}) };
   }
@@ -284,6 +290,12 @@ function normalizeState(nextState) {
   }
   if (!nextState.servingsByWeek[currentWeekKey]) {
     nextState.servingsByWeek[currentWeekKey] = emptyWeekServings(nextState.family.familySize);
+  }
+  if (!nextState.dayModesByWeek[currentWeekKey]) {
+    nextState.dayModesByWeek[currentWeekKey] = emptyWeekDayModes();
+  }
+  if (!nextState.dayNotesByWeek[currentWeekKey]) {
+    nextState.dayNotesByWeek[currentWeekKey] = emptyWeekDayNotes();
   }
   nextState.plan = undefined;
   nextState.lockedPlan = undefined;
@@ -359,6 +371,8 @@ function syncPayload() {
     lockedPlansByWeek: state.lockedPlansByWeek,
     dayTypesByWeek: state.dayTypesByWeek,
     servingsByWeek: state.servingsByWeek,
+    dayModesByWeek: state.dayModesByWeek,
+    dayNotesByWeek: state.dayNotesByWeek,
     clientUpdatedAt: state.clientUpdatedAt || 0,
   };
 }
@@ -369,6 +383,8 @@ function weekPayload(weekKey) {
     lockedPlan: { ...emptyWeekLocks(), ...(state.lockedPlansByWeek?.[weekKey] || {}) },
     dayTypes: { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[weekKey] || {}) },
     servings: { ...emptyWeekServings(state.family.familySize), ...(state.servingsByWeek?.[weekKey] || {}) },
+    dayModes: { ...emptyWeekDayModes(), ...(state.dayModesByWeek?.[weekKey] || {}) },
+    dayNotes: { ...emptyWeekDayNotes(), ...(state.dayNotesByWeek?.[weekKey] || {}) },
     clientUpdatedAt: state.clientUpdatedAt || 0,
   };
 }
@@ -378,13 +394,13 @@ function syncedScopesForPatch(patch) {
   if ("family" in patch) scopes.add("profile");
   if ("metadata" in patch) scopes.add("metadata");
   if ("meals" in patch) scopes.add("meals");
-  if ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch) scopes.add("weeks");
+  if ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch || "dayModesByWeek" in patch || "dayNotesByWeek" in patch) scopes.add("weeks");
   return [...scopes];
 }
 
 function changedWeekKeys(patch, previousState) {
   const keys = new Set();
-  ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servingsByWeek"].forEach((field) => {
+  ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servingsByWeek", "dayModesByWeek", "dayNotesByWeek"].forEach((field) => {
     if (!(field in patch)) return;
     const previous = previousState?.[field] || {};
     const current = state[field] || {};
@@ -394,7 +410,7 @@ function changedWeekKeys(patch, previousState) {
       }
     });
   });
-  if (!keys.size && ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch)) {
+  if (!keys.size && ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch || "dayModesByWeek" in patch || "dayNotesByWeek" in patch)) {
     keys.add(getWeekKey());
   }
   return [...keys];
@@ -449,6 +465,8 @@ function applyRemotePayload(payload) {
     lockedPlansByWeek: payload.lockedPlansByWeek,
     dayTypesByWeek: payload.dayTypesByWeek,
     servingsByWeek: payload.servingsByWeek,
+    dayModesByWeek: payload.dayModesByWeek,
+    dayNotesByWeek: payload.dayNotesByWeek,
     clientUpdatedAt: remoteClientUpdatedAt,
     pendingLocalSync: false,
   };
@@ -544,6 +562,13 @@ function getWeekKey(offset = state.weekOffset) {
   return getWeekDates(offset)[0].toISOString().slice(0, 10);
 }
 
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function emptyWeekPlan() {
   return { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
 }
@@ -554,6 +579,14 @@ function emptyWeekLocks() {
 
 function emptyWeekDayTypes() {
   return { 0: "weekday", 1: "weekday", 2: "weekday", 3: "weekday", 4: "weekday", 5: "weekend", 6: "weekend" };
+}
+
+function emptyWeekDayModes() {
+  return { 0: "home", 1: "home", 2: "home", 3: "home", 4: "home", 5: "home", 6: "home" };
+}
+
+function emptyWeekDayNotes() {
+  return { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
 }
 
 function emptyWeekServings(familySize = 5) {
@@ -571,6 +604,14 @@ function currentLocks() {
 
 function currentDayTypes() {
   return { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[getWeekKey()] || {}) };
+}
+
+function currentDayModes() {
+  return { ...emptyWeekDayModes(), ...(state.dayModesByWeek?.[getWeekKey()] || {}) };
+}
+
+function currentDayNotes() {
+  return { ...emptyWeekDayNotes(), ...(state.dayNotesByWeek?.[getWeekKey()] || {}) };
 }
 
 function currentServings() {
@@ -595,6 +636,16 @@ function setCurrentLocks(lockedPlan) {
 function setCurrentDayTypes(dayTypes) {
   const weekKey = getWeekKey();
   setState({ dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: dayTypes } });
+}
+
+function setCurrentDayModes(dayModes) {
+  const weekKey = getWeekKey();
+  setState({ dayModesByWeek: { ...(state.dayModesByWeek || {}), [weekKey]: dayModes } });
+}
+
+function setCurrentDayNotes(dayNotes) {
+  const weekKey = getWeekKey();
+  setState({ dayNotesByWeek: { ...(state.dayNotesByWeek || {}), [weekKey]: dayNotes } });
 }
 
 function setCurrentServings(servings) {
@@ -722,8 +773,14 @@ function navButton(view, label, iconName) {
 function renderCalendar() {
   const dates = getWeekDates();
   const plan = currentPlan();
+  const dayModes = currentDayModes();
+  const dayNotes = currentDayNotes();
+  const todayIndex = getTodayIndexInCurrentWeek();
+  const todayCard = renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex);
   const cards = dayNames.map((day, index) => {
     const meal = getMeal(plan[index]);
+    const isAway = dayModes[index] === "away";
+    const note = dayNotes[index] || "";
     return `
       <article class="day-card">
         <div class="day-head">
@@ -732,7 +789,12 @@ function renderCalendar() {
             <div class="day-date">${formatDate(dates[index])}</div>
           </div>
         </div>
-        ${meal ? `
+        ${isAway ? `
+          <div class="calendar-meal">
+            <p class="meal-title">Spise borte</p>
+            <p class="meal-description">${escapeHtml(note || "Ingen detaljer lagt inn.")}</p>
+          </div>
+        ` : meal ? `
           <div class="calendar-meal">
             <p class="meal-title">${escapeHtml(meal.title)}</p>
             <p class="meal-description">${escapeHtml(meal.description || "Ingen beskrivelse lagt inn.")}</p>
@@ -762,7 +824,40 @@ function renderCalendar() {
         <button class="button secondary" data-week="1">Neste</button>
       </div>
     </section>
+    ${todayCard}
     <section class="week-grid">${cards}</section>
+  `;
+}
+
+function getTodayIndexInCurrentWeek() {
+  const todayKey = localDateKey(new Date());
+  return getWeekDates().findIndex((date) => localDateKey(date) === todayKey);
+}
+
+function renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex) {
+  const index = todayIndex >= 0 ? todayIndex : 0;
+  const day = todayIndex >= 0 ? "I dag" : dayNames[index];
+  const meal = getMeal(plan[index]);
+  const isAway = dayModes[index] === "away";
+  const note = dayNotes[index] || "";
+  const title = isAway ? "Spise borte" : meal ? meal.title : "Ikke planlagt";
+  const description = isAway
+    ? (note || "Ingen detaljer lagt inn.")
+    : meal
+      ? (meal.description || "Ingen beskrivelse lagt inn.")
+      : "Gå til Planlegger for å legge inn middag.";
+  return `
+    <section class="today-summary">
+      <div>
+        <span class="today-kicker">${day} · ${formatDate(dates[index])}</span>
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(description)}</p>
+      </div>
+      <div class="today-actions">
+        ${meal && !isAway ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
+        <button class="button secondary compact" data-view="planner">Planlegger</button>
+      </div>
+    </section>
   `;
 }
 
@@ -772,12 +867,17 @@ function renderPlanner() {
   const lockedPlan = currentLocks();
   const dayTypes = currentDayTypes();
   const servings = currentServings();
+  const dayModes = currentDayModes();
+  const dayNotes = currentDayNotes();
   const rows = dayNames.map((day, index) => {
     const mealId = plan[index] || "";
     const meal = getMeal(mealId);
     const locked = Boolean(lockedPlan[index]);
     const dayType = dayTypes[index] || "weekday";
     const dayServings = Math.max(1, Number(servings[index]) || 4);
+    const dayMode = dayModes[index] || "home";
+    const isAway = dayMode === "away";
+    const dayNote = dayNotes[index] || "";
     return `
       <div class="planner-row">
         <div class="planner-day-block">
@@ -786,6 +886,13 @@ function renderPlanner() {
           <button class="toggle-chip ${locked ? "active" : ""}" data-lock-day="${index}">${locked ? "Låst" : "Åpen"}</button>
         </div>
         <div class="planner-meal-block">
+          <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${day}">
+            <option value="home" ${dayMode === "home" ? "selected" : ""}>Middag hjemme</option>
+            <option value="away" ${dayMode === "away" ? "selected" : ""}>Spise borte</option>
+          </select>
+          ${isAway ? `
+            <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="Hvor spiser dere? f.eks. hos svigefar">
+          ` : `
           <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${day}">
             ${suitabilityEntries().map(([value, label]) => `<option value="${value}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
           </select>
@@ -798,10 +905,11 @@ function renderPlanner() {
             ${mealSelectOptions(mealId)}
           </select>
           ${meal ? `<div class="planner-preview"><strong>${escapeHtml(meal.title)}</strong><span>${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}</span><em>${escapeHtml(suggestionReason(meal, index))}</em></div>` : '<div class="planner-preview muted">Ingen middag valgt</div>'}
+          `}
         </div>
         <div class="planner-actions">
-          <button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>
-          ${mealId ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
+          ${isAway ? "" : `<button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>`}
+          ${mealId && !isAway ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
         </div>
       </div>
     `;
@@ -1658,6 +1766,19 @@ function updateDayType(dayIndex, dayType) {
   setCurrentDayTypes({ ...currentDayTypes(), [dayIndex]: dayType });
 }
 
+function updateDayMode(dayIndex, mode) {
+  const dayModes = { ...currentDayModes(), [dayIndex]: mode };
+  const patch = { dayModesByWeek: { ...(state.dayModesByWeek || {}), [getWeekKey()]: dayModes } };
+  if (mode === "away") {
+    patch.plansByWeek = { ...(state.plansByWeek || {}), [getWeekKey()]: { ...currentPlan(), [dayIndex]: "" } };
+  }
+  setState(patch);
+}
+
+function updateDayNote(dayIndex, note) {
+  setCurrentDayNotes({ ...currentDayNotes(), [dayIndex]: String(note || "").trim() });
+}
+
 function updateDayServings(dayIndex, servings) {
   setCurrentServings({ ...currentServings(), [dayIndex]: Math.max(1, Number(servings) || 1) });
 }
@@ -1665,8 +1786,9 @@ function updateDayServings(dayIndex, servings) {
 function fillWeek() {
   const plan = currentPlan();
   const lockedPlan = currentLocks();
+  const dayModes = currentDayModes();
   dayNames.forEach((_, index) => {
-    if (!plan[index] && !lockedPlan[index]) {
+    if (!plan[index] && !lockedPlan[index] && dayModes[index] !== "away") {
       plan[index] = pickSuggestion(index, plan);
     }
   });
@@ -1676,14 +1798,15 @@ function fillWeek() {
 function replaceOpenWeek() {
   const plan = currentPlan();
   const lockedPlan = currentLocks();
+  const dayModes = currentDayModes();
   dayNames.forEach((_, index) => {
-    if (!lockedPlan[index]) {
+    if (!lockedPlan[index] && dayModes[index] !== "away") {
       plan[index] = "";
     }
   });
   state.plansByWeek = { ...(state.plansByWeek || {}), [getWeekKey()]: plan };
   dayNames.forEach((_, index) => {
-    if (!lockedPlan[index]) {
+    if (!lockedPlan[index] && dayModes[index] !== "away") {
       plan[index] = pickSuggestion(index, plan);
       state.plansByWeek[getWeekKey()] = plan;
     }
@@ -1710,6 +1833,14 @@ function bindEvents() {
     select.addEventListener("change", () => updateDayType(Number(select.dataset.dayType), select.value));
   });
 
+  app.querySelectorAll("[data-day-mode]").forEach((select) => {
+    select.addEventListener("change", () => updateDayMode(Number(select.dataset.dayMode), select.value));
+  });
+
+  app.querySelectorAll("[data-day-note]").forEach((input) => {
+    input.addEventListener("change", () => updateDayNote(Number(input.dataset.dayNote), input.value));
+  });
+
   app.querySelectorAll("[data-day-servings]").forEach((input) => {
     input.addEventListener("change", () => updateDayServings(Number(input.dataset.dayServings), input.value));
   });
@@ -1732,6 +1863,8 @@ function bindEvents() {
       lockedPlansByWeek: { ...(state.lockedPlansByWeek || {}), [weekKey]: emptyWeekLocks() },
       dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: emptyWeekDayTypes() },
       servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings(state.family.familySize) },
+      dayModesByWeek: { ...(state.dayModesByWeek || {}), [weekKey]: emptyWeekDayModes() },
+      dayNotesByWeek: { ...(state.dayNotesByWeek || {}), [weekKey]: emptyWeekDayNotes() },
     });
   });
 
@@ -2052,16 +2185,20 @@ function startSplitSyncListeners(onSnapshot) {
     const lockedPlansByWeek = { ...(state.lockedPlansByWeek || {}) };
     const dayTypesByWeek = { ...(state.dayTypesByWeek || {}) };
     const servingsByWeek = { ...(state.servingsByWeek || {}) };
+    const dayModesByWeek = { ...(state.dayModesByWeek || {}) };
+    const dayNotesByWeek = { ...(state.dayNotesByWeek || {}) };
     snapshot.docs.forEach((weekDoc) => {
       const data = weekDoc.data();
       plansByWeek[weekDoc.id] = { ...emptyWeekPlan(), ...(data.plan || {}) };
       lockedPlansByWeek[weekDoc.id] = { ...emptyWeekLocks(), ...(data.lockedPlan || {}) };
       dayTypesByWeek[weekDoc.id] = { ...emptyWeekDayTypes(), ...(data.dayTypes || {}) };
       servingsByWeek[weekDoc.id] = { ...emptyWeekServings(state.family.familySize), ...(data.servings || {}) };
+      dayModesByWeek[weekDoc.id] = { ...emptyWeekDayModes(), ...(data.dayModes || {}) };
+      dayNotesByWeek[weekDoc.id] = { ...emptyWeekDayNotes(), ...(data.dayNotes || {}) };
     });
     applyingRemoteState = true;
     pendingRemoteScopes.delete("weeks");
-    applyRemoteStatePatch({ plansByWeek, lockedPlansByWeek, dayTypesByWeek, servingsByWeek, clientUpdatedAt: maxClientUpdatedAt, pendingLocalSync: pendingRemoteScopes.size > 0 });
+    applyRemoteStatePatch({ plansByWeek, lockedPlansByWeek, dayTypesByWeek, servingsByWeek, dayModesByWeek, dayNotesByWeek, clientUpdatedAt: maxClientUpdatedAt, pendingLocalSync: pendingRemoteScopes.size > 0 });
     applyingRemoteState = false;
     markSynced();
   }, markSyncFailed);

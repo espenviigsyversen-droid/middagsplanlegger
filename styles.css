@@ -198,6 +198,46 @@ button {
   padding-bottom: 4px;
 }
 
+.today-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.today-kicker {
+  display: block;
+  color: var(--brand-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.today-summary h3 {
+  margin: 0 0 6px;
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  line-height: 1.15;
+}
+
+.today-summary p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.today-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .day-card,
 .panel,
 .meal-card {
@@ -376,6 +416,11 @@ button {
 .compact-input {
   min-height: 38px;
   background-color: var(--surface-strong);
+}
+
+.planner-away-note {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .planner-preview {
@@ -971,6 +1016,14 @@ button {
   .recipe-actions {
     justify-content: flex-start;
     min-width: 0;
+  }
+
+  .today-summary {
+    display: grid;
+  }
+
+  .today-actions {
+    justify-content: flex-start;
   }
 
   .planner-row {
