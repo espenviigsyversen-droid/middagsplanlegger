@@ -1081,15 +1081,10 @@ button {
 }
 
 .shopping-item {
-  display: grid;
-  grid-template-columns: 28px 1fr auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
   border-bottom: 1px solid var(--line);
-  cursor: pointer;
   transition: background 0.1s;
-  -webkit-tap-highlight-color: transparent;
 }
 
 .shopping-item:last-of-type {
@@ -1098,6 +1093,32 @@ button {
 
 .shopping-item:active {
   background: var(--surface-strong);
+}
+
+.shopping-item-main {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.shopping-item-category {
+  font-size: 0.76rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--line);
+  padding: 5px 14px 5px 42px;
+  cursor: pointer;
+  width: 100%;
+  appearance: auto;
+}
+
+.shopping-item.done .shopping-item-category {
+  opacity: 0.5;
 }
 
 .shopping-checkbox {
@@ -1520,6 +1541,17 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(150px, 0.8fr) auto 34px;
 }
 
+.metadata-row.ingredient-mapping-row {
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.8fr) auto 34px;
+}
+
+.mapping-ingredient {
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .metadata-row .icon-button {
   width: 34px;
   height: 34px;
@@ -1672,7 +1704,9 @@ button {
   }
 
   .metadata-row.plan-mode-row,
-  .metadata-add.plan-mode-add {
+  .metadata-row.ingredient-mapping-row,
+  .metadata-add.plan-mode-add,
+  .metadata-add.ingredient-mapping-add {
     grid-template-columns: 1fr;
   }
 

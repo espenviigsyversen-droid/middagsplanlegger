@@ -194,6 +194,7 @@ const defaultState = {
     prepTimeLabels: defaultPrepTimeLabels,
     suitabilityLabels: defaultSuitabilityLabels,
     planModeOptions: defaultPlanModeOptions,
+    ingredientMappings: {},
   },
   family: {
     name: "Familien",
@@ -284,6 +285,7 @@ function normalizeState(nextState) {
       ...(nextState.metadata?.suitabilityLabels || {}),
     },
     planModeOptions: normalizePlanModeOptions(nextState.metadata?.planModeOptions),
+    ingredientMappings: nextState.metadata?.ingredientMappings && typeof nextState.metadata.ingredientMappings === "object" ? nextState.metadata.ingredientMappings : {},
   };
   if (nextState.metadata.categoryLabels.kjott === "Kjott") {
     nextState.metadata.categoryLabels.kjott = "Kjøtt";
@@ -879,6 +881,8 @@ const STORE_CATEGORIES = [
 
 function categorizeIngredient(name) {
   const lower = (name || "").toLowerCase();
+  const custom = state?.metadata?.ingredientMappings?.[lower];
+  if (custom) return custom;
   for (const cat of STORE_CATEGORIES) {
     if (cat.keywords.some((kw) => lower.includes(kw))) return cat.key;
   }
@@ -985,17 +989,23 @@ function renderGenerateModal() {
 }
 
 function renderShoppingItem(item) {
-  const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
+  const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
+  const allCats = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
+  const catOptions = allCats.map((c) => `<option value="${c.key}"${item.category === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("");
   return `
-    <label class="shopping-item${item.checked ? " done" : ""}">
-      <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""}>
-      <span class="shopping-item-name">${escapeHtml(item.name)}</span>
-      ${amountText ? `<span class="shopping-item-amount">${escapeHtml(amountText)}</span>` : `<span></span>`}
-      <button type="button" class="shopping-item-remove" data-remove-item="${escapeHtml(item.id)}" aria-label="Fjern vare">×</button>
-    </label>
+    <div class="shopping-item${item.checked ? " done" : ""}">
+      <label class="shopping-item-main">
+        <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""}>
+        <span class="shopping-item-name">${escapeHtml(item.name)}</span>
+        ${amountText ? `<span class="shopping-item-amount">${escapeHtml(amountText)}</span>` : `<span></span>`}
+        <button type="button" class="shopping-item-remove" data-remove-item="${escapeHtml(item.id)}" aria-label="Fjern vare">&times;</button>
+      </label>
+      <select class="shopping-item-category" data-remap-item="${escapeHtml(item.id)}" aria-label="Kategori for ${escapeHtml(item.name)}">
+        ${catOptions}
+      </select>
+    </div>
   `;
 }
-
 function renderShoppingList() {
   const items = state.shoppingList?.items || [];
   const allCategories = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
@@ -1070,7 +1080,7 @@ function renderShell(viewHtml) {
         <div class="bottom-nav-inner">
           ${navButton("calendar", "Kalender", "calendar")}
           ${navButton("planner", "Planlegger", "plan")}
-          ${navButton("meals", "Middager", "meals")}
+          ${navButton("meals", "Oppskrifter", "meals")}
           ${navButton("shopping", "Handle", "shopping")}
           ${navButton("setup", "Setup", "profile")}
         </div>
@@ -1336,13 +1346,13 @@ function renderMeals() {
   return `
     <section class="view-header meals-view-header">
       <div class="meals-header-row">
-        <h2 class="view-title">Middager</h2>
-        <button class="button compact" data-edit-meal="new">${icon("add")} Ny middag</button>
+        <h2 class="view-title">Oppskrifter</h2>
+        <button class="button compact" data-edit-meal="new">${icon("add")} Ny oppskrift</button>
       </div>
     </section>
     ${state.editingMealId ? renderMealEditor() : ""}
     <section class="filters">
-      <input class="input" data-filter="query" value="${escapeHtml(state.filters.query)}" placeholder="Søk etter middag eller ingrediens">
+      <input class="input" data-filter="query" value="${escapeHtml(state.filters.query)}" placeholder="Søk etter oppskrift eller ingrediens">
       <div class="filter-row">
         <select class="select" data-filter="category">
           <option value="all">Alle kategorier</option>
@@ -1516,7 +1526,7 @@ function renderMealEditor() {
   return `
     <section class="panel meal-editor">
       <div class="meal-editor-head">
-        <h2>${isNew ? "Ny middag" : `Rediger ${escapeHtml(meal.title)}`}</h2>
+        <h2>${isNew ? "Ny oppskrift" : `Rediger ${escapeHtml(meal.title)}`}</h2>
         <button class="button ghost" data-cancel-edit>Avbryt</button>
       </div>
       <form class="form" data-meal-form>
@@ -1868,6 +1878,10 @@ function renderSetup() {
           <span>Plan</span>
           <strong>${planModeEntries().length}</strong>
         </button>
+        <button class="setup-menu-item" data-view="ingredient-mappings">
+          <span>Vareoppslag</span>
+          <strong>${Object.keys(state.metadata?.ingredientMappings || {}).length}</strong>
+        </button>
       </div>
     </section>
     <section class="panel setup-section">
@@ -2078,6 +2092,45 @@ function renderPlanModesSetup() {
         <button class="button secondary" type="submit">Legg til planvalg</button>
       </form>
       <p class="field-hint">Tips: Bruk typen “Rester” for dager der dere spiser mat som allerede er laget. Da hopper rådgiveren over dagen.</p>
+    </section>
+  `;
+}
+
+function renderIngredientMappingsSetup() {
+  const mappings = state.metadata?.ingredientMappings || {};
+  const allCats = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
+  const entries = Object.entries(mappings).sort(([a], [b]) => a.localeCompare(b, "no"));
+  return `
+    <section class="view-header">
+      <div>
+        <h2 class="view-title">Vareoppslag</h2>
+        <p class="view-lead">Her ser du hvilke varer som er satt til en bestemt kategori i handlelisten. Du kan legge til nye manuelt eller endre kategori direkte på en vare i handlelisten.</p>
+      </div>
+      <button class="button secondary" data-view="setup">Tilbake</button>
+    </section>
+    <section class="panel setup-section">
+      <div class="metadata-list">
+        ${entries.length === 0 ? `<p class="status-note">Ingen oppslag ennå. Bytt kategori på en vare i handlelisten for å lagre en kobling.</p>` : ""}
+        ${entries.map(([ingredient, catKey]) => {
+          const catLabel = allCats.find((c) => c.key === catKey)?.label || catKey;
+          return `
+          <div class="metadata-row ingredient-mapping-row">
+            <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
+            <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
+              ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
+            </select>
+            <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
+            <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
+          </div>`;
+        }).join("")}
+      </div>
+      <form class="metadata-add ingredient-mapping-add" data-ingredient-mapping-form>
+        <input class="input" name="ingredientName" placeholder="Ingrediensnavn, f.eks. quinoa">
+        <select class="select" name="ingredientCategory">
+          ${allCats.map((c) => `<option value="${c.key}">${escapeHtml(c.label)}</option>`).join("")}
+        </select>
+        <button class="button secondary" type="submit">Legg til oppslag</button>
+      </form>
     </section>
   `;
 }
@@ -2789,6 +2842,60 @@ function bindEvents() {
       setState({ family: state.family });
     });
   });
+
+  // Shopping list: remap item category and save to ingredientMappings
+  app.querySelectorAll("[data-remap-item]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const itemId = select.dataset.remapItem;
+      const newCat = select.value;
+      let ingredientName = null;
+      const items = (state.shoppingList?.items || []).map((item) => {
+        if (item.id !== itemId) return item;
+        ingredientName = item.name.toLowerCase();
+        return { ...item, category: newCat };
+      });
+      const mappings = ingredientName
+        ? { ...(state.metadata?.ingredientMappings || {}), [ingredientName]: newCat }
+        : state.metadata?.ingredientMappings || {};
+      setState({
+        shoppingList: { ...state.shoppingList, items },
+        metadata: { ...state.metadata, ingredientMappings: mappings },
+      });
+    });
+  });
+
+  // Ingredient mappings setup: add new mapping
+  app.querySelector("[data-ingredient-mapping-form]")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const name = String(formData.get("ingredientName") || "").trim().toLowerCase();
+    const cat = String(formData.get("ingredientCategory") || "").trim();
+    if (!name || !cat) return;
+    const mappings = { ...(state.metadata?.ingredientMappings || {}), [name]: cat };
+    setState({ metadata: { ...state.metadata, ingredientMappings: mappings } });
+    e.currentTarget.reset();
+  });
+
+  // Ingredient mappings setup: save existing mapping
+  app.querySelectorAll("[data-save-mapping]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const ingredient = button.dataset.saveMapping;
+      const select = app.querySelector(`[data-mapping-cat="${CSS.escape(ingredient)}"]`);
+      if (!select) return;
+      const mappings = { ...(state.metadata?.ingredientMappings || {}), [ingredient]: select.value };
+      setState({ metadata: { ...state.metadata, ingredientMappings: mappings } });
+    });
+  });
+
+  // Ingredient mappings setup: remove mapping
+  app.querySelectorAll("[data-remove-mapping]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const ingredient = button.dataset.removeMapping;
+      const mappings = { ...(state.metadata?.ingredientMappings || {}) };
+      delete mappings[ingredient];
+      setState({ metadata: { ...state.metadata, ingredientMappings: mappings } });
+    });
+  });
 }
 
 function render() {
@@ -2805,6 +2912,7 @@ function render() {
     "prep-times": renderPrepTimesSetup,
     suitability: renderSuitabilitySetup,
     "plan-modes": renderPlanModesSetup,
+    "ingredient-mappings": renderIngredientMappingsSetup,
   };
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
