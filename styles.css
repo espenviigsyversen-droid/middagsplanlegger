@@ -1792,7 +1792,31 @@ button {
   }
 
   .metadata-row.ingredient-mapping-row {
-    grid-template-columns: minmax(0, 1fr) minmax(100px, auto) auto 34px;
+    grid-template-columns: minmax(0, 1fr) auto 34px;
+    gap: 7px 8px;
+    padding: 8px;
+  }
+
+  .metadata-row.ingredient-mapping-row .mapping-ingredient {
+    grid-column: 1 / -1;
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .metadata-row.ingredient-mapping-row .select {
+    min-height: 36px;
+    padding: 7px 9px;
+    font-size: 0.86rem;
+  }
+
+  .metadata-row.ingredient-mapping-row .button.compact {
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 0.82rem;
   }
 
   .preference-fields {
