@@ -1137,25 +1137,8 @@ button {
   grid-template-columns: 28px 1fr auto auto;
   align-items: center;
   gap: 10px;
-  padding: 13px 14px 4px;
-  cursor: pointer;
+  padding: 12px 14px;
   -webkit-tap-highlight-color: transparent;
-}
-
-.shopping-item-category {
-  font-size: 0.76rem;
-  color: var(--muted);
-  background: none;
-  border: none;
-  border-top: 1px solid var(--line);
-  padding: 5px 14px 5px 42px;
-  cursor: pointer;
-  width: 100%;
-  appearance: auto;
-}
-
-.shopping-item.done .shopping-item-category {
-  opacity: 0.5;
 }
 
 .shopping-checkbox {
@@ -1186,20 +1169,23 @@ button {
   opacity: 0.6;
 }
 
-.shopping-item-remove {
+.shopping-item-menu {
+  width: 34px;
+  height: 34px;
   background: none;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
   color: var(--muted);
-  font-size: 1.3rem;
+  font-size: 1.45rem;
   line-height: 1;
-  padding: 2px 4px;
+  padding: 0 0 4px;
   cursor: pointer;
-  opacity: 0.4;
-  transition: opacity 0.1s;
 }
 
-.shopping-item-remove:hover {
-  opacity: 1;
+.shopping-item-menu:hover {
+  background: var(--surface-strong);
+  border-color: var(--line);
+  color: var(--brand-dark);
 }
 
 .shopping-clear-btn {
@@ -1209,6 +1195,27 @@ button {
   text-align: center;
   border-top: 1px solid var(--line);
   font-size: 0.88rem;
+}
+
+.shopping-editor-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.shopping-editor-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.shopping-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr);
+  gap: 10px;
+}
+
+.shopping-editor-actions {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
 }
 
 .meal-group h3 {

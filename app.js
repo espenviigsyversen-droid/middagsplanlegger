@@ -177,6 +177,7 @@ const defaultState = {
   activeView: "calendar",
   shoppingList: { items: [], generatedForWeek: null },
   generateModal: { open: false, selectedDays: [] },
+  editingShoppingItemId: null,
   clientUpdatedAt: 0,
   pendingLocalSync: false,
   editingMealId: null,
@@ -538,6 +539,7 @@ function applyRemoteStatePatch(patch) {
     draftSteps: state.draftSteps,
     selectedMealId: state.selectedMealId,
     selectedRecipeContext: state.selectedRecipeContext,
+    editingShoppingItemId: state.editingShoppingItemId,
     keepScreenAwake: state.keepScreenAwake,
     previousView: state.previousView,
     weekOffset: state.weekOffset,
@@ -578,6 +580,7 @@ function applyRemotePayload(payload) {
     draftSteps: state.draftSteps,
     selectedMealId: state.selectedMealId,
     selectedRecipeContext: state.selectedRecipeContext,
+    editingShoppingItemId: state.editingShoppingItemId,
     keepScreenAwake: state.keepScreenAwake,
     previousView: state.previousView,
     weekOffset: state.weekOffset,
@@ -1155,22 +1158,60 @@ function renderGenerateModal() {
 
 function renderShoppingItem(item) {
   const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
-  const allCats = getStoreCategories();
-  const catOptions = allCats.map((c) => `<option value="${c.key}"${item.category === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("");
   return `
     <div class="shopping-item${item.checked ? " done" : ""}">
-      <label class="shopping-item-main">
-        <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""}>
+      <div class="shopping-item-main">
+        <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""} aria-label="Huk av ${escapeHtml(item.name)}">
         <span class="shopping-item-name">${escapeHtml(item.name)}</span>
         ${amountText ? `<span class="shopping-item-amount">${escapeHtml(amountText)}</span>` : `<span></span>`}
-        <button type="button" class="shopping-item-remove" data-remove-item="${escapeHtml(item.id)}" aria-label="Fjern vare">&times;</button>
-      </label>
-      <select class="shopping-item-category" data-remap-item="${escapeHtml(item.id)}" aria-label="Kategori for ${escapeHtml(item.name)}">
-        ${catOptions}
-      </select>
+        <button type="button" class="shopping-item-menu" data-edit-shopping-item="${escapeHtml(item.id)}" aria-label="Rediger ${escapeHtml(item.name)}">⋯</button>
+      </div>
     </div>
   `;
 }
+
+function renderShoppingItemEditor() {
+  const item = (state.shoppingList?.items || []).find((entry) => entry.id === state.editingShoppingItemId);
+  if (!item) return "";
+  const unitOptionsHtml = getUnitOptions().map((unit) => `<option value="${escapeHtml(unit)}"${item.unit === unit ? " selected" : ""}>${escapeHtml(unit || "Ingen")}</option>`).join("");
+  const categoryOptions = getStoreCategories().map((cat) => `<option value="${escapeHtml(cat.key)}"${item.category === cat.key ? " selected" : ""}>${escapeHtml(cat.label)}</option>`).join("");
+  return `
+    <div class="modal-backdrop" data-close-shopping-editor>
+      <form class="modal shopping-editor-modal" data-shopping-editor-form role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <h3>Vare</h3>
+          <button class="modal-close" type="button" data-close-shopping-editor aria-label="Lukk">×</button>
+        </div>
+        <div class="shopping-editor-fields">
+          <label class="setting">
+            <span>Navn</span>
+            <input class="input" name="name" value="${escapeHtml(item.name)}" autocomplete="off">
+          </label>
+          <div class="shopping-editor-grid">
+            <label class="setting">
+              <span>Mengde</span>
+              <input class="input" name="amount" value="${escapeHtml(item.amount)}" inputmode="decimal">
+            </label>
+            <label class="setting">
+              <span>Enhet</span>
+              <select class="select" name="unit">${unitOptionsHtml}</select>
+            </label>
+          </div>
+          <label class="setting">
+            <span>Butikkategori</span>
+            <select class="select" name="category">${categoryOptions}</select>
+          </label>
+        </div>
+        <div class="modal-footer shopping-editor-actions">
+          <button class="button danger compact" type="button" data-delete-shopping-item="${escapeHtml(item.id)}">Slett</button>
+          <button class="button secondary compact" type="button" data-close-shopping-editor>Avbryt</button>
+          <button class="button compact" type="submit">Lagre</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
 function renderShoppingList() {
   const items = state.shoppingList?.items || [];
   const allCategories = getStoreCategories();
@@ -1182,7 +1223,7 @@ function renderShoppingList() {
     .filter((cat) => cat.items.length > 0);
 
   const isEmpty = items.length === 0;
-  const modal = state.generateModal?.open ? renderGenerateModal() : "";
+  const modal = `${state.generateModal?.open ? renderGenerateModal() : ""}${state.editingShoppingItemId ? renderShoppingItemEditor() : ""}`;
 
   return `
     ${modal}
@@ -3022,6 +3063,46 @@ function bindEvents() {
     addShoppingItemByName(name);
   });
 
+  app.querySelectorAll("[data-edit-shopping-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setState({ editingShoppingItemId: button.dataset.editShoppingItem });
+    });
+  });
+
+  app.querySelectorAll("[data-close-shopping-editor]").forEach((el) => {
+    el.addEventListener("click", (event) => {
+      if (event.target === el || el.matches("button")) {
+        setState({ editingShoppingItemId: null });
+      }
+    });
+  });
+
+  app.querySelector("[data-shopping-editor-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const itemId = state.editingShoppingItemId;
+    const name = String(formData.get("name") || "").trim();
+    const amount = String(formData.get("amount") || "").trim();
+    const unit = String(formData.get("unit") || "").trim();
+    const category = String(formData.get("category") || "other").trim();
+    if (!itemId || !name) return;
+    const items = (state.shoppingList?.items || []).map((item) => (
+      item.id === itemId ? { ...item, name, amount, unit, category } : item
+    ));
+    const mappings = { ...(state.metadata?.ingredientMappings || {}), [name.toLowerCase()]: category };
+    setState({
+      shoppingList: { ...state.shoppingList, items },
+      metadata: { ...state.metadata, ingredientMappings: mappings },
+      editingShoppingItemId: null,
+    });
+  });
+
+  app.querySelector("[data-delete-shopping-item]")?.addEventListener("click", (event) => {
+    const itemId = event.currentTarget.dataset.deleteShoppingItem;
+    const items = (state.shoppingList?.items || []).filter((item) => item.id !== itemId);
+    setState({ shoppingList: { ...state.shoppingList, items }, editingShoppingItemId: null });
+  });
+
   const shoppingInput = app.querySelector("[data-shopping-input]");
   const suggestionBox = app.querySelector("[data-shopping-suggestions]");
   if (shoppingInput && suggestionBox) {
@@ -3040,13 +3121,6 @@ function bindEvents() {
       const items = (state.shoppingList?.items || []).map((item) =>
         item.id === checkbox.dataset.toggleItem ? { ...item, checked: checkbox.checked } : item
       );
-      setState({ shoppingList: { ...state.shoppingList, items } });
-    });
-  });
-
-  app.querySelectorAll("[data-remove-item]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const items = (state.shoppingList?.items || []).filter((item) => item.id !== button.dataset.removeItem);
       setState({ shoppingList: { ...state.shoppingList, items } });
     });
   });
