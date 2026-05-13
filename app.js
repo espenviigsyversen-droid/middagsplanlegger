@@ -872,14 +872,16 @@ function renderCalendar() {
   const dayModes = currentDayModes();
   const dayNotes = currentDayNotes();
   const todayIndex = getTodayIndexInCurrentWeek();
-  const highlightedIndex = todayIndex >= 0 ? todayIndex : 0;
-  const todayCard = renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex);
+  const isCurrentWeek = todayIndex >= 0;
+
+  const todayCard = isCurrentWeek
+    ? renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex)
+    : "";
 
   const weekRows = dayNames.map((day, index) => {
-    if (index === highlightedIndex) return "";
+    if (isCurrentWeek && index === todayIndex) return "";
     const meal = getMeal(plan[index]);
     const isPlannedMeal = dayPlansMeal(dayModes[index]);
-    const note = dayNotes[index] || "";
     const shortDay = day.substring(0, 3);
     const title = !isPlannedMeal
       ? planModeLabel(dayModes[index])
@@ -905,13 +907,18 @@ function renderCalendar() {
     `;
   }).join("");
 
-  const listHeading = todayIndex >= 0 ? "Resten av uken" : "Alle dager";
+  const listHeading = isCurrentWeek ? "Resten av uken" : "Alle dager";
 
   return `
     <section class="view-header calendar-view-header">
       <div>
         <h2 class="view-title">Middagsplan</h2>
-        <p class="view-lead">${weekRangeLabel()}</p>
+        <div class="calendar-week-nav">
+          <button class="button secondary week-arrow-btn" data-week="-1" aria-label="Forrige uke">←</button>
+          <span class="calendar-week-label">${weekRangeLabel()}</span>
+          <button class="button secondary week-arrow-btn" data-week="1" aria-label="Neste uke">→</button>
+          ${!isCurrentWeek ? `<button class="text-action" data-week="0">I dag</button>` : ""}
+        </div>
       </div>
     </section>
     ${todayCard}
@@ -919,11 +926,6 @@ function renderCalendar() {
       <h4 class="week-list-heading">${listHeading}</h4>
       ${weekRows}
     </section>
-    <div class="week-nav">
-      <button class="button secondary compact" data-week="-1">← Forrige</button>
-      <button class="button secondary compact" data-week="0">Denne uken</button>
-      <button class="button secondary compact" data-week="1">Neste →</button>
-    </div>
   `;
 }
 

@@ -255,6 +255,19 @@ button {
   margin-bottom: 12px;
 }
 
+.calendar-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.calendar-week-label {
+  font-size: 0.95rem;
+  color: var(--muted);
+  flex: 1;
+}
+
 .week-list {
   background: var(--surface);
   border: 1px solid var(--line);
