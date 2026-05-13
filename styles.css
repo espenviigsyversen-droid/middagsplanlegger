@@ -1545,12 +1545,39 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(110px, auto) auto 34px;
 }
 
+.mapping-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.mapping-group {
+  display: grid;
+  gap: 8px;
+}
+
+.mapping-group-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 .mapping-ingredient {
   font-size: 0.9rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.mapping-ingredient small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.muted-row {
+  opacity: 0.58;
 }
 
 .metadata-row .icon-button {
