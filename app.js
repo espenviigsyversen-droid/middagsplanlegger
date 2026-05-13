@@ -892,7 +892,9 @@ function categorizeIngredient(name) {
 }
 
 function getStoreCategories() {
-  return [...(state.metadata?.storeCategories || STORE_CATEGORIES.map(({ key, label }) => ({ key, label }))), { key: "other", label: "Annet" }];
+  const saved = state.metadata?.storeCategories;
+  const base = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key, label }) => ({ key, label }));
+  return [...base, { key: "other", label: "Annet" }];
 }
 
 function formatShoppingAmount(num) {
@@ -2123,33 +2125,29 @@ function renderIngredientMappingsSetup() {
         ${entries.length === 0 ? `<p class="status-note">Ingen oppslag ennå. Bytt kategori på en vare i handlelisten for å lagre en kobling.</p>` : ""}
         ${entries.map(([ingredient, catKey]) => `
           <div class="metadata-row ingredient-mapping-row">
-            <div class="mapping-main">
-              <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
-              <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
-                ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
-              </select>
-            </div>
-            <div class="mapping-actions">
-              <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
-              <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
-            </div>
+            <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
+            <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
+              ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
+            </select>
+            <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
+            <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
           </div>`).join("")}
       </div>
       <form class="metadata-add ingredient-mapping-add" data-ingredient-mapping-form>
-        <div class="mapping-add-fields">
-          <input class="input" name="ingredientName" placeholder="Ingrediensnavn, f.eks. quinoa">
-          <select class="select" name="ingredientCategory">
-            ${allCats.map((c) => `<option value="${c.key}">${escapeHtml(c.label)}</option>`).join("")}
-          </select>
-        </div>
-        <button class="button secondary" type="submit">Legg til oppslag</button>
+        <input class="input" name="ingredientName" placeholder="Ingrediensnavn, f.eks. quinoa">
+        <select class="select" name="ingredientCategory">
+          ${allCats.map((c) => `<option value="${c.key}">${escapeHtml(c.label)}</option>`).join("")}
+        </select>
+        <button class="button secondary" type="submit">Legg til</button>
       </form>
     </section>
   `;
 }
 
+
 function renderStoreCategoriesSetup() {
-  const cats = state.metadata?.storeCategories || STORE_CATEGORIES.map(({ key, label }) => ({ key, label }));
+  const saved = state.metadata?.storeCategories;
+  const cats = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key, label }) => ({ key, label }));
   return `
     <section class="view-header">
       <div>
@@ -2165,9 +2163,9 @@ function renderStoreCategoriesSetup() {
             <span>${escapeHtml(cat.label)}</span>
             <button class="icon-button" data-remove-store-cat="${escapeHtml(cat.key)}" title="Fjern kategori">&times;</button>
           </div>`).join("")}
-        <div class="metadata-row" style="opacity:0.5">
+        <div class="metadata-row" style="opacity:0.55">
           <span>Annet</span>
-          <span style="font-size:0.75rem">fast</span>
+          <span class="field-hint" style="margin:0">Alltid tilgjengelig</span>
         </div>
       </div>
       <form class="metadata-add" data-store-cat-form>
@@ -2894,7 +2892,8 @@ function bindEvents() {
     const label = String(formData.get("storeCatName") || "").trim();
     if (!label) return;
     const key = makeSlug(label);
-    const cats = state.metadata?.storeCategories || STORE_CATEGORIES.map(({ key: k, label: l }) => ({ key: k, label: l }));
+    const saved = state.metadata?.storeCategories;
+    const cats = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key: k, label: l }) => ({ key: k, label: l }));
     const nextKey = uniqueMetadataKey(key, Object.fromEntries(cats.map((c) => [c.key, c.label])));
     const nextCats = [...cats, { key: nextKey, label }];
     setState({ metadata: { ...state.metadata, storeCategories: nextCats } });
@@ -2905,7 +2904,9 @@ function bindEvents() {
   app.querySelectorAll("[data-remove-store-cat]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.removeStoreCat;
-      const cats = (state.metadata?.storeCategories || []).filter((c) => c.key !== key);
+      const saved = state.metadata?.storeCategories;
+      const base = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key: k, label: l }) => ({ key: k, label: l }));
+      const cats = base.filter((c) => c.key !== key);
       if (cats.length === 0) return;
       setState({ metadata: { ...state.metadata, storeCategories: cats } });
     });
