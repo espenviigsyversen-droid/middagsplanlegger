@@ -2111,7 +2111,13 @@ function renderPlanModesSetup() {
 function renderIngredientMappingsSetup() {
   const mappings = state.metadata?.ingredientMappings || {};
   const allCats = getStoreCategories();
-  const entries = Object.entries(mappings).sort(([a], [b]) => a.localeCompare(b, "no"));
+  const userEntries = Object.entries(mappings).sort(([a], [b]) => a.localeCompare(b, "no"));
+
+  // Flatten all built-in keywords into sorted {keyword, catKey, catLabel} list
+  const builtInRows = STORE_CATEGORIES.flatMap((cat) =>
+    cat.keywords.map((kw) => ({ kw, catKey: cat.key, catLabel: cat.label }))
+  ).sort((a, b) => a.kw.localeCompare(b.kw, "no"));
+
   return `
     <section class="view-header">
       <div>
@@ -2121,29 +2127,40 @@ function renderIngredientMappingsSetup() {
       <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
     <section class="panel setup-section">
-      <div class="metadata-list">
-        ${entries.length === 0 ? `<p class="status-note">Ingen oppslag ennå. Bytt kategori på en vare i handlelisten for å lagre en kobling.</p>` : ""}
-        ${entries.map(([ingredient, catKey]) => `
-          <div class="metadata-row ingredient-mapping-row">
-            <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
-            <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
-              ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
-            </select>
-            <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
-            <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
-          </div>`).join("")}
-      </div>
-      <form class="metadata-add ingredient-mapping-add" data-ingredient-mapping-form>
+      ${userEntries.length > 0 ? `
+        <p class="status-note">Dine oppslag</p>
+        <div class="metadata-list">
+          ${userEntries.map(([ingredient, catKey]) => `
+            <div class="metadata-row ingredient-mapping-row">
+              <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
+              <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
+                ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
+              </select>
+              <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
+              <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
+            </div>`).join("")}
+        </div>
+      ` : `<p class="status-note">Ingen egne oppslag ennå. Bytt kategori på en vare i handlelisten for å lagre en kobling.</p>`}
+
+      <form class="metadata-add ingredient-mapping-add" data-ingredient-mapping-form style="margin-top:14px">
         <input class="input" name="ingredientName" placeholder="Ingrediensnavn, f.eks. quinoa">
         <select class="select" name="ingredientCategory">
           ${allCats.map((c) => `<option value="${c.key}">${escapeHtml(c.label)}</option>`).join("")}
         </select>
         <button class="button secondary" type="submit">Legg til</button>
       </form>
+
+      <p class="status-note" style="margin-top:20px">Innebygde nøkkelord (${builtInRows.length})</p>
+      <div class="metadata-list">
+        ${builtInRows.map((row) => `
+          <div class="metadata-row" style="opacity:0.65">
+            <span>${escapeHtml(row.kw)}</span>
+            <span style="font-size:0.8rem;color:var(--muted)">${escapeHtml(row.catLabel)}</span>
+          </div>`).join("")}
+      </div>
     </section>
   `;
 }
-
 
 function renderStoreCategoriesSetup() {
   const builtInKeys = new Set(STORE_CATEGORIES.map((c) => c.key));
