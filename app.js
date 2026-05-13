@@ -1416,7 +1416,7 @@ function renderMealCard(meal) {
           <button class="icon-button" data-add-next="${escapeHtml(meal.id)}" title="Legg i første ledige dag">${icon("add")}</button>
         </div>
       </div>
-      <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}</div>
+      <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}${meal.excludeFromSuggestions ? '<span class="chip chip-recipe-only">Kun oppskrift</span>' : ""}</div>
     </article>
   `;
 }
@@ -1450,6 +1450,7 @@ function renderMealDetail() {
           <button class="button ghost" data-close-meal>Tilbake</button>
           <button class="button secondary wake-button ${state.keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${wakeText}</button>
           ${meal.recipeUrl ? `<a class="button secondary" href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
+          <button class="button secondary" data-add-to-shopping="${escapeHtml(meal.id)}">${icon("shopping")} Legg i handleliste</button>
           <button class="button secondary" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
         </div>
       </div>
@@ -1495,6 +1496,7 @@ function emptyMeal() {
     categories: ["kjott"],
     kidFriendly: false,
     favorite: false,
+    excludeFromSuggestions: false,
     leftovers: "none",
     prepTime: "quick",
     minDaysBetween: 14,
@@ -1562,6 +1564,7 @@ function renderMealEditor() {
             <div class="checkbox-grid">
               <label class="checkbox-line"><input type="checkbox" name="kidFriendly" ${meal.kidFriendly ? "checked" : ""}> <span>Barnevennlig</span></label>
               <label class="checkbox-line"><input type="checkbox" name="favorite" ${meal.favorite ? "checked" : ""}> <span>Favoritt</span></label>
+              <label class="checkbox-line"><input type="checkbox" name="excludeFromSuggestions" ${meal.excludeFromSuggestions ? "checked" : ""}> <span>Kun oppskrift (ikke foreslå som middag)</span></label>
             </div>
           </div>
         </div>
@@ -1689,6 +1692,7 @@ function saveMealFromForm(form) {
     suitability: formData.getAll("suitability"),
     kidFriendly: formData.has("kidFriendly"),
     favorite: formData.has("favorite"),
+    excludeFromSuggestions: formData.has("excludeFromSuggestions"),
     leftovers: String(formData.get("leftovers") || "none"),
     prepTime: String(formData.get("prepTime") || "quick"),
     minDaysBetween: Math.max(1, Number(formData.get("minDaysBetween")) || 14),
@@ -2378,6 +2382,7 @@ function pickSuggestion(dayIndex, planOverride = currentPlan()) {
   const wantsQuick = state.family.quickDays.includes(day);
   const dayType = currentDayTypes()[dayIndex] || "weekday";
   const candidates = state.meals
+    .filter((meal) => !meal.excludeFromSuggestions)
     .filter((meal) => !used.has(meal.id))
     .filter((meal) => !plannedTooClose(meal, dayIndex, plan))
     .map((meal) => {
@@ -2558,6 +2563,33 @@ function bindEvents() {
 
   app.querySelector("[data-toggle-wake]")?.addEventListener("click", () => {
     setState({ keepScreenAwake: !state.keepScreenAwake });
+  });
+
+  app.querySelectorAll("[data-add-to-shopping]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const meal = getMeal(button.dataset.addToShopping);
+      if (!meal?.ingredients?.length) return;
+      const targetServings = recipeTargetServings() || mealBaseServings(meal);
+      const ratio = mealBaseServings(meal) > 0 ? targetServings / mealBaseServings(meal) : 1;
+      const newItems = meal.ingredients
+        .filter((ing) => ing.name?.trim())
+        .map((ing) => {
+          const scaled = parseFloat(ing.amount) * ratio;
+          return {
+            id: Math.random().toString(36).slice(2),
+            name: ing.name.trim(),
+            amount: isNaN(scaled) ? (ing.amount || "") : formatShoppingAmount(scaled),
+            unit: ing.unit || "",
+            category: categorizeIngredient(ing.name),
+            checked: false,
+            custom: true,
+          };
+        });
+      const existing = state.shoppingList?.items || [];
+      setState({ shoppingList: { ...state.shoppingList, items: [...existing, ...newItems] } });
+      button.textContent = "✓ Lagt til";
+      setTimeout(() => { button.innerHTML = `${icon("shopping")} Legg i handleliste`; }, 2000);
+    });
   });
 
   app.querySelector("[data-meal-form]")?.addEventListener("submit", (event) => {

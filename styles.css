@@ -426,6 +426,7 @@ button {
 .chip.kjott { background: #f8e6e4; color: var(--meat); }
 .chip.pasta { background: #f8efd7; color: var(--pasta); }
 .chip.suppe { background: #eee7f5; color: var(--soup); }
+.chip-recipe-only { background: #f0f0ee; color: var(--muted); font-style: italic; }
 
 .day-actions {
   display: flex;
