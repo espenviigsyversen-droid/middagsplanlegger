@@ -882,7 +882,7 @@ const STORE_CATEGORIES = [
   { key: "meat", label: "Kjøtt & fisk", keywords: ["kylling", "laks", "torsk", "svin", "svinekjøtt", "biff", "reker", "kjøttdeig", "bacon", "pølse", "skinke", "lam", "tunfisk", "sei", "hyse", "ørret", "makrell", "sild", "fiskefilet", "fiskekaker", "fiskepinner", "kjøtt", "fisk", "farse", "karbonader"] },
   { key: "dairy", label: "Meieri & egg", keywords: ["melk", "fløte", "ost", "smør", "rømme", "yoghurt", "egg", "creme fraiche", "kesam", "brunost", "gouda", "parmesan", "mozzarella", "brie", "cottage", "ricotta", "kremost", "hvitost"] },
   { key: "bread", label: "Brød & bakevarer", keywords: ["brød", "knekkebrød", "kavring", "tortilla", "pita", "lefse", "rundstykke", "bagett", "loff", "wraps", "nachos", "chips", "flatbrød"] },
-  { key: "dry", label: "Tørrvarer & hermetikk", keywords: ["pasta", "ris", "mel", "sukker", "olje", "tomatsaus", "linser", "kikert", "quinoa", "couscous", "nudler", "kokosmelk", "soyasaus", "olivenolje", "rapsolje", "eddik", "honning", "hermetikk", "hermetisk", "buljong", "kraft", "hoisin", "ketchup", "majones", "sennep", "hakket tomat"] },
+  { key: "dry", label: "Tørrvarer & hermetikk", keywords: ["pasta", "spaghetti", "spagetti", "spaghetti saus", "spaghettisaus", "pastasaus", "ris", "mel", "sukker", "olje", "tomatsaus", "linser", "kikert", "quinoa", "couscous", "nudler", "kokosmelk", "soyasaus", "olivenolje", "rapsolje", "eddik", "honning", "hermetikk", "hermetisk", "buljong", "kraft", "hoisin", "ketchup", "majones", "sennep", "hakket tomat"] },
   { key: "spices", label: "Krydder & sauser", keywords: ["salt", "pepper", "oregano", "ingefær", "karri", "kanel", "paprikapulver", "cumin", "gurkemeie", "chillipulver", "timian", "rosmarin", "laurbær", "muskat", "krydder", "garam masala", "tikka", "kardemomme", "allehånde", "løkpulver", "hvitløkspulver"] },
 ];
 
@@ -991,6 +991,72 @@ function mergeGeneratedShoppingItems(generatedItems) {
   });
   const custom = existing.filter((item) => item.custom);
   return mergeShoppingItems(generated, custom);
+}
+
+function shoppingSuggestionSources() {
+  const suggestions = new Map();
+  const add = (name, category = null) => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (suggestions.has(key)) return;
+    suggestions.set(key, { name: trimmed, category: category || categorizeIngredient(trimmed) });
+  };
+
+  Object.entries(state.metadata?.ingredientMappings || {}).forEach(([name, category]) => {
+    if (category !== DISABLED_INGREDIENT_MAPPING) add(name, category);
+  });
+  STORE_CATEGORIES.forEach((cat) => cat.keywords.forEach((keyword) => add(keyword, cat.key)));
+  (state.meals || []).forEach((meal) => {
+    (meal.ingredients || []).forEach((ingredient) => add(ingredient.name));
+    (meal.keyIngredients || []).forEach((ingredient) => add(ingredient));
+  });
+  (state.shoppingList?.items || []).forEach((item) => add(item.name, item.category));
+
+  return [...suggestions.values()].sort((a, b) => a.name.localeCompare(b.name, "no"));
+}
+
+function shoppingSuggestions(query, limit = 8) {
+  const term = String(query || "").trim().toLowerCase();
+  if (term.length < 2) return [];
+  return shoppingSuggestionSources()
+    .filter((item) => item.name.toLowerCase().includes(term))
+    .sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aStarts = aName.startsWith(term);
+      const bStarts = bName.startsWith(term);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      return a.name.localeCompare(b.name, "no");
+    })
+    .slice(0, limit);
+}
+
+function renderShoppingSuggestions(query) {
+  const suggestions = shoppingSuggestions(query);
+  if (!suggestions.length) return "";
+  const categories = Object.fromEntries(getStoreCategories().map((cat) => [cat.key, cat.label]));
+  return suggestions.map((item) => `
+    <button type="button" class="shopping-suggestion" data-shopping-suggestion="${escapeHtml(item.name)}">
+      <span>${escapeHtml(item.name)}</span>
+      <small>${escapeHtml(categories[item.category] || "Annet")}</small>
+    </button>
+  `).join("");
+}
+
+function addShoppingItemByName(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return;
+  const newItem = {
+    id: Math.random().toString(36).slice(2),
+    name: trimmed,
+    amount: "",
+    unit: "",
+    category: categorizeIngredient(trimmed),
+    checked: false,
+    custom: true,
+  };
+  setState({ shoppingList: { ...state.shoppingList, items: mergeShoppingItems(state.shoppingList?.items || [], [newItem]) } });
 }
 
 function generateShoppingListItems(selectedDays) {
@@ -1128,10 +1194,13 @@ function renderShoppingList() {
       ${!isEmpty ? `<p class="view-lead">${unchecked.length} gjenstår · ${checked.length} avhuket</p>` : ""}
     </section>
 
-    <form class="shopping-add-form" data-add-custom-form>
-      <input class="input" name="item" placeholder="Legg til vare manuelt..." autocomplete="off">
-      <button class="button secondary compact" type="submit">Legg til</button>
-    </form>
+    <div class="shopping-add-wrap">
+      <form class="shopping-add-form" data-add-custom-form>
+        <input class="input" name="item" placeholder="Legg til vare manuelt..." autocomplete="off" data-shopping-input>
+        <button class="button secondary compact" type="submit">Legg til</button>
+      </form>
+      <div class="shopping-suggestions" data-shopping-suggestions></div>
+    </div>
 
     ${isEmpty ? `
       <div class="shopping-empty">
@@ -2950,18 +3019,21 @@ function bindEvents() {
     const input = e.currentTarget.querySelector("[name=item]");
     const name = input.value.trim();
     if (!name) return;
-    const newItem = {
-      id: Math.random().toString(36).slice(2),
-      name,
-      amount: "",
-      unit: "",
-      category: categorizeIngredient(name),
-      checked: false,
-      custom: true,
-    };
-    setState({ shoppingList: { ...state.shoppingList, items: mergeShoppingItems(state.shoppingList?.items || [], [newItem]) } });
-    input.value = "";
+    addShoppingItemByName(name);
   });
+
+  const shoppingInput = app.querySelector("[data-shopping-input]");
+  const suggestionBox = app.querySelector("[data-shopping-suggestions]");
+  if (shoppingInput && suggestionBox) {
+    shoppingInput.addEventListener("input", () => {
+      suggestionBox.innerHTML = renderShoppingSuggestions(shoppingInput.value);
+    });
+    suggestionBox.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-shopping-suggestion]");
+      if (!button) return;
+      addShoppingItemByName(button.dataset.shoppingSuggestion);
+    });
+  }
 
   app.querySelectorAll("[data-toggle-item]").forEach((checkbox) => {
     checkbox.addEventListener("change", () => {
