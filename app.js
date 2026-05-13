@@ -175,6 +175,7 @@ const defaultMeals = [
 const defaultState = {
   activeView: "calendar",
   shoppingList: { items: [], generatedForWeek: null },
+  generateModal: { open: false, selectedDays: [] },
   clientUpdatedAt: 0,
   pendingLocalSync: false,
   editingMealId: null,
@@ -653,6 +654,38 @@ function getWeekKey(offset = state.weekOffset) {
   return getWeekDates(offset)[0].toISOString().slice(0, 10);
 }
 
+function getWeekKeyForDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function getDayIndexForDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  return day === 0 ? 6 : day - 1;
+}
+
+function getUpcomingDays(n = 9) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = [];
+  for (let i = 0; i < n; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    const weekKey = getWeekKeyForDate(date);
+    const dayIndex = getDayIndexForDate(date);
+    const plan = state.plansByWeek?.[weekKey] || {};
+    const dayModes = state.dayModesByWeek?.[weekKey] || {};
+    const meal = getMeal(plan[dayIndex]);
+    const dayMode = dayModes[dayIndex] || "home";
+    days.push({ date, weekKey, dayIndex, meal, dayMode, dateKey: localDateKey(date) });
+  }
+  return days;
+}
+
 function localDateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -857,19 +890,18 @@ function formatShoppingAmount(num) {
   return rounded % 1 === 0 ? String(rounded) : String(rounded);
 }
 
-function generateShoppingListItems() {
-  const plan = currentPlan();
-  const dayModes = currentDayModes();
-  const servings = currentServings();
+function generateShoppingListItems(selectedDays) {
   const aggregated = {};
 
-  dayNames.forEach((_, index) => {
-    if (!dayPlansMeal(dayModes[index])) return;
-    const meal = getMeal(plan[index]);
+  selectedDays.forEach(({ weekKey, dayIndex, dayMode }) => {
+    if (!dayPlansMeal(dayMode)) return;
+    const plan = state.plansByWeek?.[weekKey] || {};
+    const servings = state.servingsByWeek?.[weekKey] || {};
+    const meal = getMeal(plan[dayIndex]);
     if (!meal?.ingredients?.length) return;
 
     const base = mealBaseServings(meal);
-    const target = Math.max(1, Number(servings[index]) || state.family.familySize);
+    const target = Math.max(1, Number(servings[dayIndex]) || state.family.familySize);
     const ratio = base > 0 ? target / base : 1;
 
     meal.ingredients.forEach(({ name, amount, unit }) => {
@@ -902,6 +934,55 @@ function generateShoppingListItems() {
   return Object.values(aggregated).map(({ _num, ...item }) => item);
 }
 
+function renderGenerateModal() {
+  const days = getUpcomingDays(9);
+  const selected = state.generateModal.selectedDays;
+  const shortDayNames = ["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"];
+
+  const rows = days.map((d) => {
+    const isChecked = selected.includes(d.dateKey);
+    const hasPlannedMeal = dayPlansMeal(d.dayMode);
+    const mealTitle = !hasPlannedMeal
+      ? planModeLabel(d.dayMode)
+      : d.meal ? d.meal.title : "Ikke planlagt";
+    const isMuted = !hasPlannedMeal || !d.meal;
+    const shortDay = shortDayNames[d.date.getDay()];
+    const dateStr = formatDate(d.date);
+    return `
+      <label class="gen-modal-row${isChecked ? " selected" : ""}">
+        <input type="checkbox" class="gen-modal-check" data-modal-day="${escapeHtml(d.dateKey)}" ${isChecked ? "checked" : ""}>
+        <div class="gen-modal-day">
+          <span class="gen-modal-dayname">${shortDay}</span>
+          <span class="gen-modal-date">${dateStr}</span>
+        </div>
+        <span class="gen-modal-meal${isMuted ? " muted" : ""}">${escapeHtml(mealTitle)}</span>
+      </label>
+    `;
+  }).join("");
+
+  const anySelected = selected.length > 0;
+
+  return `
+    <div class="modal-backdrop" data-close-modal>
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <h3>Velg dager å handle for</h3>
+          <button class="modal-close" data-close-modal aria-label="Lukk">×</button>
+        </div>
+        <div class="gen-modal-list">
+          ${rows}
+        </div>
+        <div class="modal-footer">
+          <button class="button secondary compact" data-close-modal>Avbryt</button>
+          <button class="button${anySelected ? "" : " disabled"}" data-confirm-generate ${anySelected ? "" : "disabled"}>
+            Generer liste (${selected.length} dager)
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderShoppingItem(item) {
   const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
   return `
@@ -925,8 +1006,10 @@ function renderShoppingList() {
     .filter((cat) => cat.items.length > 0);
 
   const isEmpty = items.length === 0;
+  const modal = state.generateModal?.open ? renderGenerateModal() : "";
 
   return `
+    ${modal}
     <section class="view-header meals-view-header">
       <div class="meals-header-row">
         <h2 class="view-title">Handleliste</h2>
@@ -943,7 +1026,7 @@ function renderShoppingList() {
     ${isEmpty ? `
       <div class="shopping-empty">
         <p>Ingen varer lagt til ennå.</p>
-        <p>Trykk <strong>Generer fra plan</strong> for å hente ingredienser fra ukens middager automatisk.</p>
+        <p>Trykk <strong>Generer fra plan</strong> for å velge hvilke dager du skal handle for.</p>
       </div>
     ` : `
       <div class="shopping-list">
@@ -2582,9 +2665,39 @@ function bindEvents() {
   app.querySelector("[data-refresh-app]")?.addEventListener("click", refreshApp);
 
   app.querySelector("[data-generate-list]")?.addEventListener("click", () => {
-    const generated = generateShoppingListItems();
+    const upcoming = getUpcomingDays(9);
+    const preselected = upcoming
+      .filter((d) => dayPlansMeal(d.dayMode) && d.meal)
+      .map((d) => d.dateKey);
+    setState({ generateModal: { open: true, selectedDays: preselected } });
+  });
+
+  app.querySelectorAll("[data-close-modal]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target === el) setState({ generateModal: { open: false, selectedDays: [] } });
+    });
+  });
+
+  app.querySelectorAll("[data-modal-day]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const dateKey = checkbox.dataset.modalDay;
+      const current = state.generateModal.selectedDays;
+      const selectedDays = checkbox.checked
+        ? [...current, dateKey]
+        : current.filter((d) => d !== dateKey);
+      setState({ generateModal: { ...state.generateModal, selectedDays } });
+    });
+  });
+
+  app.querySelector("[data-confirm-generate]")?.addEventListener("click", () => {
+    const selectedKeys = new Set(state.generateModal.selectedDays);
+    const selectedDays = getUpcomingDays(9).filter((d) => selectedKeys.has(d.dateKey));
+    const generated = generateShoppingListItems(selectedDays);
     const custom = (state.shoppingList?.items || []).filter((i) => i.custom);
-    setState({ shoppingList: { items: [...generated, ...custom], generatedForWeek: getWeekKey() } });
+    setState({
+      shoppingList: { items: [...generated, ...custom], generatedForWeek: getWeekKey() },
+      generateModal: { open: false, selectedDays: [] },
+    });
   });
 
   app.querySelector("[data-add-custom-form]")?.addEventListener("submit", (e) => {
