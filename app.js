@@ -195,7 +195,7 @@ const defaultState = {
     suitabilityLabels: defaultSuitabilityLabels,
     planModeOptions: defaultPlanModeOptions,
     ingredientMappings: {},
-    storeCategories: STORE_CATEGORIES.map(({ key, label }) => ({ key, label })),
+    storeCategories: [], // populated lazily via getStoreCategories() which falls back to STORE_CATEGORIES
   },
   family: {
     name: "Familien",
@@ -287,7 +287,7 @@ function normalizeState(nextState) {
     },
     planModeOptions: normalizePlanModeOptions(nextState.metadata?.planModeOptions),
     ingredientMappings: nextState.metadata?.ingredientMappings && typeof nextState.metadata.ingredientMappings === "object" ? nextState.metadata.ingredientMappings : {},
-    storeCategories: Array.isArray(nextState.metadata?.storeCategories) && nextState.metadata.storeCategories.length > 0 ? nextState.metadata.storeCategories : STORE_CATEGORIES.map(({ key, label }) => ({ key, label })),
+    storeCategories: Array.isArray(nextState.metadata?.storeCategories) ? nextState.metadata.storeCategories : [],
   };
   if (nextState.metadata.categoryLabels.kjott === "Kjott") {
     nextState.metadata.categoryLabels.kjott = "Kjøtt";
@@ -1890,7 +1890,7 @@ function renderSetup() {
         </button>
         <button class="setup-menu-item" data-view="store-categories">
           <span>Butikkategorier</span>
-          <strong>${(state.metadata?.storeCategories || []).length}</strong>
+          <strong>${getStoreCategories().length - 1}</strong>
         </button>
       </div>
     </section>
