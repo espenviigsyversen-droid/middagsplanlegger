@@ -858,11 +858,9 @@ button {
 }
 
 .card-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 42px;
-  width: 100%;
-  gap: 8px;
-  max-width: 430px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .card-actions .button {

@@ -1412,8 +1412,7 @@ function renderMealCard(meal) {
         </div>
         <div class="card-actions">
           <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}">Oppskrift</button>
-          <button class="button secondary compact" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
-          <button class="icon-button" data-add-next="${escapeHtml(meal.id)}" title="Legg i første ledige dag">${icon("add")}</button>
+          <button class="button ghost compact" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
         </div>
       </div>
       <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}${meal.excludeFromSuggestions ? '<span class="chip chip-recipe-only">Kun oppskrift</span>' : ""}</div>
