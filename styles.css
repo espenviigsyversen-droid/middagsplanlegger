@@ -1542,7 +1542,24 @@ button {
 }
 
 .metadata-row.ingredient-mapping-row {
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.8fr) auto 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.mapping-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, auto);
+  gap: 8px;
+  align-items: center;
+}
+
+.mapping-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .mapping-ingredient {
@@ -1550,6 +1567,12 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mapping-add-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, auto);
+  gap: 8px;
 }
 
 .metadata-row .icon-button {
@@ -1704,9 +1727,15 @@ button {
   }
 
   .metadata-row.plan-mode-row,
-  .metadata-row.ingredient-mapping-row,
-  .metadata-add.plan-mode-add,
+  .metadata-add.plan-mode-add {
+    grid-template-columns: 1fr;
+  }
+
   .metadata-add.ingredient-mapping-add {
+    grid-template-columns: 1fr;
+  }
+
+  .mapping-add-fields {
     grid-template-columns: 1fr;
   }
 

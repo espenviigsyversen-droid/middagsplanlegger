@@ -195,6 +195,7 @@ const defaultState = {
     suitabilityLabels: defaultSuitabilityLabels,
     planModeOptions: defaultPlanModeOptions,
     ingredientMappings: {},
+    storeCategories: STORE_CATEGORIES.map(({ key, label }) => ({ key, label })),
   },
   family: {
     name: "Familien",
@@ -286,6 +287,7 @@ function normalizeState(nextState) {
     },
     planModeOptions: normalizePlanModeOptions(nextState.metadata?.planModeOptions),
     ingredientMappings: nextState.metadata?.ingredientMappings && typeof nextState.metadata.ingredientMappings === "object" ? nextState.metadata.ingredientMappings : {},
+    storeCategories: Array.isArray(nextState.metadata?.storeCategories) && nextState.metadata.storeCategories.length > 0 ? nextState.metadata.storeCategories : STORE_CATEGORIES.map(({ key, label }) => ({ key, label })),
   };
   if (nextState.metadata.categoryLabels.kjott === "Kjott") {
     nextState.metadata.categoryLabels.kjott = "Kjøtt";
@@ -889,6 +891,10 @@ function categorizeIngredient(name) {
   return "other";
 }
 
+function getStoreCategories() {
+  return [...(state.metadata?.storeCategories || STORE_CATEGORIES.map(({ key, label }) => ({ key, label }))), { key: "other", label: "Annet" }];
+}
+
 function formatShoppingAmount(num) {
   if (isNaN(num) || num === 0) return "";
   const rounded = parseFloat(num.toFixed(2));
@@ -990,7 +996,7 @@ function renderGenerateModal() {
 
 function renderShoppingItem(item) {
   const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
-  const allCats = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
+  const allCats = getStoreCategories();
   const catOptions = allCats.map((c) => `<option value="${c.key}"${item.category === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("");
   return `
     <div class="shopping-item${item.checked ? " done" : ""}">
@@ -1008,7 +1014,7 @@ function renderShoppingItem(item) {
 }
 function renderShoppingList() {
   const items = state.shoppingList?.items || [];
-  const allCategories = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
+  const allCategories = getStoreCategories();
   const unchecked = items.filter((i) => !i.checked);
   const checked = items.filter((i) => i.checked);
 
@@ -1882,6 +1888,10 @@ function renderSetup() {
           <span>Vareoppslag</span>
           <strong>${Object.keys(state.metadata?.ingredientMappings || {}).length}</strong>
         </button>
+        <button class="setup-menu-item" data-view="store-categories">
+          <span>Butikkategorier</span>
+          <strong>${(state.metadata?.storeCategories || []).length}</strong>
+        </button>
       </div>
     </section>
     <section class="panel setup-section">
@@ -2098,42 +2108,76 @@ function renderPlanModesSetup() {
 
 function renderIngredientMappingsSetup() {
   const mappings = state.metadata?.ingredientMappings || {};
-  const allCats = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
+  const allCats = getStoreCategories();
   const entries = Object.entries(mappings).sort(([a], [b]) => a.localeCompare(b, "no"));
   return `
     <section class="view-header">
       <div>
         <h2 class="view-title">Vareoppslag</h2>
-        <p class="view-lead">Her ser du hvilke varer som er satt til en bestemt kategori i handlelisten. Du kan legge til nye manuelt eller endre kategori direkte på en vare i handlelisten.</p>
+        <p class="view-lead">Lagrede koblinger mellom varer og butikkategorier. Bytt kategori på en vare i handlelisten for å legge til automatisk.</p>
       </div>
       <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
     <section class="panel setup-section">
       <div class="metadata-list">
         ${entries.length === 0 ? `<p class="status-note">Ingen oppslag ennå. Bytt kategori på en vare i handlelisten for å lagre en kobling.</p>` : ""}
-        ${entries.map(([ingredient, catKey]) => {
-          const catLabel = allCats.find((c) => c.key === catKey)?.label || catKey;
-          return `
+        ${entries.map(([ingredient, catKey]) => `
           <div class="metadata-row ingredient-mapping-row">
-            <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
-            <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
-              ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
-            </select>
-            <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
-            <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
-          </div>`;
-        }).join("")}
+            <div class="mapping-main">
+              <span class="mapping-ingredient">${escapeHtml(ingredient)}</span>
+              <select class="select compact" data-mapping-cat="${escapeHtml(ingredient)}">
+                ${allCats.map((c) => `<option value="${c.key}"${catKey === c.key ? " selected" : ""}>${escapeHtml(c.label)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="mapping-actions">
+              <button class="button secondary compact" data-save-mapping="${escapeHtml(ingredient)}">Lagre</button>
+              <button class="icon-button" data-remove-mapping="${escapeHtml(ingredient)}" title="Fjern oppslag">&times;</button>
+            </div>
+          </div>`).join("")}
       </div>
       <form class="metadata-add ingredient-mapping-add" data-ingredient-mapping-form>
-        <input class="input" name="ingredientName" placeholder="Ingrediensnavn, f.eks. quinoa">
-        <select class="select" name="ingredientCategory">
-          ${allCats.map((c) => `<option value="${c.key}">${escapeHtml(c.label)}</option>`).join("")}
-        </select>
+        <div class="mapping-add-fields">
+          <input class="input" name="ingredientName" placeholder="Ingrediensnavn, f.eks. quinoa">
+          <select class="select" name="ingredientCategory">
+            ${allCats.map((c) => `<option value="${c.key}">${escapeHtml(c.label)}</option>`).join("")}
+          </select>
+        </div>
         <button class="button secondary" type="submit">Legg til oppslag</button>
       </form>
     </section>
   `;
 }
+
+function renderStoreCategoriesSetup() {
+  const cats = state.metadata?.storeCategories || STORE_CATEGORIES.map(({ key, label }) => ({ key, label }));
+  return `
+    <section class="view-header">
+      <div>
+        <h2 class="view-title">Butikkategorier</h2>
+        <p class="view-lead">Kategorier som brukes til å gruppere varer i handlelisten. Automatisk sortering baseres på innebygde nøkkelord.</p>
+      </div>
+      <button class="button secondary" data-view="setup">Tilbake</button>
+    </section>
+    <section class="panel setup-section">
+      <div class="metadata-list">
+        ${cats.map((cat) => `
+          <div class="metadata-row">
+            <span>${escapeHtml(cat.label)}</span>
+            <button class="icon-button" data-remove-store-cat="${escapeHtml(cat.key)}" title="Fjern kategori">&times;</button>
+          </div>`).join("")}
+        <div class="metadata-row" style="opacity:0.5">
+          <span>Annet</span>
+          <span style="font-size:0.75rem">fast</span>
+        </div>
+      </div>
+      <form class="metadata-add" data-store-cat-form>
+        <input class="input" name="storeCatName" placeholder="Ny kategori, f.eks. Frysevarer">
+        <button class="button secondary" type="submit">Legg til</button>
+      </form>
+    </section>
+  `;
+}
+
 
 function planModeTypeOptions(selected) {
   return [
@@ -2843,7 +2887,31 @@ function bindEvents() {
     });
   });
 
-  // Shopping list: remap item category and save to ingredientMappings
+  // Store categories: add new
+  app.querySelector("[data-store-cat-form]")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const label = String(formData.get("storeCatName") || "").trim();
+    if (!label) return;
+    const key = makeSlug(label);
+    const cats = state.metadata?.storeCategories || STORE_CATEGORIES.map(({ key: k, label: l }) => ({ key: k, label: l }));
+    const nextKey = uniqueMetadataKey(key, Object.fromEntries(cats.map((c) => [c.key, c.label])));
+    const nextCats = [...cats, { key: nextKey, label }];
+    setState({ metadata: { ...state.metadata, storeCategories: nextCats } });
+    e.currentTarget.reset();
+  });
+
+  // Store categories: remove
+  app.querySelectorAll("[data-remove-store-cat]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.removeStoreCat;
+      const cats = (state.metadata?.storeCategories || []).filter((c) => c.key !== key);
+      if (cats.length === 0) return;
+      setState({ metadata: { ...state.metadata, storeCategories: cats } });
+    });
+  });
+
+    // Shopping list: remap item category and save to ingredientMappings
   app.querySelectorAll("[data-remap-item]").forEach((select) => {
     select.addEventListener("change", () => {
       const itemId = select.dataset.remapItem;
@@ -2913,6 +2981,7 @@ function render() {
     suitability: renderSuitabilitySetup,
     "plan-modes": renderPlanModesSetup,
     "ingredient-mappings": renderIngredientMappingsSetup,
+    "store-categories": renderStoreCategoriesSetup,
   };
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
