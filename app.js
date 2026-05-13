@@ -174,6 +174,7 @@ const defaultMeals = [
 
 const defaultState = {
   activeView: "calendar",
+  shoppingList: { items: [], generatedForWeek: null },
   clientUpdatedAt: 0,
   pendingLocalSync: false,
   editingMealId: null,
@@ -598,6 +599,7 @@ function icon(name) {
     profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
     add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
     swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m17 1 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 23-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+    shopping: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
   };
   return icons[name] || "";
 }
@@ -830,6 +832,139 @@ function scaleAmount(amount, baseServings, targetServings) {
   return formatAmount((parsed * targetServings) / baseServings);
 }
 
+// ── Handleliste ──────────────────────────────────────────────
+
+const STORE_CATEGORIES = [
+  { key: "produce", label: "Grønnsaker & frukt", keywords: ["løk", "gulrot", "gulrøtter", "tomat", "paprika", "spinat", "hvitløk", "brokkoli", "potet", "poteter", "agurk", "salat", "sopp", "mais", "erter", "eple", "banan", "sitron", "lime", "appelsin", "kål", "purre", "selleri", "squash", "aubergine", "chili", "vårløk", "gressløk", "persille", "koriander", "mango", "avokado", "jordbær", "blåbær", "grønnsak", "grønnsaker"] },
+  { key: "meat", label: "Kjøtt & fisk", keywords: ["kylling", "laks", "torsk", "svin", "svinekjøtt", "biff", "reker", "kjøttdeig", "bacon", "pølse", "skinke", "lam", "tunfisk", "sei", "hyse", "ørret", "makrell", "sild", "fiskefilet", "fiskekaker", "fiskepinner", "kjøtt", "fisk", "farse", "karbonader"] },
+  { key: "dairy", label: "Meieri & egg", keywords: ["melk", "fløte", "ost", "smør", "rømme", "yoghurt", "egg", "creme fraiche", "kesam", "brunost", "gouda", "parmesan", "mozzarella", "brie", "cottage", "ricotta", "kremost", "hvitost"] },
+  { key: "bread", label: "Brød & bakevarer", keywords: ["brød", "knekkebrød", "kavring", "tortilla", "pita", "lefse", "rundstykke", "bagett", "loff", "wraps", "nachos", "chips", "flatbrød"] },
+  { key: "dry", label: "Tørrvarer & hermetikk", keywords: ["pasta", "ris", "mel", "sukker", "olje", "tomatsaus", "linser", "kikert", "quinoa", "couscous", "nudler", "kokosmelk", "soyasaus", "olivenolje", "rapsolje", "eddik", "honning", "hermetikk", "hermetisk", "buljong", "kraft", "hoisin", "ketchup", "majones", "sennep", "hakket tomat"] },
+  { key: "spices", label: "Krydder & sauser", keywords: ["salt", "pepper", "oregano", "ingefær", "karri", "kanel", "paprikapulver", "cumin", "gurkemeie", "chillipulver", "timian", "rosmarin", "laurbær", "muskat", "krydder", "garam masala", "tikka", "kardemomme", "allehånde", "løkpulver", "hvitløkspulver"] },
+];
+
+function categorizeIngredient(name) {
+  const lower = (name || "").toLowerCase();
+  for (const cat of STORE_CATEGORIES) {
+    if (cat.keywords.some((kw) => lower.includes(kw))) return cat.key;
+  }
+  return "other";
+}
+
+function formatShoppingAmount(num) {
+  if (isNaN(num) || num === 0) return "";
+  const rounded = parseFloat(num.toFixed(2));
+  return rounded % 1 === 0 ? String(rounded) : String(rounded);
+}
+
+function generateShoppingListItems() {
+  const plan = currentPlan();
+  const dayModes = currentDayModes();
+  const servings = currentServings();
+  const aggregated = {};
+
+  dayNames.forEach((_, index) => {
+    if (!dayPlansMeal(dayModes[index])) return;
+    const meal = getMeal(plan[index]);
+    if (!meal?.ingredients?.length) return;
+
+    const base = mealBaseServings(meal);
+    const target = Math.max(1, Number(servings[index]) || state.family.familySize);
+    const ratio = base > 0 ? target / base : 1;
+
+    meal.ingredients.forEach(({ name, amount, unit }) => {
+      if (!name?.trim()) return;
+      const normName = name.trim();
+      const normUnit = (unit || "").trim().toLowerCase();
+      const key = `${normName.toLowerCase()}__${normUnit}`;
+      const scaled = parseFloat(amount) * ratio;
+
+      if (aggregated[key]) {
+        if (!isNaN(scaled) && !isNaN(aggregated[key]._num)) {
+          aggregated[key]._num += scaled;
+          aggregated[key].amount = formatShoppingAmount(aggregated[key]._num);
+        }
+      } else {
+        aggregated[key] = {
+          id: Math.random().toString(36).slice(2),
+          name: normName,
+          amount: isNaN(scaled) ? (amount || "") : formatShoppingAmount(scaled),
+          _num: isNaN(scaled) ? NaN : scaled,
+          unit: unit || "",
+          category: categorizeIngredient(normName),
+          checked: false,
+          custom: false,
+        };
+      }
+    });
+  });
+
+  return Object.values(aggregated).map(({ _num, ...item }) => item);
+}
+
+function renderShoppingItem(item) {
+  const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
+  return `
+    <label class="shopping-item${item.checked ? " done" : ""}">
+      <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""}>
+      <span class="shopping-item-name">${escapeHtml(item.name)}</span>
+      ${amountText ? `<span class="shopping-item-amount">${escapeHtml(amountText)}</span>` : `<span></span>`}
+      <button type="button" class="shopping-item-remove" data-remove-item="${escapeHtml(item.id)}" aria-label="Fjern vare">×</button>
+    </label>
+  `;
+}
+
+function renderShoppingList() {
+  const items = state.shoppingList?.items || [];
+  const allCategories = [...STORE_CATEGORIES, { key: "other", label: "Annet" }];
+  const unchecked = items.filter((i) => !i.checked);
+  const checked = items.filter((i) => i.checked);
+
+  const categoryGroups = allCategories
+    .map((cat) => ({ ...cat, items: unchecked.filter((i) => i.category === cat.key) }))
+    .filter((cat) => cat.items.length > 0);
+
+  const isEmpty = items.length === 0;
+
+  return `
+    <section class="view-header meals-view-header">
+      <div class="meals-header-row">
+        <h2 class="view-title">Handleliste</h2>
+        <button class="button compact" data-generate-list>${icon("shopping")} Generer fra plan</button>
+      </div>
+      ${!isEmpty ? `<p class="view-lead">${unchecked.length} gjenstår · ${checked.length} avhuket</p>` : ""}
+    </section>
+
+    <form class="shopping-add-form" data-add-custom-form>
+      <input class="input" name="item" placeholder="Legg til vare manuelt..." autocomplete="off">
+      <button class="button secondary compact" type="submit">Legg til</button>
+    </form>
+
+    ${isEmpty ? `
+      <div class="shopping-empty">
+        <p>Ingen varer lagt til ennå.</p>
+        <p>Trykk <strong>Generer fra plan</strong> for å hente ingredienser fra ukens middager automatisk.</p>
+      </div>
+    ` : `
+      <div class="shopping-list">
+        ${categoryGroups.map((cat) => `
+          <div class="shopping-category">
+            <h4 class="shopping-category-heading">${escapeHtml(cat.label)}</h4>
+            ${cat.items.map(renderShoppingItem).join("")}
+          </div>
+        `).join("")}
+        ${checked.length > 0 ? `
+          <div class="shopping-category checked-section">
+            <h4 class="shopping-category-heading">I kurven (${checked.length})</h4>
+            ${checked.map(renderShoppingItem).join("")}
+            <button type="button" class="shopping-clear-btn text-action quiet" data-clear-checked>Fjern avhukede varer</button>
+          </div>
+        ` : ""}
+      </div>
+    `}
+  `;
+}
+
 function renderShell(viewHtml) {
   const isRecipeView = state.activeView === "recipe";
   app.innerHTML = `
@@ -852,6 +987,7 @@ function renderShell(viewHtml) {
           ${navButton("calendar", "Kalender", "calendar")}
           ${navButton("planner", "Planlegger", "plan")}
           ${navButton("meals", "Middager", "meals")}
+          ${navButton("shopping", "Handle", "shopping")}
           ${navButton("setup", "Setup", "profile")}
         </div>
       </nav>
@@ -2445,6 +2581,51 @@ function bindEvents() {
 
   app.querySelector("[data-refresh-app]")?.addEventListener("click", refreshApp);
 
+  app.querySelector("[data-generate-list]")?.addEventListener("click", () => {
+    const generated = generateShoppingListItems();
+    const custom = (state.shoppingList?.items || []).filter((i) => i.custom);
+    setState({ shoppingList: { items: [...generated, ...custom], generatedForWeek: getWeekKey() } });
+  });
+
+  app.querySelector("[data-add-custom-form]")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = e.currentTarget.querySelector("[name=item]");
+    const name = input.value.trim();
+    if (!name) return;
+    const newItem = {
+      id: Math.random().toString(36).slice(2),
+      name,
+      amount: "",
+      unit: "",
+      category: categorizeIngredient(name),
+      checked: false,
+      custom: true,
+    };
+    setState({ shoppingList: { ...state.shoppingList, items: [...(state.shoppingList?.items || []), newItem] } });
+    input.value = "";
+  });
+
+  app.querySelectorAll("[data-toggle-item]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const items = (state.shoppingList?.items || []).map((item) =>
+        item.id === checkbox.dataset.toggleItem ? { ...item, checked: checkbox.checked } : item
+      );
+      setState({ shoppingList: { ...state.shoppingList, items } });
+    });
+  });
+
+  app.querySelectorAll("[data-remove-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const items = (state.shoppingList?.items || []).filter((item) => item.id !== button.dataset.removeItem);
+      setState({ shoppingList: { ...state.shoppingList, items } });
+    });
+  });
+
+  app.querySelector("[data-clear-checked]")?.addEventListener("click", () => {
+    const items = (state.shoppingList?.items || []).filter((item) => !item.checked);
+    setState({ shoppingList: { ...state.shoppingList, items } });
+  });
+
   app.querySelectorAll("[data-toggle-family]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.toggleFamily;
@@ -2470,6 +2651,7 @@ function render() {
     calendar: renderCalendar,
     planner: renderPlanner,
     meals: renderMeals,
+    shopping: renderShoppingList,
     recipe: renderMealDetail,
     setup: renderSetup,
     "meal-preferences": renderMealPreferencesSetup,
