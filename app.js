@@ -1112,29 +1112,28 @@ function renderMeals() {
   const meals = filteredMeals();
   const grouped = state.filters.sort === "category" && !state.filters.query.trim() && state.filters.category === "all" && state.filters.flag === "all";
   return `
-    <section class="view-header">
-      <div>
+    <section class="view-header meals-view-header">
+      <div class="meals-header-row">
         <h2 class="view-title">Middager</h2>
-        <p class="view-lead">Bygg familiens egen middagsbank. Det du legger inn her blir tilgjengelig i kalenderen og planleggeren.</p>
-      </div>
-      <div class="toolbar">
-        <button class="button" data-edit-meal="new">${icon("add")} Ny middag</button>
+        <button class="button compact" data-edit-meal="new">${icon("add")} Ny middag</button>
       </div>
     </section>
     ${state.editingMealId ? renderMealEditor() : ""}
     <section class="filters">
       <input class="input" data-filter="query" value="${escapeHtml(state.filters.query)}" placeholder="Søk etter middag eller ingrediens">
-      <select class="select" data-filter="category">
-        <option value="all">Alle kategorier</option>
-        ${categoryEntries().map(([value, label]) => `<option value="${value}" ${state.filters.category === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-      </select>
-      <select class="select" data-filter="flag">
-        <option value="all">Alle typer</option>
-        <option value="favorite" ${state.filters.flag === "favorite" ? "selected" : ""}>Favoritter</option>
-        <option value="kid" ${state.filters.flag === "kid" ? "selected" : ""}>Barnevennlig</option>
-        <option value="quick" ${state.filters.flag === "quick" ? "selected" : ""}>Rask middag</option>
-        ${suitabilityEntries().map(([value, label]) => `<option value="suitability:${value}" ${state.filters.flag === `suitability:${value}` ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-      </select>
+      <div class="filter-row">
+        <select class="select" data-filter="category">
+          <option value="all">Alle kategorier</option>
+          ${categoryEntries().map(([value, label]) => `<option value="${value}" ${state.filters.category === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+        <select class="select" data-filter="flag">
+          <option value="all">Alle typer</option>
+          <option value="favorite" ${state.filters.flag === "favorite" ? "selected" : ""}>Favoritter</option>
+          <option value="kid" ${state.filters.flag === "kid" ? "selected" : ""}>Barnevennlig</option>
+          <option value="quick" ${state.filters.flag === "quick" ? "selected" : ""}>Rask middag</option>
+          ${suitabilityEntries().map(([value, label]) => `<option value="suitability:${value}" ${state.filters.flag === `suitability:${value}` ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </div>
       <select class="select" data-filter="sort">
         <option value="category" ${state.filters.sort === "category" ? "selected" : ""}>Gruppert etter kategori</option>
         <option value="alpha" ${state.filters.sort === "alpha" ? "selected" : ""}>Alfabetisk liste</option>
@@ -1196,10 +1195,6 @@ function renderMealCard(meal) {
         </div>
       </div>
       <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}</div>
-      <div class="meta-line">
-        <span>Min. ${meal.minDaysBetween} dager mellom</span>
-        <span>Nøkkel: ${escapeHtml(meal.keyIngredients.join(", "))}</span>
-      </div>
     </article>
   `;
 }
