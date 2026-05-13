@@ -1042,34 +1042,31 @@ function renderPlanner() {
   }).join("");
 
   return `
-    <section class="view-header">
-      <div>
-        <h2 class="view-title">Planlegg uken</h2>
-        <p class="view-lead">${weekRangeLabel()}. Fyll inn manuelt eller la den enkle rådgiveren foreslå middager som passer med raske dager, rester og variasjon.</p>
+    <section class="view-header planner-view-header">
+      <h2 class="view-title">Planlegg uken</h2>
+      <div class="planner-top-bar">
+        <div class="week-nav-compact">
+          <button class="button secondary week-arrow-btn" data-week="-1" aria-label="Forrige uke">←</button>
+          <span class="week-nav-label">${weekRangeLabel()}</span>
+          <button class="button secondary week-arrow-btn" data-week="1" aria-label="Neste uke">→</button>
+        </div>
+        <button class="button compact" data-fill-week>${icon("add")} Fyll ledige dager</button>
       </div>
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <button class="button secondary" data-week="-1">Forrige</button>
-          <button class="button secondary" data-week="0">Denne uken</button>
-          <button class="button secondary" data-week="1">Neste</button>
-        </div>
-        <div class="toolbar-group">
-          <button class="button" data-fill-week>${icon("add")} Fyll ledige dager</button>
-          <button class="button secondary" data-replace-open-week>Bytt åpne forslag</button>
-          <button class="button secondary quiet" data-clear-week>Tøm uke</button>
-        </div>
+      <div class="planner-secondary-actions">
+        <button class="text-action" data-week="0">Denne uken</button>
+        <span class="action-sep">·</span>
+        <button class="text-action" data-replace-open-week>Bytt åpne forslag</button>
+        <span class="action-sep">·</span>
+        <button class="text-action quiet" data-clear-week>Tøm uke</button>
       </div>
     </section>
-    <div class="grid two">
-      <section class="panel">
-        <h2>Ukeplan</h2>
-        <div class="planner-list">${rows}</div>
-      </section>
-      <aside class="panel">
-        <h2>Rådgiverstatus</h2>
-        <p class="status-note">${advisorSummary()}</p>
-      </aside>
-    </div>
+    <details class="advisor-panel">
+      <summary>Rådgiverstatus</summary>
+      <p class="status-note">${advisorSummary()}</p>
+    </details>
+    <section class="panel">
+      <div class="planner-list">${rows}</div>
+    </section>
   `;
 }
 
