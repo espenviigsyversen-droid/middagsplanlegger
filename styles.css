@@ -307,9 +307,6 @@ button {
 .week-row-meal {
   font-size: 0.92rem;
   line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .week-row-meal.muted {
