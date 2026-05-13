@@ -892,9 +892,9 @@ function categorizeIngredient(name) {
 }
 
 function getStoreCategories() {
-  const saved = state.metadata?.storeCategories;
-  const base = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key, label }) => ({ key, label }));
-  return [...base, { key: "other", label: "Annet" }];
+  const builtInKeys = new Set(STORE_CATEGORIES.map((c) => c.key));
+  const custom = (state.metadata?.storeCategories || []).filter((c) => !builtInKeys.has(c.key));
+  return [...STORE_CATEGORIES.map(({ key, label }) => ({ key, label })), ...custom, { key: "other", label: "Annet" }];
 }
 
 function formatShoppingAmount(num) {
@@ -1892,7 +1892,7 @@ function renderSetup() {
         </button>
         <button class="setup-menu-item" data-view="store-categories">
           <span>Butikkategorier</span>
-          <strong>${getStoreCategories().length - 1}</strong>
+          <strong>${STORE_CATEGORIES.length + (state.metadata?.storeCategories || []).filter((c) => !STORE_CATEGORIES.some((b) => b.key === c.key)).length}</strong>
         </button>
       </div>
     </section>
@@ -2146,29 +2146,26 @@ function renderIngredientMappingsSetup() {
 
 
 function renderStoreCategoriesSetup() {
-  const saved = state.metadata?.storeCategories;
-  const cats = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key, label }) => ({ key, label }));
+  const builtInKeys = new Set(STORE_CATEGORIES.map((c) => c.key));
+  const custom = (state.metadata?.storeCategories || []).filter((c) => !builtInKeys.has(c.key));
+  const builtInRows = STORE_CATEGORIES.map((cat) =>
+    `<div class="metadata-row" style="opacity:0.65"><span>${escapeHtml(cat.label)}</span><span style="font-size:0.72rem;color:var(--muted)">innebygd</span></div>`
+  ).join("") + `<div class="metadata-row" style="opacity:0.45"><span>Annet</span><span style="font-size:0.72rem;color:var(--muted)">innebygd</span></div>`;
+  const customRows = custom.map((cat) =>
+    `<div class="metadata-row"><span>${escapeHtml(cat.label)}</span><button class="icon-button" data-remove-store-cat="${escapeHtml(cat.key)}" title="Fjern">&times;</button></div>`
+  ).join("");
   return `
     <section class="view-header">
       <div>
         <h2 class="view-title">Butikkategorier</h2>
-        <p class="view-lead">Kategorier som brukes til å gruppere varer i handlelisten. Automatisk sortering baseres på innebygde nøkkelord.</p>
+        <p class="view-lead">Innebygde kategorier kan ikke fjernes. Du kan legge til egne kategorier nederst.</p>
       </div>
       <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
     <section class="panel setup-section">
-      <div class="metadata-list">
-        ${cats.map((cat) => `
-          <div class="metadata-row">
-            <span>${escapeHtml(cat.label)}</span>
-            <button class="icon-button" data-remove-store-cat="${escapeHtml(cat.key)}" title="Fjern kategori">&times;</button>
-          </div>`).join("")}
-        <div class="metadata-row" style="opacity:0.55">
-          <span>Annet</span>
-          <span class="field-hint" style="margin:0">Alltid tilgjengelig</span>
-        </div>
-      </div>
-      <form class="metadata-add" data-store-cat-form>
+      <div class="metadata-list">${builtInRows}</div>
+      ${custom.length > 0 ? `<p class="status-note" style="margin-top:14px">Egne kategorier</p><div class="metadata-list">${customRows}</div>` : ""}
+      <form class="metadata-add" data-store-cat-form style="margin-top:14px">
         <input class="input" name="storeCatName" placeholder="Ny kategori, f.eks. Frysevarer">
         <button class="button secondary" type="submit">Legg til</button>
       </form>
@@ -2892,23 +2889,22 @@ function bindEvents() {
     const label = String(formData.get("storeCatName") || "").trim();
     if (!label) return;
     const key = makeSlug(label);
-    const saved = state.metadata?.storeCategories;
-    const cats = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key: k, label: l }) => ({ key: k, label: l }));
-    const nextKey = uniqueMetadataKey(key, Object.fromEntries(cats.map((c) => [c.key, c.label])));
-    const nextCats = [...cats, { key: nextKey, label }];
-    setState({ metadata: { ...state.metadata, storeCategories: nextCats } });
+    const builtInKeys = new Set(STORE_CATEGORIES.map((c) => c.key));
+    const custom = (state.metadata?.storeCategories || []).filter((c) => !builtInKeys.has(c.key));
+    const allKeys = Object.fromEntries([...STORE_CATEGORIES, ...custom].map((c) => [c.key, c.label]));
+    const nextKey = uniqueMetadataKey(key, allKeys);
+    setState({ metadata: { ...state.metadata, storeCategories: [...custom, { key: nextKey, label }] } });
     e.currentTarget.reset();
   });
 
-  // Store categories: remove
+  // Store categories: remove (built-ins cannot be removed)
   app.querySelectorAll("[data-remove-store-cat]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.removeStoreCat;
-      const saved = state.metadata?.storeCategories;
-      const base = (saved && saved.length > 0) ? saved : STORE_CATEGORIES.map(({ key: k, label: l }) => ({ key: k, label: l }));
-      const cats = base.filter((c) => c.key !== key);
-      if (cats.length === 0) return;
-      setState({ metadata: { ...state.metadata, storeCategories: cats } });
+      const builtInKeys = new Set(STORE_CATEGORIES.map((c) => c.key));
+      if (builtInKeys.has(key)) return;
+      const custom = (state.metadata?.storeCategories || []).filter((c) => c.key !== key);
+      setState({ metadata: { ...state.metadata, storeCategories: custom } });
     });
   });
 
