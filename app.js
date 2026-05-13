@@ -872,56 +872,58 @@ function renderCalendar() {
   const dayModes = currentDayModes();
   const dayNotes = currentDayNotes();
   const todayIndex = getTodayIndexInCurrentWeek();
+  const highlightedIndex = todayIndex >= 0 ? todayIndex : 0;
   const todayCard = renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex);
-  const cards = dayNames.map((day, index) => {
+
+  const weekRows = dayNames.map((day, index) => {
+    if (index === highlightedIndex) return "";
     const meal = getMeal(plan[index]);
     const isPlannedMeal = dayPlansMeal(dayModes[index]);
     const note = dayNotes[index] || "";
+    const shortDay = day.substring(0, 3);
+    const title = !isPlannedMeal
+      ? planModeLabel(dayModes[index])
+      : meal ? meal.title : null;
+
     return `
-      <article class="day-card">
-        <div class="day-head">
-          <div>
-            <div class="day-name">${day}</div>
-            <div class="day-date">${formatDate(dates[index])}</div>
-          </div>
+      <div class="week-row">
+        <div class="week-row-day">
+          <span class="week-row-name">${shortDay}</span>
+          <span class="week-row-date">${formatDate(dates[index])}</span>
         </div>
-        ${!isPlannedMeal ? `
-          <div class="calendar-meal">
-            <p class="meal-title">${escapeHtml(planModeLabel(dayModes[index]))}</p>
-            <p class="meal-description">${escapeHtml(note || "Ingen detaljer lagt inn.")}</p>
-          </div>
-        ` : meal ? `
-          <div class="calendar-meal">
-            <p class="meal-title">${escapeHtml(meal.title)}</p>
-            <p class="meal-description">${escapeHtml(meal.description || "Ingen beskrivelse lagt inn.")}</p>
-          </div>
-          <div class="day-actions calendar-actions">
-            <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>
-          </div>
-        ` : `
-          <div class="empty-day">Ikke planlagt</div>
-          <div class="day-actions calendar-actions">
-            <button class="button secondary compact" data-view="planner">Planlegg</button>
-          </div>
-        `}
-      </article>
+        <div class="week-row-meal${!title ? " muted" : ""}">
+          ${escapeHtml(title || "Ikke planlagt")}
+        </div>
+        <div class="week-row-action">
+          ${meal && isPlannedMeal
+            ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>`
+            : !title
+              ? `<button class="button secondary compact" data-view="planner">Planlegg</button>`
+              : ""}
+        </div>
+      </div>
     `;
   }).join("");
 
+  const listHeading = todayIndex >= 0 ? "Resten av uken" : "Alle dager";
+
   return `
-    <section class="view-header">
+    <section class="view-header calendar-view-header">
       <div>
-        <h2 class="view-title">Denne ukens middager</h2>
-        <p class="view-lead">${weekRangeLabel()}. En enkel oversikt over hva som er planlagt denne uken.</p>
-      </div>
-      <div class="toolbar">
-        <button class="button secondary" data-week="-1">Forrige</button>
-        <button class="button secondary" data-week="0">Denne uken</button>
-        <button class="button secondary" data-week="1">Neste</button>
+        <h2 class="view-title">Middagsplan</h2>
+        <p class="view-lead">${weekRangeLabel()}</p>
       </div>
     </section>
     ${todayCard}
-    <section class="week-grid">${cards}</section>
+    <section class="week-list">
+      <h4 class="week-list-heading">${listHeading}</h4>
+      ${weekRows}
+    </section>
+    <div class="week-nav">
+      <button class="button secondary compact" data-week="-1">← Forrige</button>
+      <button class="button secondary compact" data-week="0">Denne uken</button>
+      <button class="button secondary compact" data-week="1">Neste →</button>
+    </div>
   `;
 }
 
