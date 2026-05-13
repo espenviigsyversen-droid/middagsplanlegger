@@ -49,6 +49,7 @@ const syncedStateKeys = new Set([
   "servingsByWeek",
   "dayModesByWeek",
   "dayNotesByWeek",
+  "shoppingList",
 ]);
 
 const defaultMeals = [
@@ -293,6 +294,7 @@ function normalizeState(nextState) {
     nextState.metadata.categoryLabels.kjott = "Kjøtt";
   }
   nextState.mealPreferences = normalizeMealPreferences(nextState.mealPreferences, nextState.metadata.categoryLabels);
+  nextState.shoppingList = normalizeShoppingList(nextState.shoppingList);
   nextState.meals = nextState.meals.map((meal) => ({
     ...meal,
     recipeUrl: String(meal.recipeUrl || "").trim(),
@@ -466,6 +468,7 @@ function syncPayload() {
     servingsByWeek: state.servingsByWeek,
     dayModesByWeek: state.dayModesByWeek,
     dayNotesByWeek: state.dayNotesByWeek,
+    shoppingList: state.shoppingList,
     clientUpdatedAt: state.clientUpdatedAt || 0,
   };
 }
@@ -489,6 +492,7 @@ function syncedScopesForPatch(patch) {
   if ("metadata" in patch) scopes.add("metadata");
   if ("meals" in patch) scopes.add("meals");
   if ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch || "dayModesByWeek" in patch || "dayNotesByWeek" in patch) scopes.add("weeks");
+  if ("shoppingList" in patch) scopes.add("shopping");
   return [...scopes];
 }
 
@@ -562,6 +566,7 @@ function applyRemotePayload(payload) {
     servingsByWeek: payload.servingsByWeek,
     dayModesByWeek: payload.dayModesByWeek,
     dayNotesByWeek: payload.dayNotesByWeek,
+    shoppingList: payload.shoppingList,
     clientUpdatedAt: remoteClientUpdatedAt,
     pendingLocalSync: false,
   };
@@ -897,10 +902,81 @@ function getStoreCategories() {
   return [...STORE_CATEGORIES.map(({ key, label }) => ({ key, label })), ...custom, { key: "other", label: "Annet" }];
 }
 
+function normalizeShoppingList(shoppingList = {}) {
+  const items = Array.isArray(shoppingList?.items) ? shoppingList.items : [];
+  return {
+    generatedForWeek: shoppingList?.generatedForWeek || null,
+    items: items.map((item) => ({
+      id: String(item.id || Math.random().toString(36).slice(2)),
+      name: String(item.name || "").trim(),
+      amount: String(item.amount || "").trim(),
+      unit: String(item.unit || "").trim(),
+      category: String(item.category || "other"),
+      checked: Boolean(item.checked),
+      custom: Boolean(item.custom),
+    })).filter((item) => item.name),
+  };
+}
+
 function formatShoppingAmount(num) {
   if (isNaN(num) || num === 0) return "";
   const rounded = parseFloat(num.toFixed(2));
   return rounded % 1 === 0 ? String(rounded) : String(rounded);
+}
+
+function shoppingMergeKey(item) {
+  return `${String(item.name || "").trim().toLowerCase()}__${String(item.unit || "").trim().toLowerCase()}`;
+}
+
+function mergeShoppingAmount(existingAmount, incomingAmount) {
+  const existing = parseAmount(existingAmount);
+  const incoming = parseAmount(incomingAmount);
+  if (existing !== null && incoming !== null) {
+    return formatShoppingAmount(existing + incoming);
+  }
+  return existingAmount || incomingAmount || "";
+}
+
+function mergeShoppingItems(existingItems, incomingItems) {
+  const merged = [...normalizeShoppingList({ items: existingItems }).items];
+  const indexByKey = new Map(merged.map((item, index) => [shoppingMergeKey(item), index]));
+
+  normalizeShoppingList({ items: incomingItems }).items.forEach((incoming) => {
+    const key = shoppingMergeKey(incoming);
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push(incoming);
+      return;
+    }
+    const current = merged[existingIndex];
+    merged[existingIndex] = {
+      ...current,
+      amount: mergeShoppingAmount(current.amount, incoming.amount),
+      category: current.category || incoming.category,
+      checked: current.checked && incoming.checked,
+      custom: current.custom && incoming.custom,
+    };
+  });
+
+  return merged;
+}
+
+function mergeGeneratedShoppingItems(generatedItems) {
+  const existing = normalizeShoppingList(state.shoppingList).items;
+  const existingByKey = new Map(existing.map((item) => [shoppingMergeKey(item), item]));
+  const generated = normalizeShoppingList({ items: generatedItems }).items.map((item) => {
+    const previous = existingByKey.get(shoppingMergeKey(item));
+    return {
+      ...item,
+      id: previous?.id || item.id,
+      category: previous?.category || item.category,
+      checked: Boolean(previous?.checked),
+      custom: false,
+    };
+  });
+  const custom = existing.filter((item) => item.custom);
+  return mergeShoppingItems(generated, custom);
 }
 
 function generateShoppingListItems(selectedDays) {
@@ -922,7 +998,8 @@ function generateShoppingListItems(selectedDays) {
       const normName = name.trim();
       const normUnit = (unit || "").trim().toLowerCase();
       const key = `${normName.toLowerCase()}__${normUnit}`;
-      const scaled = parseFloat(amount) * ratio;
+      const parsedAmount = parseAmount(amount);
+      const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
 
       if (aggregated[key]) {
         if (!isNaN(scaled) && !isNaN(aggregated[key]._num)) {
@@ -2682,7 +2759,8 @@ function bindEvents() {
       const newItems = meal.ingredients
         .filter((ing) => ing.name?.trim())
         .map((ing) => {
-          const scaled = parseFloat(ing.amount) * ratio;
+          const parsedAmount = parseAmount(ing.amount);
+          const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
           return {
             id: Math.random().toString(36).slice(2),
             name: ing.name.trim(),
@@ -2694,7 +2772,7 @@ function bindEvents() {
           };
         });
       const existing = state.shoppingList?.items || [];
-      setState({ shoppingList: { ...state.shoppingList, items: [...existing, ...newItems] } });
+      setState({ shoppingList: { ...state.shoppingList, items: mergeShoppingItems(existing, newItems) } });
       button.textContent = "✓ Lagt til";
       setTimeout(() => { button.innerHTML = `${icon("shopping")} Legg i handleliste`; }, 2000);
     });
@@ -2834,9 +2912,8 @@ function bindEvents() {
     const selectedKeys = new Set(state.generateModal.selectedDays);
     const selectedDays = getUpcomingDays(9).filter((d) => selectedKeys.has(d.dateKey));
     const generated = generateShoppingListItems(selectedDays);
-    const custom = (state.shoppingList?.items || []).filter((i) => i.custom);
     setState({
-      shoppingList: { items: [...generated, ...custom], generatedForWeek: getWeekKey() },
+      shoppingList: { items: mergeGeneratedShoppingItems(generated), generatedForWeek: getWeekKey() },
       generateModal: { open: false, selectedDays: [] },
     });
   });
@@ -2855,7 +2932,7 @@ function bindEvents() {
       checked: false,
       custom: true,
     };
-    setState({ shoppingList: { ...state.shoppingList, items: [...(state.shoppingList?.items || []), newItem] } });
+    setState({ shoppingList: { ...state.shoppingList, items: mergeShoppingItems(state.shoppingList?.items || [], [newItem]) } });
     input.value = "";
   });
 
@@ -3059,6 +3136,7 @@ async function initFirebaseSync() {
     remoteRefs.profile = doc(db, "families", FAMILY_ID, "app", "profile");
     remoteRefs.preferences = doc(db, "families", FAMILY_ID, "app", "preferences");
     remoteRefs.metadata = doc(db, "families", FAMILY_ID, "app", "metadata");
+    remoteRefs.shopping = doc(db, "families", FAMILY_ID, "app", "shopping");
     remoteRefs.meals = collection(db, "families", FAMILY_ID, "meals");
     remoteRefs.weeks = collection(db, "families", FAMILY_ID, "weeks");
     window.middagsplanDoc = doc;
@@ -3121,6 +3199,16 @@ function startSplitSyncListeners(onSnapshot) {
     }
     applyRemoteDocument("preferences", snapshot.data(), (data) => {
       applyRemoteStatePatch({ mealPreferences: data.mealPreferences, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
+    });
+  }, markSyncFailed);
+
+  onSnapshot(remoteRefs.shopping, (snapshot) => {
+    if (!snapshot.exists()) {
+      scheduleRemoteSave(0, ["shopping"]);
+      return;
+    }
+    applyRemoteDocument("shopping", snapshot.data(), (data) => {
+      applyRemoteStatePatch({ shoppingList: data.shoppingList, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
     });
   }, markSyncFailed);
 
@@ -3213,10 +3301,10 @@ function markSyncFailed() {
 
 async function saveAllRemoteState() {
   Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks"]);
+  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks", "shopping"]);
 }
 
-function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks"]) {
+function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks", "shopping"]) {
   if (!remoteRefs.profile || applyingRemoteState) return;
   scopes.forEach((scope) => pendingRemoteScopes.add(scope));
   const key = [...new Set(scopes)].sort().join("-");
@@ -3254,6 +3342,10 @@ async function saveRemoteScopes(scopes) {
 
   if (uniqueScopes.includes("metadata")) {
     writes.push(window.middagsplanSetDoc(remoteRefs.metadata, { metadata: state.metadata, clientUpdatedAt, updatedAt }, { merge: true }));
+  }
+
+  if (uniqueScopes.includes("shopping")) {
+    writes.push(window.middagsplanSetDoc(remoteRefs.shopping, { shoppingList: state.shoppingList, clientUpdatedAt, updatedAt }, { merge: true }));
   }
 
   if (uniqueScopes.includes("meals")) {
