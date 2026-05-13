@@ -1199,7 +1199,12 @@ button {
 
 .shopping-editor-modal {
   display: grid;
+  width: min(520px, calc(100vw - 24px));
+  margin: 0 auto max(12px, env(safe-area-inset-bottom));
+  padding-left: 18px;
+  padding-right: 18px;
   gap: 14px;
+  border-radius: 18px;
 }
 
 .shopping-editor-fields {
@@ -1216,6 +1221,8 @@ button {
 .shopping-editor-actions {
   display: grid;
   grid-template-columns: auto 1fr 1fr;
+  gap: 12px;
+  padding-bottom: 2px;
 }
 
 .meal-group h3 {
