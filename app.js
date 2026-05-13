@@ -659,6 +659,7 @@ function getWeekKeyForDate(date) {
   const day = d.getDay();
   const diff = (day === 0 ? -6 : 1 - day);
   d.setDate(d.getDate() + diff);
+  d.setHours(12, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 }
 
@@ -670,7 +671,7 @@ function getDayIndexForDate(date) {
 
 function getUpcomingDays(n = 9) {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setHours(12, 0, 0, 0);
   const days = [];
   for (let i = 0; i < n; i++) {
     const date = new Date(today);
