@@ -240,6 +240,7 @@ const defaultState = {
   servingsByWeek: {},
   dayModesByWeek: {},
   dayNotesByWeek: {},
+  mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
 let state = loadState();
@@ -328,6 +329,7 @@ function normalizeState(nextState) {
   if (!nextState.dayNotesByWeek[currentWeekKey]) {
     nextState.dayNotesByWeek[currentWeekKey] = emptyWeekDayNotes();
   }
+  nextState.mealPicker = { open: false, dayIndex: null, query: "" };
   nextState.plan = undefined;
   nextState.lockedPlan = undefined;
   return nextState;
@@ -649,6 +651,132 @@ function mealSelectOptions(selectedId = "") {
 
   return grouped + other;
 }
+
+function renderMealPickerModal() {
+  const picker = state.mealPicker || { open: false, dayIndex: null, query: "" };
+  if (!picker.open || picker.dayIndex === null) return "";
+
+  const dayIndex = picker.dayIndex;
+  const dayName = dayNames[dayIndex];
+  const query = picker.query || "";
+
+  return `
+    <div class="modal-backdrop active" data-close-meal-picker>
+      <div class="modal bottom-sheet active" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Velg middag for ${escapeHtml(dayName)}</h3>
+          <button class="modal-close" type="button" data-close-meal-picker aria-label="Lukk">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="meal-picker-search-wrap">
+            <input 
+              type="text" 
+              class="meal-picker-search-input" 
+              placeholder="Søk i oppskrifter (f.eks. taco, laks...)" 
+              value="${escapeHtml(query)}" 
+              data-meal-picker-search 
+              autocomplete="off"
+              autofocus
+            />
+            <button class="search-clear-btn" type="button" data-clear-search-input style="${query ? '' : 'display: none;'}">×</button>
+          </div>
+          <div class="meal-picker-list">
+            ${renderMealPickerListItems(query, dayIndex)}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMealPickerListItems(query = "", dayIndex) {
+  const labels = getCategoryLabels();
+  const normalizedQuery = query.toLowerCase().trim();
+  const plan = currentPlan();
+  const selectedMealId = plan[dayIndex] || "";
+
+  const filteredMeals = sortedMeals().filter((meal) => {
+    if (!normalizedQuery) return true;
+    const titleMatch = meal.title.toLowerCase().includes(normalizedQuery);
+    const descMatch = (meal.description || "").toLowerCase().includes(normalizedQuery);
+    const catMatch = meal.categories.some((cat) => (labels[cat] || cat).toLowerCase().includes(normalizedQuery));
+    const ingrMatch = (meal.keyIngredients || []).some((ingr) => ingr.toLowerCase().includes(normalizedQuery));
+    return titleMatch || descMatch || catMatch || ingrMatch;
+  });
+
+  let html = "";
+
+  // 1. Clear choice / Reset option
+  html += `
+    <div class="meal-picker-item clear-item ${selectedMealId === "" ? "selected" : ""}" data-select-meal="">
+      <div class="meal-picker-item-details">
+        <span class="meal-picker-item-title">✖ Ingen middag planlagt</span>
+        <span class="meal-picker-item-desc">Fjern middag fra denne dagen</span>
+      </div>
+      ${selectedMealId === "" ? '<span class="meal-picker-check">✓</span>' : ''}
+    </div>
+  `;
+
+  if (filteredMeals.length === 0) {
+    return html + `<div class="meal-picker-empty">Ingen oppskrifter matcher søket ditt.</div>`;
+  }
+
+  const prepTimeLabels = getPrepTimeLabels();
+
+  const categoriesToRender = Object.keys(labels);
+  categoriesToRender.forEach((category) => {
+    const mealsInCategory = filteredMeals.filter((meal) => meal.categories[0] === category);
+    if (mealsInCategory.length === 0) return;
+
+    html += `<div class="meal-picker-category-title">${escapeHtml(labels[category])}</div>`;
+    mealsInCategory.forEach((meal) => {
+      const isSelected = selectedMealId === meal.id;
+      const chips = [
+        meal.prepTime ? `<span class="picker-chip time">${escapeHtml(prepTimeLabels[meal.prepTime] || meal.prepTime)}</span>` : "",
+        meal.kidFriendly ? `<span class="picker-chip kid">Barnevennlig</span>` : "",
+        meal.favorite ? `<span class="picker-chip fav">Favoritt</span>` : "",
+      ].filter(Boolean).join("");
+
+      html += `
+        <div class="meal-picker-item ${isSelected ? "selected" : ""}" data-select-meal="${escapeHtml(meal.id)}">
+          <div class="meal-picker-item-details">
+            <span class="meal-picker-item-title">${escapeHtml(meal.title)}</span>
+            ${meal.description ? `<span class="meal-picker-item-desc">${escapeHtml(meal.description)}</span>` : ""}
+            <div class="meal-picker-item-chips">${chips}</div>
+          </div>
+          ${isSelected ? '<span class="meal-picker-check">✓</span>' : ''}
+        </div>
+      `;
+    });
+  });
+
+  const uncategorized = filteredMeals.filter((meal) => !meal.categories[0] || !labels[meal.categories[0]]);
+  if (uncategorized.length > 0) {
+    html += `<div class="meal-picker-category-title">Annet</div>`;
+    uncategorized.forEach((meal) => {
+      const isSelected = selectedMealId === meal.id;
+      const chips = [
+        meal.prepTime ? `<span class="picker-chip time">${escapeHtml(prepTimeLabels[meal.prepTime] || meal.prepTime)}</span>` : "",
+        meal.kidFriendly ? `<span class="picker-chip kid">Barnevennlig</span>` : "",
+        meal.favorite ? `<span class="picker-chip fav">Favoritt</span>` : "",
+      ].filter(Boolean).join("");
+
+      html += `
+        <div class="meal-picker-item ${isSelected ? "selected" : ""}" data-select-meal="${escapeHtml(meal.id)}">
+          <div class="meal-picker-item-details">
+            <span class="meal-picker-item-title">${escapeHtml(meal.title)}</span>
+            ${meal.description ? `<span class="meal-picker-item-desc">${escapeHtml(meal.description)}</span>` : ""}
+            <div class="meal-picker-item-chips">${chips}</div>
+          </div>
+          ${isSelected ? '<span class="meal-picker-check">✓</span>' : ''}
+        </div>
+      `;
+    });
+  }
+
+  return html;
+}
+
 
 function getWeekDates(offset = state.weekOffset) {
   const today = new Date();
@@ -1270,8 +1398,10 @@ function renderShoppingList() {
 
 function renderShell(viewHtml) {
   const isRecipeView = state.activeView === "recipe";
+  const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   app.innerHTML = `
     <div class="app-shell ${isRecipeView ? "recipe-mode" : ""}">
+      ${pickerModal}
       ${isRecipeView ? "" : `<header class="topbar">
         <div class="topbar-inner">
           <div class="brand">
@@ -1465,10 +1595,10 @@ function renderPlanner() {
             </label>
             <label class="planner-control wide">
               <span>Middag</span>
-              <select class="select" data-plan-day="${index}">
-                <option value="">Ikke planlagt</option>
-                ${mealSelectOptions(mealId)}
-              </select>
+              <button class="select select-trigger-btn" type="button" data-open-meal-picker="${index}">
+                <span>${meal ? escapeHtml(meal.title) : "Velg middag..."}</span>
+                <span class="chevron">▾</span>
+              </button>
             </label>
             ${meal ? `<p class="planner-reason">${escapeHtml(typeLabel)} · ${escapeHtml(suggestionReason(meal, index))}</p>` : ""}
           `}
@@ -2794,9 +2924,84 @@ function bindEvents() {
     button.addEventListener("click", () => setState({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false }));
   });
 
-  app.querySelectorAll("[data-plan-day]").forEach((select) => {
-    select.addEventListener("change", () => updatePlanDay(Number(select.dataset.planDay), select.value));
+  // Open meal picker modal
+  app.querySelectorAll("[data-open-meal-picker]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dayIndex = Number(btn.dataset.openMealPicker);
+      setState({
+        mealPicker: { open: true, dayIndex, query: "" }
+      });
+    });
   });
+
+  // Close meal picker modal (backdrop or close btn)
+  app.querySelectorAll("[data-close-meal-picker]").forEach((el) => {
+    el.addEventListener("click", () => {
+      setState({
+        mealPicker: { open: false, dayIndex: null, query: "" }
+      });
+    });
+  });
+
+  // Fast inline search filtering (prevent re-render focal loss)
+  const searchInput = app.querySelector("[data-meal-picker-search]");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      const query = e.target.value;
+      state.mealPicker.query = query;
+
+      const clearBtn = app.querySelector("[data-clear-search-input]");
+      if (clearBtn) {
+        clearBtn.style.display = query ? "block" : "none";
+      }
+
+      const listContainer = app.querySelector(".meal-picker-list");
+      if (listContainer) {
+        listContainer.innerHTML = renderMealPickerListItems(query, state.mealPicker.dayIndex);
+      }
+    });
+
+    // Automatically focus input field and select all text to make editing swift
+    searchInput.focus();
+    searchInput.select();
+  }
+
+  // Clear search query
+  app.querySelectorAll("[data-clear-search-input]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const input = app.querySelector("[data-meal-picker-search]");
+      if (input) {
+        input.value = "";
+        state.mealPicker.query = "";
+        btn.style.display = "none";
+        input.focus();
+        const listContainer = app.querySelector(".meal-picker-list");
+        if (listContainer) {
+          listContainer.innerHTML = renderMealPickerListItems("", state.mealPicker.dayIndex);
+        }
+      }
+    });
+  });
+
+  // Select meal inside picker via event delegation
+  const pickerList = app.querySelector(".meal-picker-list");
+  if (pickerList) {
+    pickerList.addEventListener("click", (e) => {
+      const item = e.target.closest("[data-select-meal]");
+      if (item) {
+        const mealId = item.dataset.selectMeal;
+        const dayIndex = state.mealPicker.dayIndex;
+        if (dayIndex !== null) {
+          const weekKey = getWeekKey();
+          const plan = { ...currentPlan(), [dayIndex]: mealId };
+          setState({
+            plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: plan },
+            mealPicker: { open: false, dayIndex: null, query: "" }
+          });
+        }
+      }
+    });
+  }
 
   app.querySelectorAll("[data-day-type]").forEach((select) => {
     select.addEventListener("change", () => updateDayType(Number(select.dataset.dayType), select.value));
