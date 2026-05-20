@@ -253,6 +253,7 @@ const pendingMealDeleteIds = new Set();
 const pendingWeekKeys = new Set();
 let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
+let mealPickerScrollY = 0;
 
 function loadState() {
   const saved = localStorage.getItem("middagsapp-state");
@@ -662,7 +663,7 @@ function renderMealPickerModal() {
 
   return `
     <div class="modal-backdrop active" data-close-meal-picker>
-      <div class="modal bottom-sheet active" onclick="event.stopPropagation()">
+      <div class="modal bottom-sheet meal-picker-modal active" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h3>Velg middag for ${escapeHtml(dayName)}</h3>
           <button class="modal-close" type="button" data-close-meal-picker aria-label="Lukk">×</button>
@@ -3475,8 +3476,26 @@ function render() {
     "ingredient-mappings": renderIngredientMappingsSetup,
     "store-categories": renderStoreCategoriesSetup,
   };
+  syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
+}
+
+function syncMealPickerScrollLock(isOpen) {
+  const isLocked = document.body.classList.contains("meal-picker-open");
+
+  if (isOpen && !isLocked) {
+    mealPickerScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = `-${mealPickerScrollY}px`;
+    document.body.classList.add("meal-picker-open");
+    return;
+  }
+
+  if (!isOpen && isLocked) {
+    document.body.classList.remove("meal-picker-open");
+    document.body.style.top = "";
+    window.scrollTo(0, mealPickerScrollY);
+  }
 }
 
 if ("serviceWorker" in navigator) {
