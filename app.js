@@ -1160,12 +1160,12 @@ function renderShoppingItem(item) {
   const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
   return `
     <div class="shopping-item${item.checked ? " done" : ""}">
-      <div class="shopping-item-main">
+      <label class="shopping-item-main">
         <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""} aria-label="Huk av ${escapeHtml(item.name)}">
         <span class="shopping-item-name">${escapeHtml(item.name)}</span>
         ${amountText ? `<span class="shopping-item-amount">${escapeHtml(amountText)}</span>` : `<span></span>`}
         <button type="button" class="shopping-item-menu" data-edit-shopping-item="${escapeHtml(item.id)}" aria-label="Rediger ${escapeHtml(item.name)}">⋯</button>
-      </div>
+      </label>
     </div>
   `;
 }
