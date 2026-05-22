@@ -58,6 +58,7 @@ Kjør disse etter JavaScript-endringer:
 ```powershell
 node --check app.js
 node --check service-worker.js
+node tests/domain/shopping.test.mjs
 ```
 
 ## Publisering

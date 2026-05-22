@@ -7,6 +7,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Ikke bruk git-kommandoer i denne lokale prosjektkopien.
 - Jobb kun innenfor prosjektmappen.
 - Bruk trygge lokale kontroller, særlig `node --check app.js` og `node --check service-worker.js`.
+- Etter endringer i handleliste-/mengdelogikk: kjør `node tests/domain/shopping.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
