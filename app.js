@@ -2871,15 +2871,27 @@ function uniqueMetadataKey(base, labels) {
 }
 
 async function refreshApp() {
+  const refreshUrl = new URL("./index.html", window.location.href);
+  refreshUrl.searchParams.set("updated", Date.now().toString());
+
   if ("serviceWorker" in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister()));
+    await Promise.all(registrations.map(async (registration) => {
+      try {
+        await registration.update();
+      } catch (error) {
+        // Continue with cache cleanup even if the browser blocks an update check.
+      }
+      await registration.unregister();
+    }));
   }
+
   if ("caches" in window) {
     const keys = await caches.keys();
     await Promise.all(keys.map((key) => caches.delete(key)));
   }
-  window.location.reload();
+
+  window.location.replace(refreshUrl.toString());
 }
 
 function dateForWeekDay(weekKey, dayIndex) {
@@ -3715,7 +3727,7 @@ function syncMealPickerScrollLock(isOpen) {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" }).catch(() => {});
   });
 }
 
