@@ -3703,7 +3703,7 @@ function render() {
     "ingredient-mappings": renderIngredientMappingsSetup,
     "store-categories": renderStoreCategoriesSetup,
   };
-  syncMealPickerScrollLock(Boolean(state.mealPicker?.open || state.shoppingReview?.open));
+  syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
 }
