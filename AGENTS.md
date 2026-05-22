@@ -7,8 +7,13 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Ikke bruk git-kommandoer i denne lokale prosjektkopien.
 - Jobb kun innenfor prosjektmappen.
 - Bruk trygge lokale kontroller, særlig `node --check app.js` og `node --check service-worker.js`.
+- Etter endringer i oppskrifts-/måltidslogikk: kjør `node tests/domain/meals.test.mjs`.
 - Etter endringer i handleliste-/mengdelogikk: kjør `node tests/domain/shopping.test.mjs`.
+- Etter endringer i forslagmotor/poengregler: kjør `node tests/domain/suggestions.test.mjs`.
 - Etter endringer i uke-/datologikk: kjør `node tests/domain/weeks.test.mjs`.
+- Etter endringer i synk-/konfliktlogikk: kjør `node tests/sync/state.test.mjs`.
+- Etter endringer i Firebase-oppkobling/referanser: kjør `node tests/sync/firebase.test.mjs`.
+- Etter endringer i Firestore write-/payload-bygging: kjør `node tests/sync/writes.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
@@ -17,8 +22,13 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 
 - `index.html`: laster appen, stylesheet, manifest, loading screen og versjonsmerkede assets.
 - `app.js`: hovedlogikk, state, rendering, hendelser, Firebase-synk og brukerflyter.
+- `src/domain/meals.js`: rene oppskrifts- og måltidshjelpere uten UI- eller Firebase-avhengighet.
 - `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner uten UI- eller Firebase-avhengighet.
+- `src/domain/suggestions.js`: rene poengregler for forslagmotoren uten UI- eller Firebase-avhengighet.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner uten UI- eller Firebase-avhengighet.
+- `src/sync/firebase.js`: Firebase SDK-lasting, anonym innlogging og bygging av Firestore-referanser.
+- `src/sync/state.js`: rene synkbeslutninger for scopes, ukeendringer og remote-konfliktbeskyttelse.
+- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata, shopping, meals og weeks.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
 - `manifest.json`: PWA metadata.

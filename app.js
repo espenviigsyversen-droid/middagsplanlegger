@@ -1,4 +1,13 @@
 import {
+  makeSlug,
+  mealBaseServings,
+  normalizeIngredients,
+  normalizedRecipeUrl,
+  splitLines,
+  splitList,
+  uniqueMetadataKey,
+} from "./src/domain/meals.js";
+import {
   formatShoppingAmount,
   mergeShoppingItems,
   normalizeShoppingList,
@@ -22,6 +31,21 @@ import {
   localDateKey,
   weekKeyOffset,
 } from "./src/domain/weeks.js";
+import {
+  scoreCategoryPreference,
+  scoreMealFit,
+  scoreMealRecency,
+  scoreRecentCategoryUse,
+} from "./src/domain/suggestions.js";
+import {
+  changedWeekKeys as getChangedWeekKeys,
+  patchTouchesSyncedData as syncPatchTouchesSyncedData,
+  remoteDocumentIsStale,
+  shouldDeferRemotePayload,
+  syncedScopesForPatch as getSyncedScopesForPatch,
+} from "./src/sync/state.js";
+import { initFirebaseClient } from "./src/sync/firebase.js";
+import { buildRemoteWrites } from "./src/sync/writes.js";
 
 const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
 const categoryLabels = {
@@ -63,20 +87,6 @@ const firebaseConfig = {
 const FIREBASE_SDK_VERSION = "12.13.0";
 const FAMILY_ID = "familien";
 const VARIATION_LOOKBACK_WEEKS = 4;
-const syncedStateKeys = new Set([
-  "family",
-  "mealPreferences",
-  "meals",
-  "metadata",
-  "plansByWeek",
-  "lockedPlansByWeek",
-  "dayTypesByWeek",
-  "servingsByWeek",
-  "dayModesByWeek",
-  "dayNotesByWeek",
-  "shoppingList",
-]);
-
 const defaultMeals = [
   {
     id: "tikka",
@@ -270,7 +280,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v69";
+const APP_VERSION = "v74";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -459,23 +469,12 @@ function dayPlansMeal(value) {
   return planModeType(value) === "home";
 }
 
-function normalizeIngredients(ingredients, fallbackNames = []) {
-  if (Array.isArray(ingredients) && ingredients.length) {
-    return ingredients.map((item) => ({
-      name: String(item.name || "").trim(),
-      amount: String(item.amount || "").trim(),
-      unit: String(item.unit || "").trim(),
-    })).filter((item) => item.name);
-  }
-  return (fallbackNames || []).map((name) => ({ name, amount: "", unit: "" }));
-}
-
 function saveState() {
   localStorage.setItem("middagsapp-state", JSON.stringify(state));
 }
 
 function patchTouchesSyncedData(patch) {
-  return Object.keys(patch).some((key) => syncedStateKeys.has(key));
+  return syncPatchTouchesSyncedData(patch);
 }
 
 function setState(patch) {
@@ -521,32 +520,11 @@ function weekPayload(weekKey) {
 }
 
 function syncedScopesForPatch(patch) {
-  const scopes = new Set();
-  if ("family" in patch) scopes.add("profile");
-  if ("mealPreferences" in patch) scopes.add("preferences");
-  if ("metadata" in patch) scopes.add("metadata");
-  if ("meals" in patch) scopes.add("meals");
-  if ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch || "dayModesByWeek" in patch || "dayNotesByWeek" in patch) scopes.add("weeks");
-  if ("shoppingList" in patch) scopes.add("shopping");
-  return [...scopes];
+  return getSyncedScopesForPatch(patch);
 }
 
 function changedWeekKeys(patch, previousState) {
-  const keys = new Set();
-  ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servingsByWeek", "dayModesByWeek", "dayNotesByWeek"].forEach((field) => {
-    if (!(field in patch)) return;
-    const previous = previousState?.[field] || {};
-    const current = state[field] || {};
-    Object.keys({ ...previous, ...current }).forEach((weekKey) => {
-      if (JSON.stringify(previous[weekKey] || {}) !== JSON.stringify(current[weekKey] || {})) {
-        keys.add(weekKey);
-      }
-    });
-  });
-  if (!keys.size && ("plansByWeek" in patch || "lockedPlansByWeek" in patch || "dayTypesByWeek" in patch || "servingsByWeek" in patch || "dayModesByWeek" in patch || "dayNotesByWeek" in patch)) {
-    keys.add(getWeekKey());
-  }
-  return [...keys];
+  return getChangedWeekKeys(patch, previousState, state, getWeekKey());
 }
 
 function scheduleRemoteSaveForPatch(patch, previousState) {
@@ -587,7 +565,7 @@ function applyRemoteStatePatch(patch) {
 function applyRemotePayload(payload) {
   const remoteClientUpdatedAt = Number(payload.clientUpdatedAt || 0);
   const localClientUpdatedAt = Number(state.clientUpdatedAt || 0);
-  if (state.pendingLocalSync && remoteClientUpdatedAt < localClientUpdatedAt) {
+  if (shouldDeferRemotePayload({ pendingLocalSync: state.pendingLocalSync, remoteClientUpdatedAt, localClientUpdatedAt })) {
     setTimeout(() => scheduleRemoteSave(0), 0);
     return;
   }
@@ -934,17 +912,6 @@ function leftoversLabel(value) {
     possible: "Kan gi rester",
     likely: "Gir ofte rester",
   }[value] || "Ikke satt";
-}
-
-function normalizedRecipeUrl(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  if (/^https?:\/\//i.test(text)) return text;
-  return `https://${text}`;
-}
-
-function mealBaseServings(meal) {
-  return Math.max(1, Number(meal?.baseServings) || 4);
 }
 
 function recipeTargetServings() {
@@ -2117,11 +2084,7 @@ function saveMealFromForm(form) {
 }
 
 function makeMealId(title) {
-  const base = title.toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "") || "middag";
+  const base = makeSlug(title, "middag");
   let id = base;
   let count = 2;
   while (state.meals.some((meal) => meal.id === id)) {
@@ -2129,14 +2092,6 @@ function makeMealId(title) {
     count += 1;
   }
   return id;
-}
-
-function splitList(value) {
-  return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function splitLines(value) {
-  return String(value || "").split("\n").map((item) => item.trim()).filter(Boolean);
 }
 
 function collectIngredientRows() {
@@ -2738,24 +2693,6 @@ function removePlanMode(key) {
   setState({ metadata: { ...state.metadata, planModeOptions: options }, dayModesByWeek });
 }
 
-function makeSlug(value) {
-  return value.toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "") || "kategori";
-}
-
-function uniqueMetadataKey(base, labels) {
-  let key = base;
-  let count = 2;
-  while (labels[key]) {
-    key = `${base}-${count}`;
-    count += 1;
-  }
-  return key;
-}
-
 async function refreshApp() {
   const refreshUrl = new URL("./index.html", window.location.href);
   refreshUrl.searchParams.set("updated", Date.now().toString());
@@ -2812,15 +2749,15 @@ function categoryDueThisWeek(category, intervalWeeks, plan, excludeDayIndex) {
 
 function categoryPreferenceScore(meal, plan, dayIndex) {
   const counts = categoryCountsForPlan(plan, dayIndex);
-  return (meal.categories || []).reduce((score, category) => {
-    const goal = preferenceGoalFor(category);
-    const current = counts[category] || 0;
-    let nextScore = score;
-    if (goal.minPerWeek && current < goal.minPerWeek) nextScore += 45;
-    if (goal.maxPerWeek && current >= goal.maxPerWeek) nextScore -= 90;
-    if (categoryDueThisWeek(category, goal.minEveryWeeks, plan, dayIndex)) nextScore += 35;
-    return nextScore;
-  }, 0);
+  const goalsByCategory = (meal.categories || []).reduce((goals, category) => ({
+    ...goals,
+    [category]: preferenceGoalFor(category),
+  }), {});
+  const dueCategories = (meal.categories || []).filter((category) => {
+    const goal = goalsByCategory[category] || {};
+    return categoryDueThisWeek(category, goal.minEveryWeeks, plan, dayIndex);
+  });
+  return scoreCategoryPreference(meal.categories || [], { counts, goalsByCategory, dueCategories });
 }
 
 function recentMealDistanceDays(mealId, targetDate, lookbackWeeks = VARIATION_LOOKBACK_WEEKS) {
@@ -2855,24 +2792,8 @@ function recentCategoryCount(categories, lookbackWeeks = 2) {
 function rotationScore(meal, dayIndex) {
   const targetDate = dateForWeekDay(getWeekKey(), dayIndex);
   const daysSince = recentMealDistanceDays(meal.id, targetDate);
-  let score = 0;
-  if (daysSince === null) {
-    score += 18;
-  } else if (daysSince <= 7) {
-    score -= 95;
-  } else if (daysSince <= 14) {
-    score -= 58;
-  } else if (daysSince <= 21) {
-    score -= 30;
-  } else if (daysSince <= 28) {
-    score -= 14;
-  }
-
   const recentCategoryUses = recentCategoryCount(meal.categories || []);
-  if (recentCategoryUses >= 6) score -= 22;
-  else if (recentCategoryUses >= 4) score -= 14;
-  else if (recentCategoryUses >= 2) score -= 6;
-  return score;
+  return scoreMealRecency(daysSince) + scoreRecentCategoryUse(recentCategoryUses);
 }
 
 function plannedTooClose(meal, dayIndex, planOverride) {
@@ -2898,12 +2819,7 @@ function pickSuggestion(dayIndex, planOverride = currentPlan()) {
     .filter((meal) => !used.has(meal.id))
     .filter((meal) => !plannedTooClose(meal, dayIndex, plan))
     .map((meal) => {
-      let score = 0;
-      if (meal.favorite) score += 20;
-      if (meal.kidFriendly) score += 15;
-      if (wantsQuick && meal.prepTime === "quick") score += 25;
-      if (state.family.leftovers && meal.leftovers === "likely") score += 6;
-      if ((meal.suitability || []).includes(dayType)) score += 35;
+      let score = scoreMealFit(meal, { wantsQuick, dayType, preferLeftovers: state.family.leftovers });
       score += categoryPreferenceScore(meal, plan, dayIndex);
       score += rotationScore(meal, dayIndex);
       return { meal, score };
@@ -3646,38 +3562,22 @@ document.addEventListener("visibilitychange", () => {
 
 async function initFirebaseSync() {
   try {
-    const [{ initializeApp }, authModule, firestoreModule] = await Promise.all([
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-app.js`),
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-auth.js`),
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}/firebase-firestore.js`),
-    ]);
-
-    const { getAuth, onAuthStateChanged, signInAnonymously } = authModule;
-    const { getFirestore, doc, collection, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp } = firestoreModule;
-    const firebaseApp = initializeApp(firebaseConfig);
-    const auth = getAuth(firebaseApp);
-    const db = getFirestore(firebaseApp);
-    remoteRefs.legacyState = doc(db, "families", FAMILY_ID, "app", "state");
-    remoteRefs.profile = doc(db, "families", FAMILY_ID, "app", "profile");
-    remoteRefs.preferences = doc(db, "families", FAMILY_ID, "app", "preferences");
-    remoteRefs.metadata = doc(db, "families", FAMILY_ID, "app", "metadata");
-    remoteRefs.shopping = doc(db, "families", FAMILY_ID, "app", "shopping");
-    remoteRefs.meals = collection(db, "families", FAMILY_ID, "meals");
-    remoteRefs.weeks = collection(db, "families", FAMILY_ID, "weeks");
-    window.middagsplanDoc = doc;
-    window.middagsplanSetDoc = setDoc;
-    window.middagsplanDeleteDoc = deleteDoc;
-    window.middagsplanServerTimestamp = serverTimestamp;
-
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
-      syncStatus = "Synk aktiv";
-      render();
-      await migrateLegacyStateIfNeeded(getDoc);
-      startSplitSyncListeners(onSnapshot);
+    await initFirebaseClient({
+      firebaseConfig,
+      sdkVersion: FIREBASE_SDK_VERSION,
+      familyId: FAMILY_ID,
+      onAuthReady: async ({ refs, firestoreApi }) => {
+        Object.assign(remoteRefs, refs);
+        window.middagsplanDoc = firestoreApi.doc;
+        window.middagsplanSetDoc = firestoreApi.setDoc;
+        window.middagsplanDeleteDoc = firestoreApi.deleteDoc;
+        window.middagsplanServerTimestamp = firestoreApi.serverTimestamp;
+        syncStatus = "Synk aktiv";
+        render();
+        await migrateLegacyStateIfNeeded(firestoreApi.getDoc);
+        startSplitSyncListeners(firestoreApi.onSnapshot);
+      },
     });
-
-    await signInAnonymously(auth);
   } catch {
     syncStatus = "Lokal lagring";
     render();
@@ -3804,7 +3704,7 @@ function applyRemoteDocument(scope, data, apply) {
 
 function remoteDocumentIsOlder(scope, remoteClientUpdatedAt) {
   const localClientUpdatedAt = Number(state.clientUpdatedAt || 0);
-  if (pendingRemoteScopes.has(scope) && remoteClientUpdatedAt < localClientUpdatedAt) {
+  if (remoteDocumentIsStale({ pendingScopes: pendingRemoteScopes, scope, remoteClientUpdatedAt, localClientUpdatedAt })) {
     if (scope === "weeks") {
       Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
     }
@@ -3855,44 +3755,25 @@ async function saveRemoteScopes(scopes) {
   const uniqueScopes = [...new Set(scopes)];
   const updatedAt = window.middagsplanServerTimestamp();
   const clientUpdatedAt = state.clientUpdatedAt || Date.now();
-  const writes = [];
+  const writes = buildRemoteWrites({
+    scopes: uniqueScopes,
+    state,
+    refs: remoteRefs,
+    api: {
+      doc: window.middagsplanDoc,
+      setDoc: window.middagsplanSetDoc,
+      deleteDoc: window.middagsplanDeleteDoc,
+    },
+    updatedAt,
+    clientUpdatedAt,
+    pendingMealDeleteIds,
+    pendingWeekKeys,
+    currentWeekKey: getWeekKey(),
+    weekPayload,
+  });
 
-  if (uniqueScopes.includes("profile")) {
-    writes.push(window.middagsplanSetDoc(remoteRefs.profile, { family: state.family, clientUpdatedAt, updatedAt }, { merge: true }));
-  }
-
-  if (uniqueScopes.includes("preferences")) {
-    writes.push(window.middagsplanSetDoc(remoteRefs.preferences, { mealPreferences: state.mealPreferences, clientUpdatedAt, updatedAt }, { merge: true }));
-  }
-
-  if (uniqueScopes.includes("metadata")) {
-    writes.push(window.middagsplanSetDoc(remoteRefs.metadata, { metadata: state.metadata, clientUpdatedAt, updatedAt }, { merge: true }));
-  }
-
-  if (uniqueScopes.includes("shopping")) {
-    writes.push(window.middagsplanSetDoc(remoteRefs.shopping, { shoppingList: state.shoppingList, clientUpdatedAt, updatedAt }, { merge: true }));
-  }
-
-  if (uniqueScopes.includes("meals")) {
-    const currentMealIds = new Set((state.meals || []).map((meal) => meal.id));
-    pendingMealDeleteIds.forEach((mealId) => {
-      if (!currentMealIds.has(mealId)) {
-        writes.push(window.middagsplanDeleteDoc(window.middagsplanDoc(remoteRefs.meals, mealId)));
-      }
-    });
-    (state.meals || []).forEach((meal) => {
-      writes.push(window.middagsplanSetDoc(window.middagsplanDoc(remoteRefs.meals, meal.id), { ...meal, clientUpdatedAt, updatedAt }, { merge: true }));
-    });
-    pendingMealDeleteIds.clear();
-  }
-
-  if (uniqueScopes.includes("weeks")) {
-    if (!pendingWeekKeys.size) pendingWeekKeys.add(getWeekKey());
-    pendingWeekKeys.forEach((weekKey) => {
-      writes.push(window.middagsplanSetDoc(window.middagsplanDoc(remoteRefs.weeks, weekKey), { ...weekPayload(weekKey), updatedAt }, { merge: true }));
-    });
-    pendingWeekKeys.clear();
-  }
+  if (uniqueScopes.includes("meals")) pendingMealDeleteIds.clear();
+  if (uniqueScopes.includes("weeks")) pendingWeekKeys.clear();
 
   await Promise.all(writes);
 }
