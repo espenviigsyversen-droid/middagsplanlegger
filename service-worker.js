@@ -1,9 +1,10 @@
-const CACHE_NAME = "middagsplan-v67";
+const CACHE_NAME = "middagsplan-v68";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./src/domain/shopping.js",
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/icon-192.png",
@@ -16,6 +17,7 @@ const NETWORK_FIRST_ASSETS = [
   "index.html",
   "styles.css",
   "app.js",
+  "src/domain/shopping.js",
   "manifest.json",
   "service-worker.js",
 ];

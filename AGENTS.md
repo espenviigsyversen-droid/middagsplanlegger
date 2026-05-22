@@ -14,7 +14,8 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 ## Viktige filer
 
 - `index.html`: laster appen, stylesheet, manifest, loading screen og versjonsmerkede assets.
-- `app.js`: all hovedlogikk, state, rendering, hendelser, Firebase-synk og brukerflyter.
+- `app.js`: hovedlogikk, state, rendering, hendelser, Firebase-synk og brukerflyter.
+- `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner uten UI- eller Firebase-avhengighet.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
 - `manifest.json`: PWA metadata.
@@ -27,6 +28,7 @@ Når appen endres og skal publiseres, hold disse i sync:
 - `APP_VERSION` i `app.js`
 - query-parametre i `index.html`, for eksempel `app.js?v=68`
 - `CACHE_NAME` i `service-worker.js`, for eksempel `middagsplan-v68`
+- nye JavaScript-moduler i `service-worker.js` sin `ASSETS`-liste hvis de skal fungere offline
 
 Appen viser versjonen i App-panelet ved `Oppdater app`. Dette brukes for å kontrollere at ny versjon faktisk er lastet på PC og mobil.
 
