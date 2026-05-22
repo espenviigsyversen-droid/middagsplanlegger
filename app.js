@@ -3706,6 +3706,14 @@ function render() {
   syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
+  hideLoadingScreen();
+}
+
+function hideLoadingScreen() {
+  const loadingScreen = document.querySelector("#app-loading-screen");
+  if (!loadingScreen) return;
+  loadingScreen.classList.add("hide");
+  setTimeout(() => loadingScreen.remove(), 320);
 }
 
 function syncMealPickerScrollLock(isOpen) {

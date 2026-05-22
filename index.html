@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#246b5b">
     <title>Middagsplanlegger</title>
-    <link rel="manifest" href="manifest.json?v=62">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="manifest" href="manifest.json?v=63">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="styles.css?v=62">
+    <link rel="stylesheet" href="styles.css?v=63">
   </head>
   <body>
+    <div class="app-loading-screen" id="app-loading-screen" aria-live="polite">
+      <div class="app-loading-content">
+        <img class="app-loading-icon" src="icons/icon.svg" alt="">
+        <div class="app-loading-spinner" aria-hidden="true"></div>
+        <p>Synker middagsplanen...</p>
+      </div>
+    </div>
     <div id="app"></div>
-    <script type="module" src="app.js?v=62"></script>
+    <script type="module" src="app.js?v=63"></script>
   </body>
 </html>
