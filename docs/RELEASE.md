@@ -9,6 +9,13 @@ Kjør lokale kontroller:
 ```powershell
 node --check app.js
 node --check service-worker.js
+node tests/domain/meals.test.mjs
+node tests/domain/shopping.test.mjs
+node tests/domain/suggestions.test.mjs
+node tests/domain/weeks.test.mjs
+node tests/sync/firebase.test.mjs
+node tests/sync/state.test.mjs
+node tests/sync/writes.test.mjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
@@ -44,6 +51,7 @@ const CACHE_NAME = "middagsplan-v68";
 Ved appendringer:
 
 - `app.js`
+- nye filer under `src/`
 - `styles.css`
 - `index.html`
 - `service-worker.js`
@@ -96,3 +104,5 @@ Appens hovedfiler kjøres network-first:
 - `service-worker.js`
 
 Andre appfiler kan serveres fra cache først.
+
+Når nye lokale JavaScript-moduler legges til under `src/`, må de også legges inn i `ASSETS` i `service-worker.js` for offline/PWA-bruk.
