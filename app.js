@@ -177,6 +177,8 @@ const defaultState = {
   activeView: "calendar",
   shoppingList: { items: [], generatedForWeek: null },
   generateModal: { open: false, selectedDays: [] },
+  shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
+  toast: null,
   editingShoppingItemId: null,
   clientUpdatedAt: 0,
   pendingLocalSync: false,
@@ -331,6 +333,8 @@ function normalizeState(nextState) {
     nextState.dayNotesByWeek[currentWeekKey] = emptyWeekDayNotes();
   }
   nextState.mealPicker = { open: false, dayIndex: null, query: "" };
+  nextState.shoppingReview = { open: false, mode: null, title: "", groups: [], selectedItemIds: [] };
+  nextState.toast = null;
   nextState.plan = undefined;
   nextState.lockedPlan = undefined;
   return nextState;
@@ -1125,6 +1129,105 @@ function mergeGeneratedShoppingItems(generatedItems) {
   return mergeShoppingItems(generated, custom);
 }
 
+function createShoppingItemFromIngredient(ingredient, ratio = 1, custom = false) {
+  const parsedAmount = parseAmount(ingredient.amount);
+  const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
+  const name = String(ingredient.name || "").trim();
+  return {
+    id: Math.random().toString(36).slice(2),
+    name,
+    amount: isNaN(scaled) ? (ingredient.amount || "") : formatShoppingAmount(scaled),
+    unit: ingredient.unit || "",
+    category: categorizeIngredient(name),
+    checked: false,
+    custom,
+  };
+}
+
+function createMealShoppingReview(meal) {
+  if (!meal?.ingredients?.length) return null;
+  const targetServings = recipeTargetServings() || mealBaseServings(meal);
+  const ratio = mealBaseServings(meal) > 0 ? targetServings / mealBaseServings(meal) : 1;
+  const items = meal.ingredients
+    .filter((ingredient) => ingredient.name?.trim())
+    .map((ingredient) => createShoppingItemFromIngredient(ingredient, ratio, true));
+
+  if (!items.length) return null;
+
+  return {
+    open: true,
+    mode: "meal",
+    title: `Legg til fra ${meal.title}`,
+    groups: [{
+      id: meal.id,
+      title: meal.title,
+      subtitle: targetServings ? `${targetServings} porsjoner` : "",
+      items,
+    }],
+    selectedItemIds: items.map((item) => item.id),
+  };
+}
+
+function createWeekShoppingReview(selectedDays) {
+  const shortDayNames = ["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"];
+  const groups = selectedDays
+    .filter(({ dayMode }) => dayPlansMeal(dayMode))
+    .map(({ weekKey, dayIndex, date, meal }) => {
+      const plan = state.plansByWeek?.[weekKey] || {};
+      const servings = state.servingsByWeek?.[weekKey] || {};
+      const plannedMeal = meal || getMeal(plan[dayIndex]);
+      if (!plannedMeal?.ingredients?.length) return null;
+
+      const base = mealBaseServings(plannedMeal);
+      const target = Math.max(1, Number(servings[dayIndex]) || state.family.familySize);
+      const ratio = base > 0 ? target / base : 1;
+      const items = plannedMeal.ingredients
+        .filter((ingredient) => ingredient.name?.trim())
+        .map((ingredient) => createShoppingItemFromIngredient(ingredient, ratio, false));
+
+      if (!items.length) return null;
+
+      return {
+        id: `${weekKey}-${dayIndex}`,
+        title: plannedMeal.title,
+        subtitle: `${shortDayNames[date.getDay()]} ${formatDate(date)} · ${target} porsjoner`,
+        items,
+      };
+    })
+    .filter(Boolean);
+
+  const selectedItemIds = groups.flatMap((group) => group.items.map((item) => item.id));
+  return {
+    open: groups.length > 0,
+    mode: "week",
+    title: "Se over handlelisten",
+    groups,
+    selectedItemIds,
+  };
+}
+
+function selectedShoppingReviewItems() {
+  const review = state.shoppingReview || {};
+  const selectedIds = new Set(review.selectedItemIds || []);
+  return (review.groups || []).flatMap((group) => group.items || []).filter((item) => selectedIds.has(item.id));
+}
+
+function shoppingReviewItemCount(review = state.shoppingReview) {
+  return (review?.selectedItemIds || []).length;
+}
+
+function closeShoppingReview() {
+  setState({ shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] } });
+}
+
+function showToast(message) {
+  const id = Math.random().toString(36).slice(2);
+  setState({ toast: { id, message } });
+  setTimeout(() => {
+    if (state.toast?.id === id) setState({ toast: null });
+  }, 2400);
+}
+
 function shoppingSuggestionSources() {
   const suggestions = new Map();
   const add = (name, category = null) => {
@@ -1285,6 +1388,76 @@ function renderGenerateModal() {
   `;
 }
 
+function renderShoppingReviewModal() {
+  const review = state.shoppingReview || { groups: [], selectedItemIds: [] };
+  if (!review.open) return "";
+
+  const selectedIds = new Set(review.selectedItemIds || []);
+  const selectedCount = shoppingReviewItemCount(review);
+  const totalCount = (review.groups || []).reduce((sum, group) => sum + (group.items || []).length, 0);
+  const confirmText = selectedCount === 1 ? "Legg til 1 vare" : `Legg til ${selectedCount} varer`;
+  const bodyClass = review.mode === "week" ? "shopping-review-body week-review" : "shopping-review-body";
+
+  const groups = (review.groups || []).map((group) => {
+    const items = group.items || [];
+    const groupSelectedCount = items.filter((item) => selectedIds.has(item.id)).length;
+    return `
+      <section class="shopping-review-group">
+        <div class="shopping-review-group-head">
+          <div>
+            <h4>${escapeHtml(group.title)}</h4>
+            ${group.subtitle ? `<p>${escapeHtml(group.subtitle)}</p>` : ""}
+          </div>
+          <div class="shopping-review-group-actions">
+            <button class="text-action quiet" type="button" data-review-group-select="${escapeHtml(group.id)}">Alle</button>
+            <button class="text-action quiet" type="button" data-review-group-clear="${escapeHtml(group.id)}">Ingen</button>
+          </div>
+        </div>
+        <div class="shopping-review-items">
+          ${items.map((item) => {
+            const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
+            const checked = selectedIds.has(item.id);
+            return `
+              <label class="shopping-review-item${checked ? " selected" : ""}">
+                <input class="shopping-checkbox" type="checkbox" data-review-item="${escapeHtml(item.id)}" ${checked ? "checked" : ""}>
+                <span class="shopping-review-item-name">${escapeHtml(item.name)}</span>
+                ${amountText ? `<span class="shopping-review-item-amount">${escapeHtml(amountText)}</span>` : ""}
+              </label>
+            `;
+          }).join("")}
+        </div>
+        <p class="shopping-review-group-count">${groupSelectedCount} av ${items.length} valgt</p>
+      </section>
+    `;
+  }).join("");
+
+  return `
+    <div class="modal-backdrop shopping-review-backdrop" data-close-shopping-review>
+      <div class="modal shopping-review-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <h3>${escapeHtml(review.title || "Se over varer")}</h3>
+            <p class="modal-subtitle">${selectedCount} av ${totalCount} varer er valgt</p>
+          </div>
+          <button class="modal-close" type="button" data-close-shopping-review aria-label="Lukk">×</button>
+        </div>
+        <div class="${bodyClass}">
+          ${groups || `<div class="shopping-empty">Ingen varer å legge til.</div>`}
+        </div>
+        <div class="modal-footer">
+          <button class="button secondary compact" type="button" data-close-shopping-review>Avbryt</button>
+          <button class="button${selectedCount ? "" : " disabled"}" type="button" data-confirm-shopping-review ${selectedCount ? "" : "disabled"}>${confirmText}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderToast() {
+  if (!state.toast?.message) return "";
+  return `<div class="toast-message" role="status">${escapeHtml(state.toast.message)}</div>`;
+}
+
 function renderShoppingItem(item) {
   const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
   return `
@@ -1400,9 +1573,13 @@ function renderShoppingList() {
 function renderShell(viewHtml) {
   const isRecipeView = state.activeView === "recipe";
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
+  const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
+  const toast = renderToast();
   app.innerHTML = `
     <div class="app-shell ${isRecipeView ? "recipe-mode" : ""}">
       ${pickerModal}
+      ${shoppingReviewModal}
+      ${toast}
       ${isRecipeView ? "" : `<header class="topbar">
         <div class="topbar-inner">
           <div class="brand">
@@ -3097,28 +3274,67 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const meal = getMeal(button.dataset.addToShopping);
       if (!meal?.ingredients?.length) return;
-      const targetServings = recipeTargetServings() || mealBaseServings(meal);
-      const ratio = mealBaseServings(meal) > 0 ? targetServings / mealBaseServings(meal) : 1;
-      const newItems = meal.ingredients
-        .filter((ing) => ing.name?.trim())
-        .map((ing) => {
-          const parsedAmount = parseAmount(ing.amount);
-          const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
-          return {
-            id: Math.random().toString(36).slice(2),
-            name: ing.name.trim(),
-            amount: isNaN(scaled) ? (ing.amount || "") : formatShoppingAmount(scaled),
-            unit: ing.unit || "",
-            category: categorizeIngredient(ing.name),
-            checked: false,
-            custom: true,
-          };
-        });
-      const existing = state.shoppingList?.items || [];
-      setState({ shoppingList: { ...state.shoppingList, items: mergeShoppingItems(existing, newItems) } });
-      button.textContent = "✓ Lagt til";
-      setTimeout(() => { button.innerHTML = `${icon("shopping")} Legg i handleliste`; }, 2000);
+      const review = createMealShoppingReview(meal);
+      if (review) setState({ shoppingReview: review });
     });
+  });
+
+  app.querySelectorAll("[data-close-shopping-review]").forEach((el) => {
+    el.addEventListener("click", (event) => {
+      if (event.target === el) closeShoppingReview();
+    });
+  });
+
+  app.querySelectorAll("[data-review-item]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const itemId = checkbox.dataset.reviewItem;
+      const current = state.shoppingReview?.selectedItemIds || [];
+      const selectedItemIds = checkbox.checked
+        ? [...new Set([...current, itemId])]
+        : current.filter((id) => id !== itemId);
+      setState({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
+    });
+  });
+
+  app.querySelectorAll("[data-review-group-select]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const group = (state.shoppingReview?.groups || []).find((entry) => entry.id === button.dataset.reviewGroupSelect);
+      if (!group) return;
+      const selectedItemIds = [...new Set([...(state.shoppingReview?.selectedItemIds || []), ...group.items.map((item) => item.id)])];
+      setState({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
+    });
+  });
+
+  app.querySelectorAll("[data-review-group-clear]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const group = (state.shoppingReview?.groups || []).find((entry) => entry.id === button.dataset.reviewGroupClear);
+      if (!group) return;
+      const groupIds = new Set(group.items.map((item) => item.id));
+      const selectedItemIds = (state.shoppingReview?.selectedItemIds || []).filter((id) => !groupIds.has(id));
+      setState({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
+    });
+  });
+
+  app.querySelector("[data-confirm-shopping-review]")?.addEventListener("click", () => {
+    const review = state.shoppingReview;
+    const selectedItems = selectedShoppingReviewItems();
+    if (!review?.open || !selectedItems.length) return;
+
+    if (review.mode === "week") {
+      setState({
+        shoppingList: { items: mergeGeneratedShoppingItems(selectedItems), generatedForWeek: getWeekKey() },
+        generateModal: { open: false, selectedDays: [] },
+        shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
+      });
+      showToast("Handlelisten er oppdatert.");
+      return;
+    }
+
+    setState({
+      shoppingList: { ...state.shoppingList, items: mergeShoppingItems(state.shoppingList?.items || [], selectedItems) },
+      shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
+    });
+    showToast("Varene er lagt til i handlelisten.");
   });
 
   app.querySelector("[data-meal-form]")?.addEventListener("submit", (event) => {
@@ -3254,11 +3470,10 @@ function bindEvents() {
   app.querySelector("[data-confirm-generate]")?.addEventListener("click", () => {
     const selectedKeys = new Set(state.generateModal.selectedDays);
     const selectedDays = getUpcomingDays(9).filter((d) => selectedKeys.has(d.dateKey));
-    const generated = generateShoppingListItems(selectedDays);
-    setState({
-      shoppingList: { items: mergeGeneratedShoppingItems(generated), generatedForWeek: getWeekKey() },
-      generateModal: { open: false, selectedDays: [] },
-    });
+    const review = createWeekShoppingReview(selectedDays);
+    if (review?.open) {
+      setState({ generateModal: { open: false, selectedDays: [] }, shoppingReview: review });
+    }
   });
 
   app.querySelector("[data-add-custom-form]")?.addEventListener("submit", (e) => {
@@ -3476,7 +3691,7 @@ function render() {
     "ingredient-mappings": renderIngredientMappingsSetup,
     "store-categories": renderStoreCategoriesSetup,
   };
-  syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
+  syncMealPickerScrollLock(Boolean(state.mealPicker?.open || state.shoppingReview?.open));
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
 }
