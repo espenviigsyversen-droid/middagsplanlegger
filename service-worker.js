@@ -1,4 +1,4 @@
-const CACHE_NAME = "middagsplan-v60";
+const CACHE_NAME = "middagsplan-v61";
 const ASSETS = [
   "./",
   "./index.html",
@@ -25,9 +25,21 @@ function normalizedPath(url) {
   return path.endsWith("/") ? "/" : path;
 }
 
+function shouldHandleRequest(request) {
+  const url = new URL(request.url);
+  return request.method === "GET" && url.origin === self.location.origin && ["http:", "https:"].includes(url.protocol);
+}
+
 function isNetworkFirstAsset(url) {
   const path = normalizedPath(url);
   return NETWORK_FIRST_ASSETS.some((asset) => path === asset || path.endsWith(`/${asset}`));
+}
+
+function cacheResponse(request, response) {
+  if (!response || !response.ok) return response;
+  const copy = response.clone();
+  caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+  return response;
 }
 
 self.addEventListener("install", (event) => {
@@ -43,16 +55,12 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  if (!shouldHandleRequest(event.request)) return;
 
   if (isNetworkFirstAsset(event.request.url)) {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
+        .then((response) => cacheResponse(event.request, response))
         .catch(() => caches.match(event.request))
     );
     return;
@@ -60,9 +68,7 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-      return response;
+      return cacheResponse(event.request, response);
     }))
   );
 });
