@@ -1733,6 +1733,26 @@ button {
   margin-bottom: 14px;
 }
 
+.app-update-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-version-pill {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(31, 122, 92, 0.22);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #e7f3ed;
+  color: var(--brand-dark);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .metadata-list {
   display: grid;
   gap: 8px;

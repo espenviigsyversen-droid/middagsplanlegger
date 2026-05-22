@@ -245,6 +245,8 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
+const APP_VERSION = "v64";
+
 let state = loadState();
 const app = document.querySelector("#app");
 let wakeLock = null;
@@ -2408,7 +2410,10 @@ function renderSetup() {
     <section class="panel setup-section">
       <h2>App</h2>
       <p class="status-note">Bruk denne etter publisering hvis appen ikke henter siste versjon automatisk. Middager og innstillinger i nettleseren beholdes.</p>
-      <button class="button" data-refresh-app>Oppdater app</button>
+      <div class="app-update-row">
+        <button class="button" data-refresh-app>Oppdater app</button>
+        <span class="app-version-pill">Versjon ${escapeHtml(APP_VERSION)}</span>
+      </div>
     </section>
   `;
 }
