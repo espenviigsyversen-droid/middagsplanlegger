@@ -2384,29 +2384,45 @@ button {
 @media (max-width: 640px) {
   .shopping-review-backdrop {
     align-items: stretch;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 0;
   }
 
   .shopping-review-modal {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     max-width: none;
-    height: 100vh;
-    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: auto;
     max-height: none;
     border-radius: 0;
+    overflow: visible;
   }
 
   .shopping-review-modal .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface);
     padding: calc(14px + env(safe-area-inset-top)) 16px 12px;
   }
 
   .shopping-review-body {
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    flex: none;
+    min-height: auto;
+    overflow: visible;
     padding: 12px 12px 16px;
-    -webkit-overflow-scrolling: touch;
+  }
+
+  .shopping-review-modal .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
   .shopping-review-group-head {

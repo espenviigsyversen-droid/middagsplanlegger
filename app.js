@@ -245,7 +245,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v64";
+const APP_VERSION = "v65";
 
 let state = loadState();
 const app = document.querySelector("#app");
