@@ -1103,31 +1103,47 @@ button {
 }
 
 .shopping-review-backdrop {
-  align-items: center;
+  align-items: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 14px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .shopping-review-modal {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   border-radius: 18px;
   width: min(720px, 100%);
   max-width: 720px;
-  height: min(86vh, 820px);
-  max-height: min(86vh, 820px);
-  overflow: hidden;
+  min-height: min-content;
+  max-height: none;
+  margin: auto;
+  overflow: visible;
 }
 
 .shopping-review-body {
   display: grid;
   align-content: start;
   gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-height: auto;
+  overflow: visible;
   padding: 14px 16px 18px;
   overscroll-behavior: contain;
   touch-action: pan-y;
+}
+
+.shopping-review-modal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.shopping-review-modal .modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .shopping-review-body.week-review {
