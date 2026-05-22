@@ -8,6 +8,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Jobb kun innenfor prosjektmappen.
 - Bruk trygge lokale kontroller, særlig `node --check app.js` og `node --check service-worker.js`.
 - Etter endringer i handleliste-/mengdelogikk: kjør `node tests/domain/shopping.test.mjs`.
+- Etter endringer i uke-/datologikk: kjør `node tests/domain/weeks.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
@@ -17,6 +18,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `index.html`: laster appen, stylesheet, manifest, loading screen og versjonsmerkede assets.
 - `app.js`: hovedlogikk, state, rendering, hendelser, Firebase-synk og brukerflyter.
 - `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner uten UI- eller Firebase-avhengighet.
+- `src/domain/weeks.js`: rene uke- og datofunksjoner uten UI- eller Firebase-avhengighet.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
 - `manifest.json`: PWA metadata.

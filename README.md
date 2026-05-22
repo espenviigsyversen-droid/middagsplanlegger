@@ -35,6 +35,7 @@ C:\Users\espen\Downloads\00_Organisert\02_Prosjekter_og_apper\Middagsapp
 - `index.html`: inngangspunkt, loading screen og versjonsmerkede appfiler.
 - `app.js`: hovedlogikk, state, rendering, hendelser og Firebase-synk.
 - `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner.
+- `src/domain/weeks.js`: rene uke- og datofunksjoner.
 - `styles.css`: all styling og responsiv layout.
 - `service-worker.js`: PWA-cache og oppdateringsstrategi.
 - `manifest.json`: PWA metadata.
@@ -59,6 +60,7 @@ Kjør disse etter JavaScript-endringer:
 node --check app.js
 node --check service-worker.js
 node tests/domain/shopping.test.mjs
+node tests/domain/weeks.test.mjs
 ```
 
 ## Publisering

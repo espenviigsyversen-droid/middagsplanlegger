@@ -6,6 +6,22 @@ import {
   scaleAmount,
   shoppingMergeKey,
 } from "./src/domain/shopping.js";
+import {
+  dateForWeekDay,
+  daysBetweenDates,
+  emptyWeekDayModes,
+  emptyWeekDayNotes,
+  emptyWeekDayTypes,
+  emptyWeekLocks,
+  emptyWeekPlan,
+  emptyWeekServings,
+  getDayIndexForDate,
+  getWeekDatesForOffset,
+  getWeekKeyForDate,
+  getWeekKeyForOffset,
+  localDateKey,
+  weekKeyOffset,
+} from "./src/domain/weeks.js";
 
 const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
 const categoryLabels = {
@@ -254,7 +270,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v68";
+const APP_VERSION = "v69";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -795,34 +811,11 @@ function renderMealPickerListItems(query = "", dayIndex) {
 
 
 function getWeekDates(offset = state.weekOffset) {
-  const today = new Date();
-  const monday = new Date(today);
-  const day = monday.getDay() || 7;
-  monday.setDate(today.getDate() - day + 1 + offset * 7);
-  return dayNames.map((_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index);
-    return date;
-  });
+  return getWeekDatesForOffset(offset);
 }
 
 function getWeekKey(offset = state.weekOffset) {
-  return getWeekDates(offset)[0].toISOString().slice(0, 10);
-}
-
-function getWeekKeyForDate(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1 - day);
-  d.setDate(d.getDate() + diff);
-  d.setHours(12, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
-}
-
-function getDayIndexForDate(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  return day === 0 ? 6 : day - 1;
+  return getWeekKeyForOffset(offset);
 }
 
 function getUpcomingDays(n = 9) {
@@ -841,38 +834,6 @@ function getUpcomingDays(n = 9) {
     days.push({ date, weekKey, dayIndex, meal, dayMode, dateKey: localDateKey(date) });
   }
   return days;
-}
-
-function localDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function emptyWeekPlan() {
-  return { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
-}
-
-function emptyWeekLocks() {
-  return { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false, 6: false };
-}
-
-function emptyWeekDayTypes() {
-  return { 0: "weekday", 1: "weekday", 2: "weekday", 3: "weekday", 4: "weekday", 5: "weekend", 6: "weekend" };
-}
-
-function emptyWeekDayModes() {
-  return { 0: "home", 1: "home", 2: "home", 3: "home", 4: "home", 5: "home", 6: "home" };
-}
-
-function emptyWeekDayNotes() {
-  return { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
-}
-
-function emptyWeekServings(familySize = 5) {
-  familySize = Math.max(1, Number(familySize) || 5);
-  return { 0: familySize, 1: familySize, 2: familySize, 3: familySize, 4: familySize, 5: familySize, 6: familySize };
 }
 
 function currentPlan() {
@@ -2817,22 +2778,6 @@ async function refreshApp() {
   }
 
   window.location.replace(refreshUrl.toString());
-}
-
-function dateForWeekDay(weekKey, dayIndex) {
-  const date = new Date(`${weekKey}T00:00:00`);
-  date.setDate(date.getDate() + Number(dayIndex));
-  return date;
-}
-
-function daysBetweenDates(a, b) {
-  return Math.abs(Math.round((a.getTime() - b.getTime()) / 86400000));
-}
-
-function weekKeyOffset(weekKey, offsetWeeks) {
-  const date = new Date(`${weekKey}T00:00:00`);
-  date.setDate(date.getDate() + offsetWeeks * 7);
-  return date.toISOString().slice(0, 10);
 }
 
 function planHasCategory(plan, category) {
