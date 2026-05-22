@@ -1,35 +1,70 @@
-# Middagsplan
+# Middagsplanlegger
 
-Første prototype av familiens middagsapp.
+Lokal/statisk PWA for familiens middagsplanlegging, oppskrifter og handleliste.
 
-## Åpne lokalt
+Appen kan kjøres uten byggsteg og publiseres som vanlige statiske filer, for eksempel på GitHub Pages.
 
-Appen kan åpnes via lokal server:
+## Hovedfunksjoner
+
+- Ukekalender og planlegger for middager.
+- Oppskriftsdatabase med kategorier, ingredienser, porsjoner og steg.
+- Forslagmotor for å fylle åpne dager.
+- Handleliste med butikkategorier.
+- Gjennomgang av ingredienser før varer legges til i handlelisten.
+- Familieinnstillinger, raske dager og preferanser.
+- Lokal lagring i nettleseren.
+- Firebase/Firestore-synk med anonym innlogging.
+- PWA-støtte med manifest, ikoner, service worker og loading screen.
+
+## Kjør lokalt
+
+Start en enkel lokal webserver i prosjektmappen og åpne:
 
 ```text
 http://127.0.0.1:8765/
 ```
 
-Filene ligger i denne mappen:
+Prosjektmappen:
 
 ```text
 C:\Users\espen\Downloads\00_Organisert\02_Prosjekter_og_apper\Middagsapp
 ```
 
-## Innhold i første versjon
+## Viktige filer
 
-- Mobilvennlig appskall med bunnnavigasjon.
-- Ukekalender for mandag til søndag.
-- Manuell planlegging av middager.
-- Enkel forslagmotor for ledige dager.
-- Oppskriftsdatabase med søk og filter.
-- Familieprofil med raske dager og noen rådgiverregler.
-- Lokal lagring i nettleseren.
-- PWA-grunnlag med manifest, ikon og service worker.
+- `index.html`: inngangspunkt, loading screen og versjonsmerkede appfiler.
+- `app.js`: hovedlogikk, state, rendering, hendelser og Firebase-synk.
+- `styles.css`: all styling og responsiv layout.
+- `service-worker.js`: PWA-cache og oppdateringsstrategi.
+- `manifest.json`: PWA metadata.
+- `icons/`: appikoner.
+- `AGENTS.md`: arbeidsinstruks for Codex/AI-agent.
+- `docs/`: teknisk dokumentasjon.
 
-## Neste utviklingssteg
+## Dokumentasjon
 
-1. Legge til skjema for å opprette og redigere egne middager.
-2. Koble appen til Firebase Auth og Firestore.
-3. Lage familieworkspace og invitasjonsflyt.
-4. Utvide rådgiveren med historikk, rester og kategori-kvoter.
+Les disse før større endringer:
+
+- `AGENTS.md`
+- `docs/ARCHITECTURE.md`
+- `docs/STATE_MODEL.md`
+- `docs/RELEASE.md`
+
+## Lokal kontroll
+
+Kjør disse etter JavaScript-endringer:
+
+```powershell
+node --check app.js
+node --check service-worker.js
+```
+
+## Publisering
+
+Appen har manuelt versjonsnummer. Når kode, CSS, HTML eller service worker endres, bump versjonen i:
+
+- `APP_VERSION` i `app.js`
+- query-parametre i `index.html`
+- `CACHE_NAME` i `service-worker.js`
+
+Se `docs/RELEASE.md` for full sjekkliste.
