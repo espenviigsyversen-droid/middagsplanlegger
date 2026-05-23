@@ -17,6 +17,9 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i Firestore write-/payload-bygging: kjør `node tests/sync/writes.test.mjs`.
 - Etter endringer i handleliste-rendering: kjør `node tests/render/shopping.test.mjs`.
 - Etter endringer i oppskrifts-rendering: kjør `node tests/render/meals.test.mjs`.
+- Etter endringer i kalender-rendering: kjør `node tests/render/calendar.test.mjs`.
+- Etter endringer i planlegger-rendering: kjør `node tests/render/planner.test.mjs`.
+- Etter endringer i setup-rendering: kjør `node tests/render/setup.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
@@ -34,7 +37,10 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/sync/state.js`: rene synkbeslutninger for scopes, ukeendringer og remote-konfliktbeskyttelse.
 - `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata, shopping, meals og weeks.
 - `src/render/shopping.js`: HTML-rendering for handleliste, vareeditor, vareforslag og shopping review modal.
-- `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering og oppskriftsdetalj.
+- `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
+- `src/render/calendar.js`: HTML-rendering for kalender/forside.
+- `src/render/planner.js`: HTML-rendering for ukeplanleggeren.
+- `src/render/setup.js`: HTML-rendering for setup og enkle metadata-sider.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
 - `manifest.json`: PWA metadata.

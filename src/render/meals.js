@@ -188,3 +188,169 @@ export function renderMealDetailView(options = {}) {
     </section>
   `;
 }
+
+function renderOption(value, label, selected, escapeHtml = String) {
+  return `<option value="${escapeHtml(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>`;
+}
+
+export function renderIngredientEditorRowView(options = {}) {
+  const {
+    item = { amount: "", unit: "", name: "" },
+    index = 0,
+    unitOptions = [],
+    escapeHtml = String,
+  } = options;
+
+  return `
+    <div class="ingredient-editor-row" data-ingredient-row="${index}">
+      <input class="input" data-ingredient-field="amount" data-ingredient-index="${index}" value="${escapeHtml(item.amount)}" placeholder="Mengde">
+      <select class="select" data-ingredient-field="unit" data-ingredient-index="${index}" aria-label="Enhet">
+        ${unitOptions.map((unit) => `<option value="${escapeHtml(unit)}" ${item.unit === unit ? "selected" : ""}>${unit ? escapeHtml(unit) : "Enhet"}</option>`).join("")}
+      </select>
+      <input class="input" data-ingredient-field="name" data-ingredient-index="${index}" value="${escapeHtml(item.name)}" placeholder="Ingrediensnavn">
+      <button class="icon-button" type="button" data-remove-ingredient="${index}" title="Fjern ingrediens">×</button>
+    </div>
+  `;
+}
+
+export function renderStepEditorRowView(options = {}) {
+  const {
+    step = "",
+    index = 0,
+    escapeHtml = String,
+  } = options;
+
+  return `
+    <div class="step-editor-row" data-step-row="${index}">
+      <div class="step-editor-number">${index + 1}</div>
+      <textarea class="textarea" data-step-field data-step-index="${index}" placeholder="Beskriv dette steget">${escapeHtml(step)}</textarea>
+      <button class="icon-button" type="button" data-remove-step="${index}" title="Fjern steg">×</button>
+    </div>
+  `;
+}
+
+export function renderMealEditorView(options = {}) {
+  const {
+    isNew = false,
+    meal,
+    baseServings = 4,
+    ingredients = [],
+    steps = [],
+    categoryEntries = [],
+    suitabilityEntries = [],
+    prepTimeEntries = [],
+    unitOptions = [],
+    escapeHtml = String,
+  } = options;
+
+  if (!meal) return "";
+
+  return `
+    <section class="panel meal-editor">
+      <div class="meal-editor-head">
+        <h2>${isNew ? "Ny oppskrift" : `Rediger ${escapeHtml(meal.title)}`}</h2>
+        <button class="button ghost" data-cancel-edit>Avbryt</button>
+      </div>
+      <form class="form" data-meal-form>
+        <div class="form-row">
+          <div class="setting">
+            <label for="mealTitle">Navn</label>
+            <input id="mealTitle" class="input" name="title" required value="${escapeHtml(meal.title)}">
+          </div>
+          <div class="setting">
+            <label for="mealBaseServings">Porsjoner</label>
+            <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${baseServings}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="setting">
+            <label for="mealPrep">Tilberedningstid</label>
+            <select id="mealPrep" class="select" name="prepTime">
+              ${prepTimeEntries.map(([value, label]) => renderOption(value, label, meal.prepTime, escapeHtml)).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="setting">
+          <label for="mealDescription">Beskrivelse</label>
+          <textarea id="mealDescription" class="textarea" name="description">${escapeHtml(meal.description)}</textarea>
+        </div>
+        <div class="setting">
+          <label for="mealRecipeUrl">Lenke til oppskrift</label>
+          <input id="mealRecipeUrl" class="input" type="text" inputmode="url" name="recipeUrl" value="${escapeHtml(meal.recipeUrl || "")}" placeholder="https://...">
+        </div>
+        <div class="form-row">
+          <div class="setting">
+            <label>Kategorier</label>
+            <div class="checkbox-grid">
+              ${categoryEntries.map(([value, label]) => `
+                <label class="checkbox-line">
+                  <input type="checkbox" name="categories" value="${escapeHtml(value)}" ${(meal.categories || []).includes(value) ? "checked" : ""}>
+                  <span>${escapeHtml(label)}</span>
+                </label>
+              `).join("")}
+            </div>
+          </div>
+          <div class="setting">
+            <label>Merking</label>
+            <div class="checkbox-grid">
+              <label class="checkbox-line"><input type="checkbox" name="kidFriendly" ${meal.kidFriendly ? "checked" : ""}> <span>Barnevennlig</span></label>
+              <label class="checkbox-line"><input type="checkbox" name="favorite" ${meal.favorite ? "checked" : ""}> <span>Favoritt</span></label>
+              <label class="checkbox-line"><input type="checkbox" name="excludeFromSuggestions" ${meal.excludeFromSuggestions ? "checked" : ""}> <span>Kun oppskrift (ikke foreslå som middag)</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="setting">
+          <label>Passer til</label>
+          <div class="checkbox-grid">
+            ${suitabilityEntries.map(([value, label]) => `
+              <label class="checkbox-line">
+                <input type="checkbox" name="suitability" value="${escapeHtml(value)}" ${(meal.suitability || []).includes(value) ? "checked" : ""}>
+                <span>${escapeHtml(label)}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="setting">
+            <label for="mealLeftovers">Rester</label>
+            <select id="mealLeftovers" class="select" name="leftovers">
+              ${renderOption("none", "Nei", meal.leftovers, escapeHtml)}
+              ${renderOption("possible", "Kanskje", meal.leftovers, escapeHtml)}
+              ${renderOption("likely", "Sannsynlig", meal.leftovers, escapeHtml)}
+            </select>
+          </div>
+          <div class="setting">
+            <label for="mealSpacing">Minimum dager mellom</label>
+            <input id="mealSpacing" class="input" type="number" min="1" max="365" name="minDaysBetween" value="${meal.minDaysBetween}">
+          </div>
+        </div>
+        <div class="setting">
+          <label for="mealIngredients">Ingredienser</label>
+          <div class="ingredient-editor">
+            <div class="ingredient-editor-head">
+              <span>Mengde</span>
+              <span>Enhet</span>
+              <span>Ingrediens</span>
+              <span></span>
+            </div>
+            ${ingredients.map((item, index) => renderIngredientEditorRowView({ item, index, unitOptions, escapeHtml })).join("")}
+          </div>
+          <button class="button secondary compact" type="button" data-add-ingredient>Legg til ingrediens</button>
+          <p class="field-hint">Mengde og enhet kan stå tomt. Ingrediensnavn bør alltid fylles ut.</p>
+        </div>
+        <div class="setting">
+          <label>Fremgangsmåte</label>
+          <div class="step-editor">
+            ${steps.map((step, index) => renderStepEditorRowView({ step, index, escapeHtml })).join("")}
+          </div>
+          <button class="button secondary compact" type="button" data-add-step>Legg til steg</button>
+        </div>
+        <div class="form-actions">
+          ${isNew ? "" : '<button class="button danger" type="button" data-delete-meal>Slett</button>'}
+          <button class="button secondary" type="button" data-cancel-edit>Avbryt</button>
+          <button class="button" type="submit">Lagre middag</button>
+        </div>
+      </form>
+    </section>
+  `;
+}

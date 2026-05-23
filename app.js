@@ -52,14 +52,32 @@ import {
 } from "./src/sync/reads.js";
 import { buildRemoteWrites } from "./src/sync/writes.js";
 import {
+  renderCalendarView,
+  renderTodaySummaryView,
+  renderWeekRowView,
+} from "./src/render/calendar.js";
+import {
   renderCategoryChipsView,
   renderGroupedMealsView,
   renderMealBadgesView,
   renderMealCardView,
   renderMealDetailView,
+  renderMealEditorView,
   renderMealsView,
+  renderIngredientEditorRowView,
+  renderStepEditorRowView,
   renderSuitabilityChipsView,
 } from "./src/render/meals.js";
+import {
+  renderPlannerRowView,
+  renderPlannerView,
+} from "./src/render/planner.js";
+import {
+  renderMetadataAddFormView,
+  renderMetadataRowsView,
+  renderSetupPageView,
+  renderSetupView,
+} from "./src/render/setup.js";
 import {
   renderShoppingItemEditorView,
   renderShoppingItemView,
@@ -301,7 +319,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v77";
+const APP_VERSION = "v79";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -1343,51 +1361,29 @@ function renderCalendar() {
     if (isCurrentWeek && index === todayIndex) return "";
     const meal = getMeal(plan[index]);
     const isPlannedMeal = dayPlansMeal(dayModes[index]);
-    const shortDay = day.substring(0, 3);
     const title = !isPlannedMeal
       ? planModeLabel(dayModes[index])
       : meal ? meal.title : null;
 
-    return `
-      <div class="week-row">
-        <div class="week-row-day">
-          <span class="week-row-name">${shortDay}</span>
-          <span class="week-row-date">${formatDate(dates[index])}</span>
-        </div>
-        <div class="week-row-meal${!title ? " muted" : ""}">
-          ${escapeHtml(title || "Ikke planlagt")}
-        </div>
-        <div class="week-row-action">
-          ${meal && isPlannedMeal
-            ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>`
-            : !title
-              ? `<button class="button secondary compact" data-view="planner">Planlegg</button>`
-              : ""}
-        </div>
-      </div>
-    `;
+    return renderWeekRowView({
+      shortDay: day.substring(0, 3),
+      dateLabel: formatDate(dates[index]),
+      title,
+      mealId: meal?.id || "",
+      dayIndex: index,
+      showRecipe: Boolean(meal && isPlannedMeal),
+      showPlanner: !title,
+      escapeHtml,
+    });
   }).join("");
 
-  const listHeading = isCurrentWeek ? "Resten av uken" : "Alle dager";
-
-  return `
-    <section class="view-header calendar-view-header">
-      <div>
-        <h2 class="view-title">Middagsplan</h2>
-        <div class="calendar-week-nav">
-          <button class="button secondary week-arrow-btn" data-week="-1" aria-label="Forrige uke">←</button>
-          <span class="calendar-week-label">${weekRangeLabel()}</span>
-          <button class="button secondary week-arrow-btn" data-week="1" aria-label="Neste uke">→</button>
-          ${!isCurrentWeek ? `<button class="text-action" data-week="0">I dag</button>` : ""}
-        </div>
-      </div>
-    </section>
-    ${todayCard}
-    <section class="week-list">
-      <h4 class="week-list-heading">${listHeading}</h4>
-      ${weekRows}
-    </section>
-  `;
+  return renderCalendarView({
+    weekRangeLabel: weekRangeLabel(),
+    todayCardHtml: todayCard,
+    weekRowsHtml: weekRows,
+    isCurrentWeek,
+    escapeHtml,
+  });
 }
 
 function getTodayIndexInCurrentWeek() {
@@ -1407,19 +1403,15 @@ function renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex) {
     : meal
       ? (meal.description || "Ingen beskrivelse lagt inn.")
       : "Gå til Planlegger for å legge inn middag.";
-  return `
-    <section class="today-summary">
-      <div>
-        <span class="today-kicker">${day} · ${formatDate(dates[index])}</span>
-        <h3>${escapeHtml(title)}</h3>
-        <p>${escapeHtml(description)}</p>
-      </div>
-      <div class="today-actions">
-        ${meal && isPlannedMeal ? `<button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
-        <button class="button secondary compact" data-view="planner">Planlegger</button>
-      </div>
-    </section>
-  `;
+  return renderTodaySummaryView({
+    dateLabel: `${day} · ${formatDate(dates[index])}`.replace(/^I dag · /, ""),
+    title,
+    description,
+    mealId: meal?.id || "",
+    dayIndex: index,
+    showRecipe: Boolean(meal && isPlannedMeal),
+    escapeHtml,
+  });
 }
 
 function renderPlanner() {
@@ -1440,97 +1432,41 @@ function renderPlanner() {
     const isPlannedMeal = dayPlansMeal(dayMode);
     const dayNote = dayNotes[index] || "";
     const typeLabel = getSuitabilityLabels()[dayType] || dayType;
-    return `
-      <div class="planner-row">
-        <div class="planner-day-block">
-          <div>
-            <div class="planner-day">${day}</div>
-            <div class="day-date">${formatDate(dates[index])}</div>
-          </div>
-          <button class="toggle-chip ${locked ? "active" : ""}" data-lock-day="${index}">${locked ? "Låst" : "Åpen"}</button>
-        </div>
-        <div class="planner-summary ${!isPlannedMeal || meal ? "" : "empty"}">
-          ${!isPlannedMeal ? `
-            <strong>${escapeHtml(planModeLabel(dayMode))}</strong>
-            <span>${escapeHtml(dayNote || "Legg inn hvor dere skal spise.")}</span>
-          ` : meal ? `
-            <strong>${escapeHtml(meal.title)}</strong>
-            <span>${escapeHtml(meal.description || suggestionReason(meal, index))}</span>
-          ` : `
-            <strong>Ikke planlagt</strong>
-            <span>Velg en middag eller trykk Forslag.</span>
-          `}
-        </div>
-        <div class="planner-meal-block">
-          <div class="planner-controls">
-            <label class="planner-control">
-              <span>Plan</span>
-              <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${day}">
-                ${planModeEntries().map(([value, option]) => `<option value="${escapeHtml(value)}" ${dayMode === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
-              </select>
-            </label>
-          ${!isPlannedMeal ? `
-            <label class="planner-control wide">
-              <span>Notat</span>
-              <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="F.eks. rester fra taco eller middag hos svigefar">
-            </label>
-          ` : `
-            <label class="planner-control">
-              <span>Type</span>
-              <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${day}">
-                ${suitabilityEntries().map(([value, label]) => `<option value="${value}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-              </select>
-            </label>
-            <label class="planner-control persons">
-              <span>Personer</span>
-              <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
-            </label>
-            <label class="planner-control wide">
-              <span>Middag</span>
-              <button class="select select-trigger-btn" type="button" data-open-meal-picker="${index}">
-                <span>${meal ? escapeHtml(meal.title) : "Velg middag..."}</span>
-                <span class="chevron">▾</span>
-              </button>
-            </label>
-            ${meal ? `<p class="planner-reason">${escapeHtml(typeLabel)} · ${escapeHtml(suggestionReason(meal, index))}</p>` : ""}
-          `}
-          </div>
-        </div>
-        <div class="planner-actions">
-          ${!isPlannedMeal ? "" : `<button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>`}
-          ${mealId && isPlannedMeal ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
-        </div>
-      </div>
-    `;
+    const summaryTitle = !isPlannedMeal
+      ? planModeLabel(dayMode)
+      : meal ? meal.title : "Ikke planlagt";
+    const summaryText = !isPlannedMeal
+      ? (dayNote || "Legg inn hvor dere skal spise.")
+      : meal ? (meal.description || suggestionReason(meal, index)) : "Velg en middag eller trykk Forslag.";
+    return renderPlannerRowView({
+      day,
+      dateLabel: formatDate(dates[index]),
+      index,
+      locked,
+      isPlannedMeal,
+      summaryTitle,
+      summaryText,
+      dayMode,
+      dayNote,
+      dayType,
+      dayServings,
+      mealId,
+      mealTitle: meal?.title || "",
+      typeLabel,
+      reason: meal ? suggestionReason(meal, index) : "",
+      planModeEntries: planModeEntries(),
+      suitabilityEntries: suitabilityEntries(),
+      escapeHtml,
+    });
   }).join("");
 
-  return `
-    <section class="view-header planner-view-header">
-      <h2 class="view-title">Planlegg uken</h2>
-      <div class="planner-top-bar">
-        <div class="week-nav-compact">
-          <button class="button secondary week-arrow-btn" data-week="-1" aria-label="Forrige uke">←</button>
-          <span class="week-nav-label">${weekRangeLabel()}</span>
-          <button class="button secondary week-arrow-btn" data-week="1" aria-label="Neste uke">→</button>
-        </div>
-        <button class="button compact" data-fill-week>${icon("add")} Fyll ledige dager</button>
-      </div>
-      <div class="planner-secondary-actions">
-        <button class="text-action" data-week="0">Denne uken</button>
-        <span class="action-sep">·</span>
-        <button class="text-action" data-replace-open-week>Bytt åpne forslag</button>
-        <span class="action-sep">·</span>
-        <button class="text-action quiet" data-clear-week>Tøm uke</button>
-      </div>
-    </section>
-    <details class="advisor-panel">
-      <summary>Rådgiverstatus</summary>
-      <p class="status-note">${advisorSummary()}</p>
-    </details>
-    <section class="panel">
-      <div class="planner-list">${rows}</div>
-    </section>
-  `;
+  return renderPlannerView({
+    weekRangeLabel: weekRangeLabel(),
+    rowsHtml: rows,
+    advisorSummary: advisorSummary(),
+    addIconHtml: icon("add"),
+    escapeHtml,
+  });
 }
 
 function advisorSummary() {
@@ -1682,122 +1618,18 @@ function renderMealEditor() {
   const meal = getDraftMeal(baseMeal);
   const ingredients = getDraftIngredients(meal);
   const steps = getDraftSteps(meal);
-  return `
-    <section class="panel meal-editor">
-      <div class="meal-editor-head">
-        <h2>${isNew ? "Ny oppskrift" : `Rediger ${escapeHtml(meal.title)}`}</h2>
-        <button class="button ghost" data-cancel-edit>Avbryt</button>
-      </div>
-      <form class="form" data-meal-form>
-        <div class="form-row">
-          <div class="setting">
-            <label for="mealTitle">Navn</label>
-            <input id="mealTitle" class="input" name="title" required value="${escapeHtml(meal.title)}">
-          </div>
-          <div class="setting">
-            <label for="mealBaseServings">Porsjoner</label>
-            <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${mealBaseServings(meal)}">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="setting">
-            <label for="mealPrep">Tilberedningstid</label>
-            <select id="mealPrep" class="select" name="prepTime">
-              ${prepTimeEntries().map(([value, label]) => prepOption(value, label, meal.prepTime)).join("")}
-            </select>
-          </div>
-        </div>
-        <div class="setting">
-          <label for="mealDescription">Beskrivelse</label>
-          <textarea id="mealDescription" class="textarea" name="description">${escapeHtml(meal.description)}</textarea>
-        </div>
-        <div class="setting">
-          <label for="mealRecipeUrl">Lenke til oppskrift</label>
-          <input id="mealRecipeUrl" class="input" type="text" inputmode="url" name="recipeUrl" value="${escapeHtml(meal.recipeUrl || "")}" placeholder="https://...">
-        </div>
-        <div class="form-row">
-          <div class="setting">
-            <label>Kategorier</label>
-            <div class="checkbox-grid">
-              ${categoryEntries().map(([value, label]) => `
-                <label class="checkbox-line">
-                  <input type="checkbox" name="categories" value="${value}" ${meal.categories.includes(value) ? "checked" : ""}>
-                  <span>${escapeHtml(label)}</span>
-                </label>
-              `).join("")}
-            </div>
-          </div>
-          <div class="setting">
-            <label>Merking</label>
-            <div class="checkbox-grid">
-              <label class="checkbox-line"><input type="checkbox" name="kidFriendly" ${meal.kidFriendly ? "checked" : ""}> <span>Barnevennlig</span></label>
-              <label class="checkbox-line"><input type="checkbox" name="favorite" ${meal.favorite ? "checked" : ""}> <span>Favoritt</span></label>
-              <label class="checkbox-line"><input type="checkbox" name="excludeFromSuggestions" ${meal.excludeFromSuggestions ? "checked" : ""}> <span>Kun oppskrift (ikke foreslå som middag)</span></label>
-            </div>
-          </div>
-        </div>
-        <div class="setting">
-          <label>Passer til</label>
-          <div class="checkbox-grid">
-            ${suitabilityEntries().map(([value, label]) => `
-              <label class="checkbox-line">
-                <input type="checkbox" name="suitability" value="${value}" ${(meal.suitability || []).includes(value) ? "checked" : ""}>
-                <span>${escapeHtml(label)}</span>
-              </label>
-            `).join("")}
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="setting">
-            <label for="mealLeftovers">Rester</label>
-            <select id="mealLeftovers" class="select" name="leftovers">
-              ${leftoverOption("none", "Nei", meal.leftovers)}
-              ${leftoverOption("possible", "Kanskje", meal.leftovers)}
-              ${leftoverOption("likely", "Sannsynlig", meal.leftovers)}
-            </select>
-          </div>
-          <div class="setting">
-            <label for="mealSpacing">Minimum dager mellom</label>
-            <input id="mealSpacing" class="input" type="number" min="1" max="365" name="minDaysBetween" value="${meal.minDaysBetween}">
-          </div>
-        </div>
-        <div class="setting">
-          <label for="mealIngredients">Ingredienser</label>
-          <div class="ingredient-editor">
-            <div class="ingredient-editor-head">
-              <span>Mengde</span>
-              <span>Enhet</span>
-              <span>Ingrediens</span>
-              <span></span>
-            </div>
-            ${ingredients.map((item, index) => renderIngredientEditorRow(item, index)).join("")}
-          </div>
-          <button class="button secondary compact" type="button" data-add-ingredient>Legg til ingrediens</button>
-          <p class="field-hint">Mengde og enhet kan stå tomt. Ingrediensnavn bør alltid fylles ut.</p>
-        </div>
-        <div class="setting">
-          <label>Fremgangsmåte</label>
-          <div class="step-editor">
-            ${steps.map((step, index) => renderStepEditorRow(step, index)).join("")}
-          </div>
-          <button class="button secondary compact" type="button" data-add-step>Legg til steg</button>
-        </div>
-        <div class="form-actions">
-          ${isNew ? "" : '<button class="button danger" type="button" data-delete-meal>Slett</button>'}
-          <button class="button secondary" type="button" data-cancel-edit>Avbryt</button>
-          <button class="button" type="submit">Lagre middag</button>
-        </div>
-      </form>
-    </section>
-  `;
-}
-
-function prepOption(value, label, selected) {
-  return `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
-}
-
-function leftoverOption(value, label, selected) {
-  return `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
+  return renderMealEditorView({
+    isNew,
+    meal,
+    baseServings: mealBaseServings(meal),
+    ingredients,
+    steps,
+    categoryEntries: categoryEntries(),
+    suitabilityEntries: suitabilityEntries(),
+    prepTimeEntries: prepTimeEntries(),
+    unitOptions: getUnitOptions(),
+    escapeHtml,
+  });
 }
 
 function getDraftMeal(meal) {
@@ -1816,26 +1648,11 @@ function getDraftSteps(meal) {
 }
 
 function renderIngredientEditorRow(item, index) {
-  return `
-    <div class="ingredient-editor-row" data-ingredient-row="${index}">
-      <input class="input" data-ingredient-field="amount" data-ingredient-index="${index}" value="${escapeHtml(item.amount)}" placeholder="Mengde">
-      <select class="select" data-ingredient-field="unit" data-ingredient-index="${index}" aria-label="Enhet">
-        ${getUnitOptions().map((unit) => `<option value="${escapeHtml(unit)}" ${item.unit === unit ? "selected" : ""}>${unit ? escapeHtml(unit) : "Enhet"}</option>`).join("")}
-      </select>
-      <input class="input" data-ingredient-field="name" data-ingredient-index="${index}" value="${escapeHtml(item.name)}" placeholder="Ingrediensnavn">
-      <button class="icon-button" type="button" data-remove-ingredient="${index}" title="Fjern ingrediens">×</button>
-    </div>
-  `;
+  return renderIngredientEditorRowView({ item, index, unitOptions: getUnitOptions(), escapeHtml });
 }
 
 function renderStepEditorRow(step, index) {
-  return `
-    <div class="step-editor-row" data-step-row="${index}">
-      <div class="step-editor-number">${index + 1}</div>
-      <textarea class="textarea" data-step-field data-step-index="${index}" placeholder="Beskriv dette steget">${escapeHtml(step)}</textarea>
-      <button class="icon-button" type="button" data-remove-step="${index}" title="Fjern steg">×</button>
-    </div>
-  `;
+  return renderStepEditorRowView({ step, index, escapeHtml });
 }
 
 function saveMealFromForm(form) {
@@ -1957,93 +1774,23 @@ function deleteCurrentMeal() {
 }
 
 function renderSetup() {
-  return `
-    <section class="view-header">
-      <div>
-        <h2 class="view-title">Setup</h2>
-        <p class="view-lead">Styr familieinnstillinger, metadata og appoppdatering fra ett sted.</p>
-      </div>
-    </section>
-    <section class="panel setup-section">
-      <h2>Familie</h2>
-      <div class="settings-grid">
-        <div class="setting">
-          <label for="familyName">Familienavn</label>
-          <input id="familyName" class="input" data-family="name" value="${escapeHtml(state.family.name)}">
-        </div>
-        <div class="setting">
-          <label for="familySize">Personer i familien</label>
-          <input id="familySize" class="input" type="number" min="1" max="30" data-family="familySize" value="${Math.max(1, Number(state.family.familySize) || 5)}">
-        </div>
-        <div class="setting">
-          <label for="kidCount">Barnevennlige middager per uke</label>
-          <input id="kidCount" class="input" type="number" min="0" max="7" data-family="kidFriendlyPerWeek" value="${state.family.kidFriendlyPerWeek}">
-        </div>
-        <div class="setting">
-          <label>Regler</label>
-          <button class="toggle-chip ${state.family.leftovers ? "active" : ""}" data-toggle-family="leftovers">Foreslå restdager</button>
-          <button class="toggle-chip ${state.family.reuseIngredients ? "active" : ""}" data-toggle-family="reuseIngredients">Gjenbruk ingredienser</button>
-        </div>
-        <div class="setting">
-          <label>Raske dager</label>
-          <div class="quick-days">
-            ${dayNames.map((day) => `<button class="toggle-chip ${state.family.quickDays.includes(day) ? "active" : ""}" data-quick-day="${day}">${day.slice(0, 3)}</button>`).join("")}
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="panel setup-section">
-      <h2>Middagspreferanser</h2>
-      <p class="status-note">Sett myke mål for ukene. Rådgiveren prøver å treffe disse, men kan fortsatt velge praktisk hvis få middager passer.</p>
-      <div class="setup-menu">
-        <button class="setup-menu-item" data-view="meal-preferences">
-          <span>Ukemål for kategorier</span>
-          <strong>${activePreferenceGoalCount()}</strong>
-        </button>
-      </div>
-    </section>
-    <section class="panel setup-section">
-      <h2>Metadata</h2>
-      <div class="setup-menu">
-        <button class="setup-menu-item" data-view="categories">
-          <span>Kategorier</span>
-          <strong>${categoryEntries().length}</strong>
-        </button>
-        <button class="setup-menu-item" data-view="units">
-          <span>Enheter</span>
-          <strong>${getUnitOptions().filter(Boolean).length}</strong>
-        </button>
-        <button class="setup-menu-item" data-view="prep-times">
-          <span>Tilberedningstid</span>
-          <strong>${prepTimeEntries().length}</strong>
-        </button>
-        <button class="setup-menu-item" data-view="suitability">
-          <span>Passer til</span>
-          <strong>${suitabilityEntries().length}</strong>
-        </button>
-        <button class="setup-menu-item" data-view="plan-modes">
-          <span>Plan</span>
-          <strong>${planModeEntries().length}</strong>
-        </button>
-        <button class="setup-menu-item" data-view="ingredient-mappings">
-          <span>Vareoppslag</span>
-          <strong>${Object.keys(state.metadata?.ingredientMappings || {}).length}</strong>
-        </button>
-        <button class="setup-menu-item" data-view="store-categories">
-          <span>Butikkategorier</span>
-          <strong>${STORE_CATEGORIES.length + (state.metadata?.storeCategories || []).filter((c) => !STORE_CATEGORIES.some((b) => b.key === c.key)).length}</strong>
-        </button>
-      </div>
-    </section>
-    <section class="panel setup-section">
-      <h2>App</h2>
-      <p class="status-note">Bruk denne etter publisering hvis appen ikke henter siste versjon automatisk. Middager og innstillinger i nettleseren beholdes.</p>
-      <div class="app-update-row">
-        <button class="button" data-refresh-app>Oppdater app</button>
-        <span class="app-version-pill">Versjon ${escapeHtml(APP_VERSION)}</span>
-      </div>
-    </section>
-  `;
+  return renderSetupView({
+    family: state.family,
+    quickDays: state.family.quickDays,
+    dayNames,
+    counts: {
+      preferenceGoals: activePreferenceGoalCount(),
+      categories: categoryEntries().length,
+      units: getUnitOptions().filter(Boolean).length,
+      prepTimes: prepTimeEntries().length,
+      suitability: suitabilityEntries().length,
+      planModes: planModeEntries().length,
+      ingredientMappings: Object.keys(state.metadata?.ingredientMappings || {}).length,
+      storeCategories: STORE_CATEGORIES.length + (state.metadata?.storeCategories || []).filter((c) => !STORE_CATEGORIES.some((b) => b.key === c.key)).length,
+    },
+    appVersion: APP_VERSION,
+    escapeHtml,
+  });
 }
 
 function activePreferenceGoalCount() {
@@ -2112,108 +1859,51 @@ function saveMealPreferencesFromForm(form) {
 }
 
 function renderCategoriesSetup() {
-  return `
-    <section class="view-header">
-      <div>
-        <h2 class="view-title">Kategorier</h2>
-        <p class="view-lead">Kategorier brukes i middager, filter, kalender og planlegger.</p>
-      </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
-    </section>
-    <section class="panel setup-section">
-      <div class="metadata-list">
-        ${categoryEntries().map(([key, label]) => `
-          <div class="metadata-row editable">
-            <input class="input" data-category-label="${escapeHtml(key)}" value="${escapeHtml(label)}" aria-label="Kategorinavn ${escapeHtml(label)}">
-            <button class="button secondary compact" data-save-category="${escapeHtml(key)}">Lagre</button>
-            <button class="icon-button" data-remove-category="${escapeHtml(key)}" title="Fjern kategori">×</button>
-          </div>
-        `).join("")}
-      </div>
-      <form class="metadata-add" data-category-form>
-        <input class="input" name="categoryName" placeholder="Ny kategori, f.eks. Kylling">
-        <button class="button secondary" type="submit">Legg til kategori</button>
-      </form>
-    </section>
-  `;
+  return renderSetupPageView({
+    title: "Kategorier",
+    lead: "Kategorier brukes i middager, filter, kalender og planlegger.",
+    bodyHtml: `
+      ${renderMetadataRowsView({ entries: categoryEntries(), inputAttribute: "data-category-label", saveAttribute: "data-save-category", removeAttribute: "data-remove-category", editable: true, removeTitle: "Fjern kategori", escapeHtml })}
+      ${renderMetadataAddFormView({ formAttribute: "data-category-form", inputName: "categoryName", placeholder: "Ny kategori, f.eks. Kylling", buttonLabel: "Legg til kategori", escapeHtml })}
+    `,
+    escapeHtml,
+  });
 }
 
 function renderUnitsSetup() {
-  return `
-    <section class="view-header">
-      <div>
-        <h2 class="view-title">Enheter</h2>
-        <p class="view-lead">Enhetene vises i ingrediensfeltet når du lager eller redigerer oppskrifter.</p>
-      </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
-    </section>
-    <section class="panel setup-section">
-      <div class="metadata-list">
-        ${getUnitOptions().filter(Boolean).map((unit) => `
-          <div class="metadata-row">
-            <span>${escapeHtml(unit)}</span>
-            <button class="icon-button" data-remove-unit="${escapeHtml(unit)}" title="Fjern enhet">×</button>
-          </div>
-        `).join("")}
-      </div>
-      <form class="metadata-add" data-unit-form>
-        <input class="input" name="unitName" placeholder="Ny enhet, f.eks. klype">
-        <button class="button secondary" type="submit">Legg til enhet</button>
-      </form>
-    </section>
-  `;
+  return renderSetupPageView({
+    title: "Enheter",
+    lead: "Enhetene vises i ingrediensfeltet når du lager eller redigerer oppskrifter.",
+    bodyHtml: `
+      ${renderMetadataRowsView({ entries: getUnitOptions().filter(Boolean).map((unit) => [unit, unit]), removeAttribute: "data-remove-unit", removeTitle: "Fjern enhet", escapeHtml })}
+      ${renderMetadataAddFormView({ formAttribute: "data-unit-form", inputName: "unitName", placeholder: "Ny enhet, f.eks. klype", buttonLabel: "Legg til enhet", escapeHtml })}
+    `,
+    escapeHtml,
+  });
 }
 
 function renderPrepTimesSetup() {
-  return `
-    <section class="view-header">
-      <div>
-        <h2 class="view-title">Tilberedningstid</h2>
-        <p class="view-lead">Disse valgene brukes i oppskriftene og senere av rådgiveren når travle dager skal planlegges.</p>
-      </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
-    </section>
-    <section class="panel setup-section">
-      <div class="metadata-list">
-        ${prepTimeEntries().map(([key, label]) => `
-          <div class="metadata-row">
-            <span>${escapeHtml(label)}</span>
-            <button class="icon-button" data-remove-prep-time="${escapeHtml(key)}" title="Fjern tilberedningstid">×</button>
-          </div>
-        `).join("")}
-      </div>
-      <form class="metadata-add" data-prep-time-form>
-        <input class="input" name="prepTimeName" placeholder="Ny tid, f.eks. Veldig rask under 15 min">
-        <button class="button secondary" type="submit">Legg til tid</button>
-      </form>
-    </section>
-  `;
+  return renderSetupPageView({
+    title: "Tilberedningstid",
+    lead: "Disse valgene brukes i oppskriftene og senere av rådgiveren når travle dager skal planlegges.",
+    bodyHtml: `
+      ${renderMetadataRowsView({ entries: prepTimeEntries(), removeAttribute: "data-remove-prep-time", removeTitle: "Fjern tilberedningstid", escapeHtml })}
+      ${renderMetadataAddFormView({ formAttribute: "data-prep-time-form", inputName: "prepTimeName", placeholder: "Ny tid, f.eks. Veldig rask under 15 min", buttonLabel: "Legg til tid", escapeHtml })}
+    `,
+    escapeHtml,
+  });
 }
 
 function renderSuitabilitySetup() {
-  return `
-    <section class="view-header">
-      <div>
-        <h2 class="view-title">Passer til</h2>
-        <p class="view-lead">Brukes til å merke om en middag passer til hverdag, helg, gjester eller andre situasjoner.</p>
-      </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
-    </section>
-    <section class="panel setup-section">
-      <div class="metadata-list">
-        ${suitabilityEntries().map(([key, label]) => `
-          <div class="metadata-row">
-            <span>${escapeHtml(label)}</span>
-            <button class="icon-button" data-remove-suitability="${escapeHtml(key)}" title="Fjern passer til">×</button>
-          </div>
-        `).join("")}
-      </div>
-      <form class="metadata-add" data-suitability-form>
-        <input class="input" name="suitabilityName" placeholder="Ny situasjon, f.eks. Turmat">
-        <button class="button secondary" type="submit">Legg til</button>
-      </form>
-    </section>
-  `;
+  return renderSetupPageView({
+    title: "Passer til",
+    lead: "Brukes til å merke om en middag passer til hverdag, helg, gjester eller andre situasjoner.",
+    bodyHtml: `
+      ${renderMetadataRowsView({ entries: suitabilityEntries(), removeAttribute: "data-remove-suitability", removeTitle: "Fjern passer til", escapeHtml })}
+      ${renderMetadataAddFormView({ formAttribute: "data-suitability-form", inputName: "suitabilityName", placeholder: "Ny situasjon, f.eks. Turmat", buttonLabel: "Legg til", escapeHtml })}
+    `,
+    escapeHtml,
+  });
 }
 
 function renderPlanModesSetup() {

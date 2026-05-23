@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   renderMealCardView,
   renderMealDetailView,
+  renderMealEditorView,
   renderMealsView,
 } from "../../src/render/meals.js";
 
@@ -69,8 +70,43 @@ function testMealDetailRender() {
   assert.match(html, /Åpne lenke/);
 }
 
+function testMealEditorRender() {
+  const html = renderMealEditorView({
+    isNew: false,
+    meal: {
+      id: "pasta",
+      title: "Pasta <god>",
+      description: "Rask",
+      recipeUrl: "example.com",
+      categories: ["pasta"],
+      suitability: ["weekday"],
+      kidFriendly: true,
+      favorite: false,
+      excludeFromSuggestions: true,
+      leftovers: "likely",
+      prepTime: "quick",
+      minDaysBetween: 14,
+    },
+    baseServings: 4,
+    ingredients: [{ amount: "1", unit: "pakke", name: "Pasta" }],
+    steps: ["Kok"],
+    categoryEntries: [["pasta", "Pasta"]],
+    suitabilityEntries: [["weekday", "Hverdag"]],
+    prepTimeEntries: [["quick", "Rask"]],
+    unitOptions: ["", "pakke"],
+    escapeHtml,
+  });
+  assert.match(html, /Rediger Pasta &lt;god&gt;/);
+  assert.match(html, /name="kidFriendly" checked/);
+  assert.match(html, /name="excludeFromSuggestions" checked/);
+  assert.match(html, /data-ingredient-row="0"/);
+  assert.match(html, /data-step-row="0"/);
+  assert.match(html, /Slett/);
+}
+
 testMealCardRender();
 testMealsViewRender();
 testMealDetailRender();
+testMealEditorRender();
 
 console.log("meals render tests ok");
