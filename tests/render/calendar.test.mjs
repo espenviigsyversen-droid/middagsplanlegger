@@ -22,7 +22,7 @@ function testCalendarRender() {
 
   const page = renderCalendarView({ weekRangeLabel: "18. mai - 24. mai", todayCardHtml: today, weekRowsHtml: row, isCurrentWeek: true, escapeHtml });
   assert.match(page, /Middagsplan/);
-  assert.match(page, /Resten av uken/);
+  assert.match(page, /Hele uken/);
 }
 
 testCalendarRender();

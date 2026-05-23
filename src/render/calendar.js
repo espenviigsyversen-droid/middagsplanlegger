@@ -64,7 +64,7 @@ export function renderCalendarView(options = {}) {
     isCurrentWeek = false,
     escapeHtml = String,
   } = options;
-  const listHeading = isCurrentWeek ? "Resten av uken" : "Alle dager";
+  const listHeading = isCurrentWeek ? "Hele uken" : "Alle dager";
 
   return `
     <section class="view-header calendar-view-header">

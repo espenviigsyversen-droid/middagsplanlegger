@@ -97,7 +97,10 @@ export function renderMealsView(options = {}) {
     </section>
     ${editorHtml}
     <section class="filters">
-      <input class="input" data-filter="query" value="${escapeHtml(filters.query || "")}" placeholder="Søk etter oppskrift eller ingrediens">
+      <div class="meal-search-wrap">
+        <input class="input meal-search-input" data-filter="query" data-meal-search value="${escapeHtml(filters.query || "")}" placeholder="Søk etter oppskrift eller ingrediens" autocomplete="off">
+        <button class="search-clear-btn meal-search-clear" type="button" data-clear-meal-search style="${filters.query ? "" : "display: none;"}" aria-label="Tøm søk">×</button>
+      </div>
       <div class="filter-row">
         <select class="select" data-filter="category">
           <option value="all">Alle kategorier</option>
@@ -116,7 +119,7 @@ export function renderMealsView(options = {}) {
         <option value="alpha" ${filters.sort === "alpha" ? "selected" : ""}>Alfabetisk liste</option>
       </select>
     </section>
-    <section class="meal-list">
+    <section class="meal-list" data-meal-list>
       ${grouped
         ? renderGroupedMealsView({ meals, categoryLabels, suitabilityLabels, escapeHtml })
         : meals.map((meal) => renderMealCardView({ meal, categoryLabels, suitabilityLabels, escapeHtml })).join("")}

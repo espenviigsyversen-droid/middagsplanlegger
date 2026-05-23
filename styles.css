@@ -955,6 +955,19 @@ button {
   margin-bottom: 14px;
 }
 
+.meal-search-wrap {
+  position: relative;
+}
+
+.meal-search-input {
+  padding-right: 44px;
+}
+
+.meal-search-clear {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .filter-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

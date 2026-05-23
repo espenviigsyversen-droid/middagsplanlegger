@@ -48,6 +48,8 @@ function testMealsViewRender() {
     escapeHtml,
   });
   assert.match(html, /value="pas"/);
+  assert.match(html, /data-clear-meal-search/);
+  assert.match(html, /data-meal-list/);
   assert.match(html, /Ny oppskrift/);
   assert.match(html, /Pasta/);
 }

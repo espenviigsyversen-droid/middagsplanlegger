@@ -319,7 +319,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v79";
+const APP_VERSION = "v80";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -335,12 +335,30 @@ let mealPickerScrollY = 0;
 
 function loadState() {
   const saved = localStorage.getItem("middagsapp-state");
-  if (!saved) return normalizeState(structuredClone(defaultState));
+  if (!saved) return normalizeStateForStartup(structuredClone(defaultState));
   try {
-    return normalizeState({ ...structuredClone(defaultState), ...JSON.parse(saved) });
+    return normalizeStateForStartup({ ...structuredClone(defaultState), ...JSON.parse(saved) });
   } catch {
-    return structuredClone(defaultState);
+    return normalizeStateForStartup(structuredClone(defaultState));
   }
+}
+
+function normalizeStateForStartup(nextState) {
+  const normalized = normalizeState(nextState);
+  return {
+    ...normalized,
+    activeView: "calendar",
+    previousView: "calendar",
+    selectedMealId: null,
+    selectedRecipeContext: null,
+    editingMealId: null,
+    editingShoppingItemId: null,
+    keepScreenAwake: false,
+    mealPicker: { open: false, dayIndex: null, query: "" },
+    generateModal: { open: false, selectedDays: [] },
+    shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
+    toast: null,
+  };
 }
 
 function normalizeState(nextState) {
@@ -1358,7 +1376,6 @@ function renderCalendar() {
     : "";
 
   const weekRows = dayNames.map((day, index) => {
-    if (isCurrentWeek && index === todayIndex) return "";
     const meal = getMeal(plan[index]);
     const isPlannedMeal = dayPlansMeal(dayModes[index]);
     const title = !isPlannedMeal
@@ -1522,6 +1539,12 @@ function renderMeals() {
     addIconHtml: icon("add"),
     escapeHtml,
   });
+}
+
+function renderMealListOnly() {
+  const meals = filteredMeals();
+  const grouped = state.filters.sort === "category" && !state.filters.query.trim() && state.filters.category === "all" && state.filters.flag === "all";
+  return grouped ? renderGroupedMeals(meals) : meals.map(renderMealCard).join("");
 }
 
 function filteredMeals() {
@@ -2377,6 +2400,35 @@ function addMealToNextFreeDay(mealId) {
   if (freeIndex >= 0) updatePlanDay(freeIndex, mealId);
 }
 
+function bindMealResultActions(root = app) {
+  root.querySelectorAll("[data-view-meal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const dayIndex = button.dataset.recipeDay;
+      setState({
+        activeView: "recipe",
+        previousView: state.activeView === "recipe" ? state.previousView : state.activeView,
+        selectedMealId: button.dataset.viewMeal,
+        selectedRecipeContext: dayIndex !== undefined ? { weekKey: getWeekKey(), dayIndex: Number(dayIndex) } : null,
+        editingMealId: null,
+      });
+    });
+  });
+
+  root.querySelectorAll("[data-edit-meal]").forEach((button) => {
+    button.addEventListener("click", () => setState({
+      activeView: "meals",
+      previousView: "meals",
+      editingMealId: button.dataset.editMeal,
+      draftMeal: null,
+      draftIngredients: null,
+      draftSteps: null,
+      selectedMealId: null,
+      selectedRecipeContext: null,
+      keepScreenAwake: false,
+    }));
+  });
+}
+
 function bindEvents() {
   app.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => setState({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false }));
@@ -2515,6 +2567,38 @@ function bindEvents() {
     field.addEventListener("change", () => {
       state.filters = { ...state.filters, [field.dataset.filter]: field.value };
       setState({ filters: state.filters });
+    });
+  });
+
+  const mealSearchInput = app.querySelector("[data-meal-search]");
+  if (mealSearchInput) {
+    mealSearchInput.addEventListener("input", () => {
+      state.filters = { ...state.filters, query: mealSearchInput.value };
+      const clearButton = app.querySelector("[data-clear-meal-search]");
+      if (clearButton) clearButton.style.display = state.filters.query ? "" : "none";
+      const mealList = app.querySelector("[data-meal-list]");
+      if (mealList) {
+        mealList.innerHTML = renderMealListOnly();
+        bindMealResultActions(mealList);
+      }
+    });
+  }
+
+  app.querySelectorAll("[data-clear-meal-search]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.filters = { ...state.filters, query: "" };
+      const input = app.querySelector("[data-meal-search]");
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+      button.style.display = "none";
+      const mealList = app.querySelector("[data-meal-list]");
+      if (mealList) {
+        mealList.innerHTML = renderMealListOnly();
+        bindMealResultActions(mealList);
+      }
+      saveState();
     });
   });
 
