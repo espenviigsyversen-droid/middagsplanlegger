@@ -45,7 +45,28 @@ import {
   syncedScopesForPatch as getSyncedScopesForPatch,
 } from "./src/sync/state.js";
 import { initFirebaseClient } from "./src/sync/firebase.js";
+import {
+  buildMealsRemotePatch,
+  buildWeeksRemotePatch,
+  maxClientUpdatedAtFromDocs,
+} from "./src/sync/reads.js";
 import { buildRemoteWrites } from "./src/sync/writes.js";
+import {
+  renderCategoryChipsView,
+  renderGroupedMealsView,
+  renderMealBadgesView,
+  renderMealCardView,
+  renderMealDetailView,
+  renderMealsView,
+  renderSuitabilityChipsView,
+} from "./src/render/meals.js";
+import {
+  renderShoppingItemEditorView,
+  renderShoppingItemView,
+  renderShoppingListView,
+  renderShoppingReviewModalView,
+  renderShoppingSuggestionsView,
+} from "./src/render/shopping.js";
 
 const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
 const categoryLabels = {
@@ -280,7 +301,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v74";
+const APP_VERSION = "v77";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -878,22 +899,15 @@ function formatDate(date) {
 }
 
 function categoryChips(meal) {
-  const labels = getCategoryLabels();
-  return meal.categories.map((cat) => `<span class="chip ${cat}">${escapeHtml(labels[cat] || cat)}</span>`).join("");
+  return renderCategoryChipsView(meal, getCategoryLabels(), escapeHtml);
 }
 
 function mealBadges(meal) {
-  const badges = [];
-  if (meal.favorite) badges.push('<span class="chip">Favoritt</span>');
-  if (meal.kidFriendly) badges.push('<span class="chip">Barnevennlig</span>');
-  if (meal.leftovers === "likely") badges.push('<span class="chip">Rester</span>');
-  if (meal.prepTime === "quick") badges.push('<span class="chip">Rask</span>');
-  return badges.join("");
+  return renderMealBadgesView(meal);
 }
 
 function suitabilityChips(meal) {
-  const labels = getSuitabilityLabels();
-  return (meal.suitability || []).map((key) => `<span class="chip">${escapeHtml(labels[key] || key)}</span>`).join("");
+  return renderSuitabilityChipsView(meal, getSuitabilityLabels(), escapeHtml);
 }
 
 function suitabilityText(meal) {
@@ -1119,14 +1133,8 @@ function shoppingSuggestions(query, limit = 8) {
 
 function renderShoppingSuggestions(query) {
   const suggestions = shoppingSuggestions(query);
-  if (!suggestions.length) return "";
   const categories = Object.fromEntries(getStoreCategories().map((cat) => [cat.key, cat.label]));
-  return suggestions.map((item) => `
-    <button type="button" class="shopping-suggestion" data-shopping-suggestion="${escapeHtml(item.name)}">
-      <span>${escapeHtml(item.name)}</span>
-      <small>${escapeHtml(categories[item.category] || "Annet")}</small>
-    </button>
-  `).join("");
+  return renderShoppingSuggestionsView({ suggestions, categories, escapeHtml });
 }
 
 function addShoppingItemByName(name) {
@@ -1240,67 +1248,9 @@ function renderGenerateModal() {
 
 function renderShoppingReviewModal() {
   const review = state.shoppingReview || { groups: [], selectedItemIds: [] };
-  if (!review.open) return "";
-
-  const selectedIds = new Set(review.selectedItemIds || []);
   const selectedCount = shoppingReviewItemCount(review);
   const totalCount = (review.groups || []).reduce((sum, group) => sum + (group.items || []).length, 0);
-  const confirmText = selectedCount === 1 ? "Legg til 1 vare" : `Legg til ${selectedCount} varer`;
-  const bodyClass = review.mode === "week" ? "shopping-review-body week-review" : "shopping-review-body";
-
-  const groups = (review.groups || []).map((group) => {
-    const items = group.items || [];
-    const groupSelectedCount = items.filter((item) => selectedIds.has(item.id)).length;
-    return `
-      <section class="shopping-review-group">
-        <div class="shopping-review-group-head">
-          <div>
-            <h4>${escapeHtml(group.title)}</h4>
-            ${group.subtitle ? `<p>${escapeHtml(group.subtitle)}</p>` : ""}
-          </div>
-          <div class="shopping-review-group-actions">
-            <button class="text-action quiet" type="button" data-review-group-select="${escapeHtml(group.id)}">Alle</button>
-            <button class="text-action quiet" type="button" data-review-group-clear="${escapeHtml(group.id)}">Ingen</button>
-          </div>
-        </div>
-        <div class="shopping-review-items">
-          ${items.map((item) => {
-            const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
-            const checked = selectedIds.has(item.id);
-            return `
-              <label class="shopping-review-item${checked ? " selected" : ""}">
-                <input class="shopping-checkbox" type="checkbox" data-review-item="${escapeHtml(item.id)}" ${checked ? "checked" : ""}>
-                <span class="shopping-review-item-name">${escapeHtml(item.name)}</span>
-                ${amountText ? `<span class="shopping-review-item-amount">${escapeHtml(amountText)}</span>` : ""}
-              </label>
-            `;
-          }).join("")}
-        </div>
-        <p class="shopping-review-group-count">${groupSelectedCount} av ${items.length} valgt</p>
-      </section>
-    `;
-  }).join("");
-
-  return `
-    <div class="modal-backdrop shopping-review-backdrop" data-close-shopping-review>
-      <div class="modal shopping-review-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <div>
-            <h3>${escapeHtml(review.title || "Se over varer")}</h3>
-            <p class="modal-subtitle">${selectedCount} av ${totalCount} varer er valgt</p>
-          </div>
-          <button class="modal-close" type="button" data-close-shopping-review aria-label="Lukk">×</button>
-        </div>
-        <div class="${bodyClass}">
-          ${groups || `<div class="shopping-empty">Ingen varer å legge til.</div>`}
-        </div>
-        <div class="modal-footer">
-          <button class="button secondary compact" type="button" data-close-shopping-review>Avbryt</button>
-          <button class="button${selectedCount ? "" : " disabled"}" type="button" data-confirm-shopping-review ${selectedCount ? "" : "disabled"}>${confirmText}</button>
-        </div>
-      </div>
-    </div>
-  `;
+  return renderShoppingReviewModalView({ review, selectedCount, totalCount, escapeHtml });
 }
 
 function renderToast() {
@@ -1309,115 +1259,29 @@ function renderToast() {
 }
 
 function renderShoppingItem(item) {
-  const amountText = [item.amount, item.unit].filter(Boolean).join(" ");
-  return `
-    <div class="shopping-item${item.checked ? " done" : ""}">
-      <label class="shopping-item-main">
-        <input type="checkbox" class="shopping-checkbox" data-toggle-item="${escapeHtml(item.id)}" ${item.checked ? "checked" : ""} aria-label="Huk av ${escapeHtml(item.name)}">
-        <span class="shopping-item-name">${escapeHtml(item.name)}</span>
-        ${amountText ? `<span class="shopping-item-amount">${escapeHtml(amountText)}</span>` : `<span></span>`}
-        <button type="button" class="shopping-item-menu" data-edit-shopping-item="${escapeHtml(item.id)}" aria-label="Rediger ${escapeHtml(item.name)}">⋯</button>
-      </label>
-    </div>
-  `;
+  return renderShoppingItemView(item, escapeHtml);
 }
 
 function renderShoppingItemEditor() {
   const item = (state.shoppingList?.items || []).find((entry) => entry.id === state.editingShoppingItemId);
-  if (!item) return "";
-  const unitOptionsHtml = getUnitOptions().map((unit) => `<option value="${escapeHtml(unit)}"${item.unit === unit ? " selected" : ""}>${escapeHtml(unit || "Ingen")}</option>`).join("");
-  const categoryOptions = getStoreCategories().map((cat) => `<option value="${escapeHtml(cat.key)}"${item.category === cat.key ? " selected" : ""}>${escapeHtml(cat.label)}</option>`).join("");
-  return `
-    <div class="modal-backdrop" data-close-shopping-editor>
-      <form class="modal shopping-editor-modal" data-shopping-editor-form role="dialog" aria-modal="true">
-        <div class="modal-header">
-          <h3>Vare</h3>
-          <button class="modal-close" type="button" data-close-shopping-editor aria-label="Lukk">×</button>
-        </div>
-        <div class="shopping-editor-fields">
-          <label class="setting">
-            <span>Navn</span>
-            <input class="input" name="name" value="${escapeHtml(item.name)}" autocomplete="off">
-          </label>
-          <div class="shopping-editor-grid">
-            <label class="setting">
-              <span>Mengde</span>
-              <input class="input" name="amount" value="${escapeHtml(item.amount)}" inputmode="decimal">
-            </label>
-            <label class="setting">
-              <span>Enhet</span>
-              <select class="select" name="unit">${unitOptionsHtml}</select>
-            </label>
-          </div>
-          <label class="setting">
-            <span>Butikkategori</span>
-            <select class="select" name="category">${categoryOptions}</select>
-          </label>
-        </div>
-        <div class="modal-footer shopping-editor-actions">
-          <button class="button danger compact" type="button" data-delete-shopping-item="${escapeHtml(item.id)}">Slett</button>
-          <button class="button secondary compact" type="button" data-close-shopping-editor>Avbryt</button>
-          <button class="button compact" type="submit">Lagre</button>
-        </div>
-      </form>
-    </div>
-  `;
+  return renderShoppingItemEditorView({
+    item,
+    unitOptions: getUnitOptions(),
+    storeCategories: getStoreCategories(),
+    escapeHtml,
+  });
 }
 
 function renderShoppingList() {
   const items = state.shoppingList?.items || [];
-  const allCategories = getStoreCategories();
-  const unchecked = items.filter((i) => !i.checked);
-  const checked = items.filter((i) => i.checked);
-
-  const categoryGroups = allCategories
-    .map((cat) => ({ ...cat, items: unchecked.filter((i) => i.category === cat.key) }))
-    .filter((cat) => cat.items.length > 0);
-
-  const isEmpty = items.length === 0;
-  const modal = `${state.generateModal?.open ? renderGenerateModal() : ""}${state.editingShoppingItemId ? renderShoppingItemEditor() : ""}`;
-
-  return `
-    ${modal}
-    <section class="view-header meals-view-header">
-      <div class="meals-header-row">
-        <h2 class="view-title">Handleliste</h2>
-        <button class="button compact" data-generate-list>${icon("shopping")} Generer fra plan</button>
-      </div>
-      ${!isEmpty ? `<p class="view-lead">${unchecked.length} gjenstår · ${checked.length} avhuket</p>` : ""}
-    </section>
-
-    <div class="shopping-add-wrap">
-      <form class="shopping-add-form" data-add-custom-form>
-        <input class="input" name="item" placeholder="Legg til vare manuelt..." autocomplete="off" data-shopping-input>
-        <button class="button secondary compact" type="submit">Legg til</button>
-      </form>
-      <div class="shopping-suggestions" data-shopping-suggestions></div>
-    </div>
-
-    ${isEmpty ? `
-      <div class="shopping-empty">
-        <p>Ingen varer lagt til ennå.</p>
-        <p>Trykk <strong>Generer fra plan</strong> for å velge hvilke dager du skal handle for.</p>
-      </div>
-    ` : `
-      <div class="shopping-list">
-        ${categoryGroups.map((cat) => `
-          <div class="shopping-category">
-            <h4 class="shopping-category-heading">${escapeHtml(cat.label)}</h4>
-            ${cat.items.map(renderShoppingItem).join("")}
-          </div>
-        `).join("")}
-        ${checked.length > 0 ? `
-          <div class="shopping-category checked-section">
-            <h4 class="shopping-category-heading">I kurven (${checked.length})</h4>
-            ${checked.map(renderShoppingItem).join("")}
-            <button type="button" class="shopping-clear-btn text-action quiet" data-clear-checked>Fjern avhukede varer</button>
-          </div>
-        ` : ""}
-      </div>
-    `}
-  `;
+  return renderShoppingListView({
+    items,
+    storeCategories: getStoreCategories(),
+    generateModalHtml: state.generateModal?.open ? renderGenerateModal() : "",
+    itemEditorHtml: state.editingShoppingItemId ? renderShoppingItemEditor() : "",
+    shoppingIconHtml: icon("shopping"),
+    escapeHtml,
+  });
 }
 
 function renderShell(viewHtml) {
@@ -1710,38 +1574,18 @@ function suggestionReason(meal, dayIndex) {
 function renderMeals() {
   const meals = filteredMeals();
   const grouped = state.filters.sort === "category" && !state.filters.query.trim() && state.filters.category === "all" && state.filters.flag === "all";
-  return `
-    <section class="view-header meals-view-header">
-      <div class="meals-header-row">
-        <h2 class="view-title">Oppskrifter</h2>
-        <button class="button compact" data-edit-meal="new">${icon("add")} Ny oppskrift</button>
-      </div>
-    </section>
-    ${state.editingMealId ? renderMealEditor() : ""}
-    <section class="filters">
-      <input class="input" data-filter="query" value="${escapeHtml(state.filters.query)}" placeholder="Søk etter oppskrift eller ingrediens">
-      <div class="filter-row">
-        <select class="select" data-filter="category">
-          <option value="all">Alle kategorier</option>
-          ${categoryEntries().map(([value, label]) => `<option value="${value}" ${state.filters.category === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-        </select>
-        <select class="select" data-filter="flag">
-          <option value="all">Alle typer</option>
-          <option value="favorite" ${state.filters.flag === "favorite" ? "selected" : ""}>Favoritter</option>
-          <option value="kid" ${state.filters.flag === "kid" ? "selected" : ""}>Barnevennlig</option>
-          <option value="quick" ${state.filters.flag === "quick" ? "selected" : ""}>Rask middag</option>
-          ${suitabilityEntries().map(([value, label]) => `<option value="suitability:${value}" ${state.filters.flag === `suitability:${value}` ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-        </select>
-      </div>
-      <select class="select" data-filter="sort">
-        <option value="category" ${state.filters.sort === "category" ? "selected" : ""}>Gruppert etter kategori</option>
-        <option value="alpha" ${state.filters.sort === "alpha" ? "selected" : ""}>Alfabetisk liste</option>
-      </select>
-    </section>
-    <section class="meal-list">
-      ${grouped ? renderGroupedMeals(meals) : meals.map(renderMealCard).join("")}
-    </section>
-  `;
+  return renderMealsView({
+    meals,
+    filters: state.filters,
+    grouped,
+    categoryEntries: categoryEntries(),
+    categoryLabels: getCategoryLabels(),
+    suitabilityEntries: suitabilityEntries(),
+    suitabilityLabels: getSuitabilityLabels(),
+    editorHtml: state.editingMealId ? renderMealEditor() : "",
+    addIconHtml: icon("add"),
+    escapeHtml,
+  });
 }
 
 function filteredMeals() {
@@ -1759,42 +1603,21 @@ function filteredMeals() {
 }
 
 function renderGroupedMeals(meals) {
-  const labels = getCategoryLabels();
-  const groups = Object.entries(labels)
-    .map(([category, label]) => ({
-      category,
-      label,
-      meals: meals.filter((meal) => meal.categories[0] === category),
-    }))
-    .filter((group) => group.meals.length);
-
-  const other = meals.filter((meal) => !meal.categories[0] || !labels[meal.categories[0]]);
-  if (other.length) groups.push({ category: "annet", label: "Annet", meals: other });
-
-  return groups.map((group) => `
-    <section class="meal-group">
-      <h3>${escapeHtml(group.label)}</h3>
-      <div class="meal-list">${group.meals.map(renderMealCard).join("")}</div>
-    </section>
-  `).join("");
+  return renderGroupedMealsView({
+    meals,
+    categoryLabels: getCategoryLabels(),
+    suitabilityLabels: getSuitabilityLabels(),
+    escapeHtml,
+  });
 }
 
 function renderMealCard(meal) {
-  return `
-    <article class="meal-card">
-      <div class="meal-card-head">
-        <div>
-          <p class="meal-title">${escapeHtml(meal.title)}</p>
-          <p class="meal-description">${escapeHtml(meal.description)}</p>
-        </div>
-        <div class="card-actions">
-          <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}">Oppskrift</button>
-          <button class="button ghost compact" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
-        </div>
-      </div>
-      <div class="chips">${categoryChips(meal)}${mealBadges(meal)}${suitabilityChips(meal)}${meal.excludeFromSuggestions ? '<span class="chip chip-recipe-only">Kun oppskrift</span>' : ""}</div>
-    </article>
-  `;
+  return renderMealCardView({
+    meal,
+    categoryLabels: getCategoryLabels(),
+    suitabilityLabels: getSuitabilityLabels(),
+    escapeHtml,
+  });
 }
 
 function renderMealDetail() {
@@ -1814,52 +1637,21 @@ function renderMealDetail() {
       : `Justert til ${displayServings} personer fra en oppskrift på ${baseServings}.`
     : `Oppskriften er lagt inn for ${baseServings} personer.`;
 
-  return `
-    <section class="recipe-detail">
-      <div class="recipe-hero">
-        <div>
-          <h2>${escapeHtml(meal.title)}</h2>
-          <p>${escapeHtml(meal.description || "Ingen beskrivelse er lagt inn ennå.")}</p>
-          <p class="recipe-serving-note">${escapeHtml(servingText)}</p>
-        </div>
-        <div class="recipe-actions">
-          <button class="button ghost" data-close-meal>Tilbake</button>
-          <button class="button secondary wake-button ${state.keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${wakeText}</button>
-          ${meal.recipeUrl ? `<a class="button secondary" href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
-          <button class="button secondary" data-add-to-shopping="${escapeHtml(meal.id)}">${icon("shopping")} Legg i handleliste</button>
-          <button class="button secondary" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
-        </div>
-      </div>
-      ${wakeSupported ? "" : '<p class="wake-note">Denne nettleseren støtter ikke å holde skjermen våken fra web-appen.</p>'}
-      <div class="recipe-columns">
-        <section class="recipe-section">
-          <h3>Ingredienser</h3>
-          ${ingredients.length ? `
-            <div class="ingredient-table">
-              ${ingredients.map((item) => `
-                <div class="ingredient-row">
-                  <span>${escapeHtml([scaleAmount(item.amount, baseServings, targetServings), item.unit].filter(Boolean).join(" "))}</span>
-                  <strong>${escapeHtml(item.name)}</strong>
-                </div>
-              `).join("")}
-            </div>
-          ` : '<p class="empty-recipe-text">Ingen ingredienser er lagt inn ennå.</p>'}
-        </section>
-        <section class="recipe-section">
-          <h3>Fremgangsmåte</h3>
-          <div class="step-list">
-            ${steps.map((step, index) => `
-              <article class="recipe-step">
-                <div class="recipe-step-number">${index + 1}</div>
-                <p>${escapeHtml(step)}</p>
-              </article>
-            `).join("")}
-          </div>
-          <p class="recipe-note">${escapeHtml(leftoversText)}</p>
-        </section>
-      </div>
-    </section>
-  `;
+  return renderMealDetailView({
+    meal,
+    steps,
+    ingredients,
+    wakeSupported,
+    keepScreenAwake: state.keepScreenAwake,
+    wakeText,
+    leftoversText,
+    servingText,
+    baseServings,
+    targetServings,
+    shoppingIconHtml: icon("shopping"),
+    scaleAmount,
+    escapeHtml,
+  });
 }
 
 function emptyMeal() {
@@ -3648,15 +3440,12 @@ function startSplitSyncListeners(onSnapshot) {
       }
       return;
     }
-    const maxClientUpdatedAt = Math.max(...snapshot.docs.map((mealDoc) => Number(mealDoc.data().clientUpdatedAt || 0)));
+    const maxClientUpdatedAt = maxClientUpdatedAtFromDocs(snapshot.docs);
     if (remoteDocumentIsOlder("meals", maxClientUpdatedAt)) return;
-    const meals = snapshot.docs.map((mealDoc) => {
-      const { clientUpdatedAt, updatedAt, ...meal } = mealDoc.data();
-      return { ...meal, id: meal.id || mealDoc.id };
-    });
+    const remotePatch = buildMealsRemotePatch(snapshot.docs);
     applyingRemoteState = true;
     pendingRemoteScopes.delete("meals");
-    applyRemoteStatePatch({ meals, clientUpdatedAt: maxClientUpdatedAt, pendingLocalSync: pendingRemoteScopes.size > 0 });
+    applyRemoteStatePatch({ ...remotePatch, pendingLocalSync: pendingRemoteScopes.size > 0 });
     applyingRemoteState = false;
     markSynced();
   }, markSyncFailed);
@@ -3667,26 +3456,24 @@ function startSplitSyncListeners(onSnapshot) {
       scheduleRemoteSave(0, ["weeks"]);
       return;
     }
-    const maxClientUpdatedAt = Math.max(...snapshot.docs.map((weekDoc) => Number(weekDoc.data().clientUpdatedAt || 0)));
+    const maxClientUpdatedAt = maxClientUpdatedAtFromDocs(snapshot.docs);
     if (remoteDocumentIsOlder("weeks", maxClientUpdatedAt)) return;
-    const plansByWeek = { ...(state.plansByWeek || {}) };
-    const lockedPlansByWeek = { ...(state.lockedPlansByWeek || {}) };
-    const dayTypesByWeek = { ...(state.dayTypesByWeek || {}) };
-    const servingsByWeek = { ...(state.servingsByWeek || {}) };
-    const dayModesByWeek = { ...(state.dayModesByWeek || {}) };
-    const dayNotesByWeek = { ...(state.dayNotesByWeek || {}) };
-    snapshot.docs.forEach((weekDoc) => {
-      const data = weekDoc.data();
-      plansByWeek[weekDoc.id] = { ...emptyWeekPlan(), ...(data.plan || {}) };
-      lockedPlansByWeek[weekDoc.id] = { ...emptyWeekLocks(), ...(data.lockedPlan || {}) };
-      dayTypesByWeek[weekDoc.id] = { ...emptyWeekDayTypes(), ...(data.dayTypes || {}) };
-      servingsByWeek[weekDoc.id] = { ...emptyWeekServings(state.family.familySize), ...(data.servings || {}) };
-      dayModesByWeek[weekDoc.id] = { ...emptyWeekDayModes(), ...(data.dayModes || {}) };
-      dayNotesByWeek[weekDoc.id] = { ...emptyWeekDayNotes(), ...(data.dayNotes || {}) };
+    const remotePatch = buildWeeksRemotePatch({
+      docs: snapshot.docs,
+      currentState: state,
+      familySize: state.family.familySize,
+      defaults: {
+        emptyWeekPlan,
+        emptyWeekLocks,
+        emptyWeekDayTypes,
+        emptyWeekServings,
+        emptyWeekDayModes,
+        emptyWeekDayNotes,
+      },
     });
     applyingRemoteState = true;
     pendingRemoteScopes.delete("weeks");
-    applyRemoteStatePatch({ plansByWeek, lockedPlansByWeek, dayTypesByWeek, servingsByWeek, dayModesByWeek, dayNotesByWeek, clientUpdatedAt: maxClientUpdatedAt, pendingLocalSync: pendingRemoteScopes.size > 0 });
+    applyRemoteStatePatch({ ...remotePatch, pendingLocalSync: pendingRemoteScopes.size > 0 });
     applyingRemoteState = false;
     markSynced();
   }, markSyncFailed);
