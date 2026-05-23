@@ -22,6 +22,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i setup-rendering: kjør `node tests/render/setup.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
+- Synk-writes skal beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
 - Appen skal starte nye økter på kalender/forside, selv om siste lagrede view var noe annet.
 

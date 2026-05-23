@@ -320,7 +320,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v81";
+const APP_VERSION = "v82";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -3152,12 +3152,14 @@ async function initFirebaseSync() {
       onAuthReady: async ({ refs, firestoreApi }) => {
         Object.assign(remoteRefs, refs);
         window.middagsplanDoc = firestoreApi.doc;
+        window.middagsplanGetDoc = firestoreApi.getDoc;
+        window.middagsplanGetDocs = firestoreApi.getDocs;
         window.middagsplanSetDoc = firestoreApi.setDoc;
         window.middagsplanDeleteDoc = firestoreApi.deleteDoc;
         window.middagsplanServerTimestamp = firestoreApi.serverTimestamp;
         syncStatus = "Synk aktiv";
         render();
-        await migrateLegacyStateIfNeeded(firestoreApi.getDoc);
+        await migrateLegacyStateIfNeeded(firestoreApi.getDoc, firestoreApi.getDocs);
         startSplitSyncListeners(firestoreApi.onSnapshot);
       },
     });
@@ -3167,7 +3169,23 @@ async function initFirebaseSync() {
   }
 }
 
-async function migrateLegacyStateIfNeeded(getDoc) {
+async function remoteSplitStateExists(getDoc, getDocs) {
+  const documentSnapshots = await Promise.all([
+    getDoc(remoteRefs.profile),
+    getDoc(remoteRefs.preferences),
+    getDoc(remoteRefs.metadata),
+    getDoc(remoteRefs.shopping),
+  ]);
+  if (documentSnapshots.some((snapshot) => snapshot.exists())) return true;
+  if (!getDocs) return false;
+  const collectionSnapshots = await Promise.all([
+    getDocs(remoteRefs.meals),
+    getDocs(remoteRefs.weeks),
+  ]);
+  return collectionSnapshots.some((snapshot) => !snapshot.empty);
+}
+
+async function migrateLegacyStateIfNeeded(getDoc, getDocs) {
   const profileSnapshot = await getDoc(remoteRefs.profile);
   if (profileSnapshot.exists()) return;
   const legacySnapshot = await getDoc(remoteRefs.legacyState);
@@ -3175,14 +3193,18 @@ async function migrateLegacyStateIfNeeded(getDoc) {
     applyingRemoteState = true;
     applyRemotePayload(legacySnapshot.data());
     applyingRemoteState = false;
+    await saveAllRemoteState({ allowMissingRemoteWrite: true });
+    return;
   }
-  await saveAllRemoteState();
+  if (!(await remoteSplitStateExists(getDoc, getDocs))) {
+    await saveAllRemoteState({ allowMissingRemoteWrite: true });
+  }
 }
 
 function startSplitSyncListeners(onSnapshot) {
   onSnapshot(remoteRefs.profile, (snapshot) => {
     if (!snapshot.exists()) {
-      scheduleRemoteSave(0, ["profile"]);
+      if (state.pendingLocalSync) scheduleRemoteSave(0, ["profile"]);
       return;
     }
     applyRemoteDocument("profile", snapshot.data(), (data) => {
@@ -3192,7 +3214,7 @@ function startSplitSyncListeners(onSnapshot) {
 
   onSnapshot(remoteRefs.metadata, (snapshot) => {
     if (!snapshot.exists()) {
-      scheduleRemoteSave(0, ["metadata"]);
+      if (state.pendingLocalSync) scheduleRemoteSave(0, ["metadata"]);
       return;
     }
     applyRemoteDocument("metadata", snapshot.data(), (data) => {
@@ -3202,7 +3224,7 @@ function startSplitSyncListeners(onSnapshot) {
 
   onSnapshot(remoteRefs.preferences, (snapshot) => {
     if (!snapshot.exists()) {
-      scheduleRemoteSave(0, ["preferences"]);
+      if (state.pendingLocalSync) scheduleRemoteSave(0, ["preferences"]);
       return;
     }
     applyRemoteDocument("preferences", snapshot.data(), (data) => {
@@ -3212,7 +3234,7 @@ function startSplitSyncListeners(onSnapshot) {
 
   onSnapshot(remoteRefs.shopping, (snapshot) => {
     if (!snapshot.exists()) {
-      scheduleRemoteSave(0, ["shopping"]);
+      if (state.pendingLocalSync) scheduleRemoteSave(0, ["shopping"]);
       return;
     }
     applyRemoteDocument("shopping", snapshot.data(), (data) => {
@@ -3222,7 +3244,7 @@ function startSplitSyncListeners(onSnapshot) {
 
   onSnapshot(remoteRefs.meals, (snapshot) => {
     if (snapshot.empty) {
-      if ((state.meals || []).length) {
+      if (state.pendingLocalSync && (state.meals || []).length) {
         scheduleRemoteSave(0, ["meals"]);
       } else {
         pendingRemoteScopes.delete("meals");
@@ -3243,8 +3265,10 @@ function startSplitSyncListeners(onSnapshot) {
 
   onSnapshot(remoteRefs.weeks, (snapshot) => {
     if (snapshot.empty) {
-      pendingWeekKeys.add(getWeekKey());
-      scheduleRemoteSave(0, ["weeks"]);
+      if (state.pendingLocalSync) {
+        pendingWeekKeys.add(getWeekKey());
+        scheduleRemoteSave(0, ["weeks"]);
+      }
       return;
     }
     const maxClientUpdatedAt = maxClientUpdatedAtFromDocs(snapshot.docs);
@@ -3302,9 +3326,9 @@ function markSyncFailed() {
   render();
 }
 
-async function saveAllRemoteState() {
+async function saveAllRemoteState(options = {}) {
   Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks", "shopping"]);
+  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks", "shopping"], options);
 }
 
 function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks", "shopping"]) {
@@ -3329,21 +3353,24 @@ function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "me
   }, delay);
 }
 
-async function saveRemoteScopes(scopes) {
+async function saveRemoteScopes(scopes, options = {}) {
   const uniqueScopes = [...new Set(scopes)];
   const updatedAt = window.middagsplanServerTimestamp();
   const clientUpdatedAt = state.clientUpdatedAt || Date.now();
-  const writes = buildRemoteWrites({
+  const writes = await buildRemoteWrites({
     scopes: uniqueScopes,
     state,
     refs: remoteRefs,
     api: {
       doc: window.middagsplanDoc,
+      getDoc: window.middagsplanGetDoc,
       setDoc: window.middagsplanSetDoc,
       deleteDoc: window.middagsplanDeleteDoc,
     },
     updatedAt,
     clientUpdatedAt,
+    pendingLocalSync: state.pendingLocalSync,
+    allowMissingRemoteWrite: Boolean(options.allowMissingRemoteWrite),
     pendingMealDeleteIds,
     pendingWeekKeys,
     currentWeekKey: getWeekKey(),

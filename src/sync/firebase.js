@@ -25,12 +25,12 @@ export async function initFirebaseClient(options = {}) {
   ]);
 
   const { getAuth, onAuthStateChanged, signInAnonymously } = authModule;
-  const { getFirestore, doc, collection, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp } = firestoreModule;
+  const { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestamp } = firestoreModule;
   const firebaseApp = initializeApp(firebaseConfig);
   const auth = getAuth(firebaseApp);
   const db = getFirestore(firebaseApp);
   const refs = createRemoteRefs({ db, doc, collection, familyId });
-  const firestoreApi = { doc, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp };
+  const firestoreApi = { doc, getDoc, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestamp };
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) return;
