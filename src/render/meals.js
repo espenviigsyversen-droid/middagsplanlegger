@@ -74,6 +74,28 @@ export function renderGroupedMealsView(options = {}) {
   `).join("");
 }
 
+export function renderMealSearchSuggestionsView(options = {}) {
+  const {
+    meals = [],
+    query = "",
+    categoryLabels = {},
+    escapeHtml = String,
+  } = options;
+
+  if (!query.trim() || !meals.length) return "";
+
+  return meals.slice(0, 5).map((meal) => {
+    const category = meal.categories?.[0];
+    const categoryLabel = category ? categoryLabels[category] || category : "";
+    return `
+      <button class="meal-search-suggestion" type="button" data-view-meal="${escapeHtml(meal.id)}">
+        <span>${escapeHtml(meal.title)}</span>
+        ${categoryLabel ? `<small>${escapeHtml(categoryLabel)}</small>` : ""}
+      </button>
+    `;
+  }).join("");
+}
+
 export function renderMealsView(options = {}) {
   const {
     meals = [],
@@ -100,6 +122,9 @@ export function renderMealsView(options = {}) {
       <div class="meal-search-wrap">
         <input class="input meal-search-input" data-filter="query" data-meal-search value="${escapeHtml(filters.query || "")}" placeholder="Søk etter oppskrift eller ingrediens" autocomplete="off">
         <button class="search-clear-btn meal-search-clear" type="button" data-clear-meal-search style="${filters.query ? "" : "display: none;"}" aria-label="Tøm søk">×</button>
+      </div>
+      <div class="meal-search-suggestions" data-meal-search-suggestions>
+        ${renderMealSearchSuggestionsView({ meals, query: filters.query || "", categoryLabels, escapeHtml })}
       </div>
       <div class="filter-row">
         <select class="select" data-filter="category">

@@ -63,6 +63,7 @@ import {
   renderMealCardView,
   renderMealDetailView,
   renderMealEditorView,
+  renderMealSearchSuggestionsView,
   renderMealsView,
   renderIngredientEditorRowView,
   renderStepEditorRowView,
@@ -319,7 +320,7 @@ const defaultState = {
   mealPicker: { open: false, dayIndex: null, query: "" },
 };
 
-const APP_VERSION = "v80";
+const APP_VERSION = "v81";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -1547,6 +1548,15 @@ function renderMealListOnly() {
   return grouped ? renderGroupedMeals(meals) : meals.map(renderMealCard).join("");
 }
 
+function renderMealSearchSuggestionsOnly() {
+  return renderMealSearchSuggestionsView({
+    meals: filteredMeals(),
+    query: state.filters.query,
+    categoryLabels: getCategoryLabels(),
+    escapeHtml,
+  });
+}
+
 function filteredMeals() {
   const query = state.filters.query.trim().toLowerCase();
   return sortedMeals().filter((meal) => {
@@ -2581,6 +2591,11 @@ function bindEvents() {
         mealList.innerHTML = renderMealListOnly();
         bindMealResultActions(mealList);
       }
+      const suggestions = app.querySelector("[data-meal-search-suggestions]");
+      if (suggestions) {
+        suggestions.innerHTML = renderMealSearchSuggestionsOnly();
+        bindMealResultActions(suggestions);
+      }
     });
   }
 
@@ -2598,6 +2613,8 @@ function bindEvents() {
         mealList.innerHTML = renderMealListOnly();
         bindMealResultActions(mealList);
       }
+      const suggestions = app.querySelector("[data-meal-search-suggestions]");
+      if (suggestions) suggestions.innerHTML = "";
       saveState();
     });
   });

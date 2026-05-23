@@ -3,6 +3,7 @@ import {
   renderMealCardView,
   renderMealDetailView,
   renderMealEditorView,
+  renderMealSearchSuggestionsView,
   renderMealsView,
 } from "../../src/render/meals.js";
 
@@ -50,8 +51,25 @@ function testMealsViewRender() {
   assert.match(html, /value="pas"/);
   assert.match(html, /data-clear-meal-search/);
   assert.match(html, /data-meal-list/);
+  assert.match(html, /data-meal-search-suggestions/);
+  assert.match(html, /meal-search-suggestion/);
   assert.match(html, /Ny oppskrift/);
   assert.match(html, /Pasta/);
+}
+
+function testMealSearchSuggestionsRender() {
+  const html = renderMealSearchSuggestionsView({
+    meals: [
+      { id: "nachos", title: "Nachos", categories: ["meat"] },
+      { id: "kyllingnachos", title: "Kyllingnachos", categories: ["chicken"] },
+    ],
+    query: "nach",
+    categoryLabels: { meat: "Kjøtt", chicken: "Kylling" },
+    escapeHtml,
+  });
+  assert.match(html, /data-view-meal="nachos"/);
+  assert.match(html, /Nachos/);
+  assert.match(html, /Kjøtt/);
 }
 
 function testMealDetailRender() {
@@ -108,6 +126,7 @@ function testMealEditorRender() {
 
 testMealCardRender();
 testMealsViewRender();
+testMealSearchSuggestionsRender();
 testMealDetailRender();
 testMealEditorRender();
 

@@ -968,6 +968,47 @@ button {
   transform: translateY(-50%);
 }
 
+.meal-search-suggestions {
+  display: grid;
+  gap: 4px;
+}
+
+.meal-search-suggestions:empty {
+  display: none;
+}
+
+.meal-search-suggestion {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 18px rgba(75, 57, 34, 0.06);
+  font: inherit;
+  text-align: left;
+}
+
+.meal-search-suggestion span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meal-search-suggestion small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.meal-search-suggestion:active {
+  transform: translateY(1px);
+}
+
 .filter-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
