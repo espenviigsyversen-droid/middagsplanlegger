@@ -825,12 +825,12 @@ button {
 }
 
 .planner-day-card {
-  min-height: 72px;
+  min-height: 66px;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -855,18 +855,18 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .planner-card-day,
 .planner-card-date,
-.planner-card-main h3,
+.planner-meal-line,
 .planner-card-main p {
   margin: 0;
 }
 
 .planner-card-day {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 850;
   letter-spacing: 0;
   text-transform: none;
@@ -881,19 +881,26 @@ button {
   min-width: 0;
 }
 
-.planner-card-main h3 {
-  overflow: hidden;
-  font-size: 1rem;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.planner-meal-line {
+  color: var(--text);
+  font-size: 0.96rem;
+  font-weight: 550;
+  line-height: 1.24;
+  overflow-wrap: anywhere;
 }
 
-.planner-card-main p {
+.planner-meal-line small {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 450;
+}
+
+.planner-card-main p:not(.planner-meal-line) {
+  display: -webkit-box;
   overflow: hidden;
   line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .planner-lock-badge {
@@ -909,8 +916,8 @@ button {
 }
 
 .planner-refresh-btn {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   color: var(--brand-dark);
   font-size: 1.1rem;
 }
@@ -943,12 +950,12 @@ button {
   height: 20px;
 }
 
-.planner-recipe-btn {
-  min-width: 96px;
-}
-
+.planner-recipe-btn,
 .planner-change-btn {
-  min-width: 76px;
+  width: 34px;
+  height: 34px;
+  color: var(--brand-dark);
+  font-size: 1.1rem;
 }
 
 .planner-sheet-backdrop {
@@ -2250,14 +2257,14 @@ button {
   }
 
   .planner-day-card {
-    min-height: 76px;
-    grid-template-columns: 64px minmax(0, 1fr) auto;
+    min-height: 62px;
+    grid-template-columns: 70px minmax(0, 1fr) auto;
     gap: 8px;
-    padding: 11px 10px;
+    padding: 9px 10px;
   }
 
   .planner-card-actions {
-    gap: 6px;
+    gap: 4px;
   }
 
   .planner-lock-badge,
@@ -2266,13 +2273,22 @@ button {
   }
 
   .planner-refresh-btn {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
 
   .planner-change-btn {
-    min-width: 68px;
-    padding-inline: 10px;
+    width: 32px;
+    height: 32px;
+    padding-inline: 0;
+  }
+
+  .planner-meal-line {
+    font-size: 0.95rem;
+  }
+
+  .planner-meal-line small {
+    font-size: 0.86rem;
   }
 
   .toolbar,
