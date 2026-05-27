@@ -31,8 +31,10 @@ function testPlannerRender() {
   assert.match(row, /Låst/);
   assert.match(row, /data-open-meal-picker="0"/);
   assert.match(row, /Oppskrift/);
+  assert.match(row, /Bytt/);
   assert.match(row, /data-edit-planner-day="0"/);
   assert.match(row, /data-random-day="0"/);
+  assert.match(row, /4 personer/);
 
   const daySheet = renderPlannerDaySheetView({
     open: true,

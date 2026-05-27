@@ -9,46 +9,36 @@ export function renderPlannerRowView(options = {}) {
     summaryText = "",
     mealId = "",
     mealTitle = "",
-    typeLabel = "",
     planModeLabel = "",
     dayServings = 1,
     escapeHtml = String,
   } = options;
 
   const hasMeal = Boolean(mealId && mealTitle && isPlannedMeal);
-  const statusText = isPlannedMeal
-    ? [typeLabel, `${dayServings} personer`].filter(Boolean).join(" · ")
-    : planModeLabel;
+  const statusText = isPlannedMeal ? `${dayServings} personer` : planModeLabel;
   const title = hasMeal ? mealTitle : summaryTitle;
-  const text = hasMeal ? summaryText : summaryText;
+  const text = hasMeal ? statusText : summaryText;
 
   return `
     <article class="planner-day-card ${hasMeal ? "planned" : "empty"} ${locked ? "locked" : ""}" data-edit-planner-day="${index}">
-      <div class="planner-card-top">
-        <div>
-          <p class="planner-card-day">${escapeHtml(day)}</p>
-          <p class="planner-card-date">${escapeHtml(dateLabel)}</p>
-        </div>
-        <div class="planner-card-actions">
-          ${locked ? '<span class="planner-lock-badge">Låst</span>' : ""}
-          ${isPlannedMeal ? `<button class="icon-button planner-refresh-btn" type="button" data-random-day="${index}" ${locked ? "disabled" : ""} aria-label="Foreslå ny middag">↻</button>` : ""}
-        </div>
+      <div class="planner-card-dateblock">
+        <p class="planner-card-day">${escapeHtml(day)}</p>
+        <p class="planner-card-date">${escapeHtml(dateLabel)}</p>
       </div>
       <div class="planner-card-main">
         ${hasMeal ? `
-          <p class="planner-card-meta">${escapeHtml(statusText)}</p>
           <h3>${escapeHtml(title)}</h3>
           <p>${escapeHtml(text)}</p>
         ` : `
-          <div class="planner-empty-target">
-            <strong>${escapeHtml(title)}</strong>
-            <span>${escapeHtml(text)}</span>
-          </div>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(text)}</p>
         `}
       </div>
-      <div class="planner-card-footer">
-        ${hasMeal ? `<button class="button secondary compact" type="button" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
-        <button class="button ghost compact" type="button" data-open-meal-picker="${index}">${hasMeal ? "Bytt" : "Legg til"}</button>
+      <div class="planner-card-actions">
+        ${locked ? '<span class="planner-lock-badge">Låst</span>' : ""}
+        ${hasMeal ? `<button class="button secondary compact planner-recipe-btn" type="button" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
+        ${isPlannedMeal ? `<button class="icon-button planner-refresh-btn" type="button" data-random-day="${index}" ${locked ? "disabled" : ""} aria-label="Foreslå ny middag">↻</button>` : ""}
+        <button class="button ghost compact planner-change-btn" type="button" data-open-meal-picker="${index}">${hasMeal ? "Bytt" : "Legg til"}</button>
       </div>
     </article>
   `;

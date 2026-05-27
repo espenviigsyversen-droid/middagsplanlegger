@@ -815,67 +815,66 @@ button {
 
 .planner-overview-list {
   display: grid;
-  gap: 10px;
+  gap: 0;
   padding-bottom: 84px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .planner-day-card {
+  min-height: 72px;
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   cursor: pointer;
 }
 
+.planner-day-card:last-child {
+  border-bottom: 0;
+}
+
 .planner-day-card.empty {
-  background: #fbfaf7;
+  background: var(--surface);
 }
 
 .planner-day-card.locked {
-  border-color: rgba(35, 123, 93, 0.32);
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 
-.planner-card-top,
-.planner-card-footer,
 .planner-card-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.planner-card-actions {
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .planner-card-day,
 .planner-card-date,
-.planner-card-meta,
 .planner-card-main h3,
 .planner-card-main p {
   margin: 0;
 }
 
 .planner-card-day {
-  font-size: 0.78rem;
+  font-size: 0.92rem;
   font-weight: 850;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .planner-card-date,
-.planner-card-meta,
 .planner-card-main p {
   color: var(--muted);
-}
-
-.planner-card-meta {
-  font-size: 0.82rem;
-  font-weight: 750;
-  margin-bottom: 4px;
 }
 
 .planner-card-main {
@@ -883,35 +882,25 @@ button {
 }
 
 .planner-card-main h3 {
-  font-size: 1.06rem;
+  overflow: hidden;
+  font-size: 1rem;
   line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .planner-card-main p {
-  line-height: 1.35;
-}
-
-.planner-empty-target {
-  min-height: 56px;
-  display: grid;
-  place-items: center;
-  gap: 3px;
-  padding: 12px;
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  text-align: center;
-  color: var(--muted);
-}
-
-.planner-empty-target strong {
-  color: var(--text);
+  overflow: hidden;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .planner-lock-badge {
-  min-height: 28px;
+  min-height: 26px;
   display: inline-flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 9px;
   border-radius: 999px;
   background: var(--brand);
   color: white;
@@ -920,8 +909,8 @@ button {
 }
 
 .planner-refresh-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   color: var(--brand-dark);
   font-size: 1.1rem;
 }
@@ -952,6 +941,14 @@ button {
 .planner-fab svg {
   width: 20px;
   height: 20px;
+}
+
+.planner-recipe-btn {
+  min-width: 96px;
+}
+
+.planner-change-btn {
+  min-width: 76px;
 }
 
 .planner-sheet-backdrop {
@@ -2249,19 +2246,33 @@ button {
   }
 
   .planner-overview-list {
-    gap: 12px;
+    gap: 0;
   }
 
   .planner-day-card {
-    padding: 16px;
+    min-height: 76px;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 11px 10px;
   }
 
-  .planner-card-footer {
-    justify-content: flex-start;
+  .planner-card-actions {
+    gap: 6px;
   }
 
-  .planner-card-footer .button {
-    flex: 1;
+  .planner-lock-badge,
+  .planner-recipe-btn {
+    display: none;
+  }
+
+  .planner-refresh-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .planner-change-btn {
+    min-width: 68px;
+    padding-inline: 10px;
   }
 
   .toolbar,
