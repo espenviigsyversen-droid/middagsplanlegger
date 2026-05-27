@@ -34,7 +34,7 @@ function testPlannerRender() {
   assert.match(row, /aria-label="Bytt middag"/);
   assert.match(row, /data-edit-planner-day="0"/);
   assert.match(row, /data-random-day="0"/);
-  assert.match(row, /4 personer/);
+  assert.doesNotMatch(row, /4 personer/);
 
   const emptyRow = renderPlannerRowView({
     day: "Tirsdag",

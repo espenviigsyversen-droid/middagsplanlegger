@@ -326,7 +326,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v89";
+const APP_VERSION = "v90";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -2381,9 +2381,10 @@ function plannedTooClose(meal, dayIndex, planOverride) {
   }));
 }
 
-function pickSuggestion(dayIndex, planOverride = currentPlan()) {
+function pickSuggestion(dayIndex, planOverride = currentPlan(), excludeMealIds = []) {
   const plan = planOverride;
   const used = new Set(Object.entries(plan).filter(([index]) => Number(index) !== dayIndex).map(([, mealId]) => mealId));
+  excludeMealIds.filter(Boolean).forEach((mealId) => used.add(mealId));
   const day = dayNames[dayIndex];
   const wantsQuick = state.family.quickDays.includes(day);
   const dayType = currentDayTypes()[dayIndex] || "weekday";
@@ -2403,6 +2404,13 @@ function pickSuggestion(dayIndex, planOverride = currentPlan()) {
 
 function updatePlanDay(dayIndex, mealId) {
   setCurrentPlan({ ...currentPlan(), [dayIndex]: mealId });
+}
+
+function refreshPlanDay(dayIndex) {
+  const plan = currentPlan();
+  const currentMealId = plan[dayIndex] || "";
+  const nextMealId = pickSuggestion(dayIndex, plan, [currentMealId]);
+  if (nextMealId) updatePlanDay(dayIndex, nextMealId);
 }
 
 function togglePlanLock(dayIndex) {
@@ -2604,7 +2612,7 @@ function bindEvents() {
   app.querySelectorAll("[data-random-day]").forEach((button) => {
     button.addEventListener("click", () => {
       const dayIndex = Number(button.dataset.randomDay);
-      if (!currentLocks()[dayIndex]) updatePlanDay(dayIndex, pickSuggestion(dayIndex));
+      if (!currentLocks()[dayIndex]) refreshPlanDay(dayIndex);
     });
   });
 

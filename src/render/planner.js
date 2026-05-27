@@ -10,15 +10,13 @@ export function renderPlannerRowView(options = {}) {
     mealId = "",
     mealTitle = "",
     planModeLabel = "",
-    dayServings = 1,
     escapeHtml = String,
   } = options;
 
   const hasMeal = Boolean(mealId && mealTitle && isPlannedMeal);
-  const statusText = isPlannedMeal ? `${dayServings} personer` : planModeLabel;
   const title = hasMeal ? mealTitle : summaryTitle;
   const isEmptyHomeDay = isPlannedMeal && !hasMeal;
-  const text = isEmptyHomeDay ? "" : hasMeal ? statusText : summaryText;
+  const text = isEmptyHomeDay ? "" : hasMeal ? "" : summaryText;
 
   return `
     <article class="planner-day-card ${hasMeal ? "planned" : "empty"} ${locked ? "locked" : ""}" data-edit-planner-day="${index}">
@@ -28,7 +26,7 @@ export function renderPlannerRowView(options = {}) {
       </div>
       <div class="planner-card-main">
         ${hasMeal ? `
-          <p class="planner-meal-line"><span>${escapeHtml(title)}</span><small> - ${escapeHtml(text)}</small></p>
+          <p class="planner-meal-line"><span>${escapeHtml(title)}</span></p>
         ` : `
           <p class="planner-meal-line"><span>${escapeHtml(title)}</span></p>
           ${text ? `<p>${escapeHtml(text)}</p>` : ""}
