@@ -18,28 +18,19 @@ export function renderSuitabilityChipsView(meal, labels = {}, escapeHtml = Strin
 export function renderMealCardView(options = {}) {
   const {
     meal,
-    categoryLabels = {},
-    suitabilityLabels = {},
     escapeHtml = String,
   } = options;
 
   return `
-    <article class="meal-card">
+    <article class="meal-card compact-meal-card" data-view-meal="${escapeHtml(meal.id)}">
       <div class="meal-card-head">
-        <div>
+        <div class="meal-card-main">
           <p class="meal-title">${escapeHtml(meal.title)}</p>
-          <p class="meal-description">${escapeHtml(meal.description)}</p>
         </div>
         <div class="card-actions">
-          <button class="button secondary compact" data-view-meal="${escapeHtml(meal.id)}">Oppskrift</button>
-          <button class="button ghost compact" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
+          <button class="icon-button meal-open-btn" type="button" data-view-meal="${escapeHtml(meal.id)}" aria-label="Åpne oppskrift">□</button>
+          <button class="icon-button meal-edit-btn" type="button" data-edit-meal="${escapeHtml(meal.id)}" aria-label="Rediger oppskrift">✎</button>
         </div>
-      </div>
-      <div class="chips">
-        ${renderCategoryChipsView(meal, categoryLabels, escapeHtml)}
-        ${renderMealBadgesView(meal)}
-        ${renderSuitabilityChipsView(meal, suitabilityLabels, escapeHtml)}
-        ${meal.excludeFromSuggestions ? '<span class="chip chip-recipe-only">Kun oppskrift</span>' : ""}
       </div>
     </article>
   `;

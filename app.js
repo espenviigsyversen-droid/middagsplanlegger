@@ -324,7 +324,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v85";
+const APP_VERSION = "v87";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -2445,7 +2445,8 @@ function addMealToNextFreeDay(mealId) {
 
 function bindMealResultActions(root = app) {
   root.querySelectorAll("[data-view-meal]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      if (button.tagName === "BUTTON") event.stopPropagation();
       const dayIndex = button.dataset.recipeDay;
       setState({
         activeView: "recipe",
@@ -2458,17 +2459,20 @@ function bindMealResultActions(root = app) {
   });
 
   root.querySelectorAll("[data-edit-meal]").forEach((button) => {
-    button.addEventListener("click", () => setState({
-      activeView: "meals",
-      previousView: "meals",
-      editingMealId: button.dataset.editMeal,
-      draftMeal: null,
-      draftIngredients: null,
-      draftSteps: null,
-      selectedMealId: null,
-      selectedRecipeContext: null,
-      keepScreenAwake: false,
-    }));
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setState({
+        activeView: "meals",
+        previousView: "meals",
+        editingMealId: button.dataset.editMeal,
+        draftMeal: null,
+        draftIngredients: null,
+        draftSteps: null,
+        selectedMealId: null,
+        selectedRecipeContext: null,
+        keepScreenAwake: false,
+      });
+    });
   });
 }
 
@@ -2692,7 +2696,10 @@ function bindEvents() {
   });
 
   app.querySelectorAll("[data-edit-meal]").forEach((button) => {
-    button.addEventListener("click", () => setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false }));
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
+    });
   });
 
   app.querySelectorAll("[data-cancel-edit]").forEach((button) => {
@@ -2701,14 +2708,17 @@ function bindEvents() {
 
   app.querySelectorAll("[data-view-meal]").forEach((button) => {
     const dayIndex = button.dataset.recipeDay === undefined ? null : Number(button.dataset.recipeDay);
-    button.addEventListener("click", () => setState({
-      activeView: "recipe",
-      previousView: state.activeView === "recipe" ? state.previousView : state.activeView,
-      selectedMealId: button.dataset.viewMeal,
-      selectedRecipeContext: dayIndex === null ? null : { weekKey: getWeekKey(), dayIndex },
-      editingMealId: null,
-      keepScreenAwake: false,
-    }));
+    button.addEventListener("click", (event) => {
+      if (button.tagName === "BUTTON") event.stopPropagation();
+      setState({
+        activeView: "recipe",
+        previousView: state.activeView === "recipe" ? state.previousView : state.activeView,
+        selectedMealId: button.dataset.viewMeal,
+        selectedRecipeContext: dayIndex === null ? null : { weekKey: getWeekKey(), dayIndex },
+        editingMealId: null,
+        keepScreenAwake: false,
+      });
+    });
   });
 
   app.querySelector("[data-close-meal]")?.addEventListener("click", () => {

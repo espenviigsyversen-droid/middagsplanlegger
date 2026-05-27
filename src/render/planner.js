@@ -158,7 +158,6 @@ export function renderPlannerView(options = {}) {
   const {
     weekRangeLabel = "",
     rowsHtml = "",
-    advisorSummary = "",
     daySheetHtml = "",
     actionSheetHtml = "",
     addIconHtml = "",
@@ -182,10 +181,6 @@ export function renderPlannerView(options = {}) {
       <span class="action-sep">·</span>
       <button class="text-action quiet" data-clear-week>Tøm uke</button>
     </div>
-    <details class="advisor-panel compact-advisor">
-      <summary>Rådgiverstatus</summary>
-      <p class="status-note">${escapeHtml(advisorSummary)}</p>
-    </details>
     <section class="planner-overview-list">${rowsHtml}</section>
     <button class="planner-fab" type="button" data-open-planner-actions>${addIconHtml}<span>Foreslå uke</span></button>
     ${daySheetHtml}

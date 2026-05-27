@@ -76,14 +76,13 @@ function testPlannerRender() {
   const page = renderPlannerView({
     weekRangeLabel: "18. mai - 24. mai",
     rowsHtml: row,
-    advisorSummary: "Alt ok",
     daySheetHtml: daySheet,
     actionSheetHtml: actionSheet,
     addIconHtml: "<svg></svg>",
     escapeHtml,
   });
   assert.match(page, /Planlegg uken/);
-  assert.match(page, /Rådgiverstatus/);
+  assert.doesNotMatch(page, /Rådgiverstatus/);
   assert.match(page, /Foreslå uke/);
   assert.match(page, /planner-fab/);
 }

@@ -428,8 +428,9 @@ button {
 
 .meal-title {
   margin: 0;
-  font-weight: 800;
-  line-height: 1.25;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .meal-description {
@@ -1118,16 +1119,25 @@ button {
 }
 
 .meal-card {
-  padding: 14px;
-  display: grid;
-  gap: 10px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .meal-card-head {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  align-items: flex-start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.compact-meal-card {
+  cursor: pointer;
+}
+
+.meal-card-main {
+  min-width: 0;
 }
 
 .card-actions {
@@ -1141,8 +1151,15 @@ button {
 }
 
 .card-actions .icon-button {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
+  color: var(--brand-dark);
+  font-size: 1rem;
+}
+
+.meal-open-btn,
+.meal-edit-btn {
+  background: var(--surface-strong);
 }
 
 .meta-line {
@@ -1236,7 +1253,7 @@ button {
 
 .meal-group {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* ── Handleliste ────────────────────────────────────────────── */
@@ -2206,6 +2223,16 @@ button {
 
   .card-actions {
     max-width: none;
+  }
+
+  .meal-card-head {
+    min-height: 56px;
+    padding: 9px 10px;
+  }
+
+  .card-actions .icon-button {
+    width: 32px;
+    height: 32px;
   }
 
   .view-header {

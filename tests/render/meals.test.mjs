@@ -33,8 +33,11 @@ function testMealCardRender() {
     escapeHtml,
   });
   assert.match(html, /Pasta &lt;god&gt;/);
-  assert.match(html, /Favoritt/);
-  assert.match(html, /Kun oppskrift/);
+  assert.match(html, /aria-label="Åpne oppskrift"/);
+  assert.match(html, /aria-label="Rediger oppskrift"/);
+  assert.doesNotMatch(html, /Favoritt/);
+  assert.doesNotMatch(html, /Kun oppskrift/);
+  assert.doesNotMatch(html, /Rask/);
 }
 
 function testMealsViewRender() {
