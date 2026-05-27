@@ -70,6 +70,8 @@ import {
   renderSuitabilityChipsView,
 } from "./src/render/meals.js";
 import {
+  renderPlannerActionSheetView,
+  renderPlannerDaySheetView,
   renderPlannerRowView,
   renderPlannerView,
 } from "./src/render/planner.js";
@@ -318,9 +320,11 @@ const defaultState = {
   dayModesByWeek: {},
   dayNotesByWeek: {},
   mealPicker: { open: false, dayIndex: null, query: "" },
+  plannerDaySheet: { open: false, dayIndex: null },
+  plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v82";
+const APP_VERSION = "v83";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -356,6 +360,8 @@ function normalizeStateForStartup(nextState) {
     editingShoppingItemId: null,
     keepScreenAwake: false,
     mealPicker: { open: false, dayIndex: null, query: "" },
+    plannerDaySheet: { open: false, dayIndex: null },
+    plannerActionsOpen: false,
     generateModal: { open: false, selectedDays: [] },
     shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
     toast: null,
@@ -428,6 +434,8 @@ function normalizeState(nextState) {
     nextState.dayNotesByWeek[currentWeekKey] = emptyWeekDayNotes();
   }
   nextState.mealPicker = { open: false, dayIndex: null, query: "" };
+  nextState.plannerDaySheet = nextState.plannerDaySheet || { open: false, dayIndex: null };
+  nextState.plannerActionsOpen = Boolean(nextState.plannerActionsOpen);
   nextState.shoppingReview = { open: false, mode: null, title: "", groups: [], selectedItemIds: [] };
   nextState.toast = null;
   nextState.plan = undefined;
@@ -1440,6 +1448,8 @@ function renderPlanner() {
   const servings = currentServings();
   const dayModes = currentDayModes();
   const dayNotes = currentDayNotes();
+  const openDayIndex = state.plannerDaySheet?.open ? state.plannerDaySheet.dayIndex : null;
+  let daySheetHtml = "";
   const rows = dayNames.map((day, index) => {
     const mealId = plan[index] || "";
     const meal = getMeal(mealId);
@@ -1456,7 +1466,7 @@ function renderPlanner() {
     const summaryText = !isPlannedMeal
       ? (dayNote || "Legg inn hvor dere skal spise.")
       : meal ? (meal.description || suggestionReason(meal, index)) : "Velg en middag eller trykk Forslag.";
-    return renderPlannerRowView({
+    const rowHtml = renderPlannerRowView({
       day,
       dateLabel: formatDate(dates[index]),
       index,
@@ -1471,17 +1481,40 @@ function renderPlanner() {
       mealId,
       mealTitle: meal?.title || "",
       typeLabel,
+      planModeLabel: planModeLabel(dayMode),
       reason: meal ? suggestionReason(meal, index) : "",
       planModeEntries: planModeEntries(),
       suitabilityEntries: suitabilityEntries(),
       escapeHtml,
     });
+    if (openDayIndex === index) {
+      daySheetHtml = renderPlannerDaySheetView({
+        open: true,
+        day,
+        dateLabel: formatDate(dates[index]),
+        index,
+        locked,
+        isPlannedMeal,
+        mealId,
+        mealTitle: meal?.title || "",
+        dayMode,
+        dayNote,
+        dayType,
+        dayServings,
+        planModeEntries: planModeEntries(),
+        suitabilityEntries: suitabilityEntries(),
+        escapeHtml,
+      });
+    }
+    return rowHtml;
   }).join("");
 
   return renderPlannerView({
     weekRangeLabel: weekRangeLabel(),
     rowsHtml: rows,
     advisorSummary: advisorSummary(),
+    daySheetHtml,
+    actionSheetHtml: renderPlannerActionSheetView({ open: Boolean(state.plannerActionsOpen), escapeHtml }),
     addIconHtml: icon("add"),
     escapeHtml,
   });
@@ -2546,8 +2579,37 @@ function bindEvents() {
     });
   });
 
-  app.querySelector("[data-fill-week]")?.addEventListener("click", fillWeek);
-  app.querySelector("[data-replace-open-week]")?.addEventListener("click", replaceOpenWeek);
+  app.querySelectorAll("[data-edit-planner-day]").forEach((card) => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button, a, input, select, textarea")) return;
+      setState({ plannerDaySheet: { open: true, dayIndex: Number(card.dataset.editPlannerDay) } });
+    });
+  });
+
+  app.querySelectorAll("[data-close-planner-day]").forEach((element) => {
+    element.addEventListener("click", () => setState({ plannerDaySheet: { open: false, dayIndex: null } }));
+  });
+
+  app.querySelectorAll("[data-open-planner-actions]").forEach((button) => {
+    button.addEventListener("click", () => setState({ plannerActionsOpen: true }));
+  });
+
+  app.querySelectorAll("[data-close-planner-actions]").forEach((element) => {
+    element.addEventListener("click", () => setState({ plannerActionsOpen: false }));
+  });
+
+  app.querySelectorAll("[data-fill-week]").forEach((button) => {
+    button.addEventListener("click", () => {
+      fillWeek();
+      if (state.plannerActionsOpen) setState({ plannerActionsOpen: false });
+    });
+  });
+  app.querySelectorAll("[data-replace-open-week]").forEach((button) => {
+    button.addEventListener("click", () => {
+      replaceOpenWeek();
+      if (state.plannerActionsOpen) setState({ plannerActionsOpen: false });
+    });
+  });
   app.querySelector("[data-clear-week]")?.addEventListener("click", () => {
     const confirmed = window.confirm("Er du sikker på at du vil tømme denne uken? Middager og låser for valgt uke fjernes.");
     if (!confirmed) return;
@@ -2559,6 +2621,8 @@ function bindEvents() {
       servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings(state.family.familySize) },
       dayModesByWeek: { ...(state.dayModesByWeek || {}), [weekKey]: emptyWeekDayModes() },
       dayNotesByWeek: { ...(state.dayNotesByWeek || {}), [weekKey]: emptyWeekDayNotes() },
+      plannerDaySheet: { open: false, dayIndex: null },
+      plannerActionsOpen: false,
     });
   });
 
@@ -2569,7 +2633,11 @@ function bindEvents() {
   app.querySelectorAll("[data-week]").forEach((button) => {
     button.addEventListener("click", () => {
       const value = Number(button.dataset.week);
-      setState({ weekOffset: value === 0 ? 0 : state.weekOffset + value });
+      setState({
+        weekOffset: value === 0 ? 0 : state.weekOffset + value,
+        plannerDaySheet: { open: false, dayIndex: null },
+        plannerActionsOpen: false,
+      });
     });
   });
 
