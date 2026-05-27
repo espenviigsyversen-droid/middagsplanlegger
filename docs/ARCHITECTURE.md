@@ -11,8 +11,14 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/domain/suggestions.js` inneholder rene poengregler for forslagmotoren, mens historikk og state fortsatt eies av `app.js`.
 - `src/domain/weeks.js` inneholder rene uke- og datofunksjoner som kan testes og videreutvikles uten UI.
 - `src/sync/firebase.js` laster Firebase SDK, logger inn anonymt og bygger Firestore-referanser.
+- `src/sync/reads.js` bygger lokale state-patches fra Firestore snapshots for oppskrifter og uker.
 - `src/sync/state.js` inneholder rene synkbeslutninger: hvilke scopes som er endret, hvilke uker som må lagres, og når remote data er eldre enn lokale endringer.
 - `src/sync/writes.js` bygger Firestore writes for de ulike sync-scopene uten å eie appens render- eller statusflyt.
+- `src/render/shopping.js` inneholder HTML-malene for handlelistevisningen, vareeditor, vareforslag og shopping review modal.
+- `src/render/meals.js` inneholder HTML-malene for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
+- `src/render/calendar.js` inneholder HTML-malene for kalender/forside.
+- `src/render/planner.js` inneholder HTML-malene for ukeplanleggeren, dagkort og planleggerens bottom sheets.
+- `src/render/setup.js` inneholder HTML-malene for setup og enkle metadata-sider.
 - `styles.css` inneholder alle visuelle regler.
 - `service-worker.js` håndterer cache, offline-støtte og oppdateringsflyt.
 - `manifest.json` definerer PWA-navn, farger og ikoner.
@@ -26,7 +32,7 @@ Appen har ingen bundler og ingen installerte npm-avhengigheter. Lokale moduler i
 Oppstart:
 
 1. `index.html` viser loading screen.
-2. `app.js` leser state fra `localStorage`.
+2. `app.js` leser state fra `localStorage` og starter nye økter på kalender/forside.
 3. `render()` tegner aktiv visning.
 4. Loading screen fjernes.
 5. Firebase anonym innlogging og Firestore-synk startes.
@@ -40,7 +46,8 @@ Oppstart:
 - `defaultState` og state-normalisering.
 - State/persistens: `loadState`, `saveState`, `setState`.
 - Importert domenelogikk: oppskrift/måltid fra `src/domain/meals.js`, mengder/handleliste fra `src/domain/shopping.js`, forslagpoeng fra `src/domain/suggestions.js` og uke/dato fra `src/domain/weeks.js`.
-- Importert synklogikk: Firebase-oppkobling fra `src/sync/firebase.js`, konflikt-/scopebeslutninger fra `src/sync/state.js` og write-bygging fra `src/sync/writes.js`.
+- Importert synklogikk: Firebase-oppkobling fra `src/sync/firebase.js`, snapshot-lesing fra `src/sync/reads.js`, konflikt-/scopebeslutninger fra `src/sync/state.js` og write-bygging fra `src/sync/writes.js`.
+- Importert renderlogikk: kalender-HTML fra `src/render/calendar.js`, oppskrifts-HTML fra `src/render/meals.js`, planlegger-HTML fra `src/render/planner.js`, setup-HTML fra `src/render/setup.js` og handleliste-HTML fra `src/render/shopping.js`.
 - Synk-hjelpere og Firestore payloads.
 - Rendering av modal- og komponentdeler.
 - Kalender, planlegger, oppskrifter, handleliste og oppsett.
@@ -64,9 +71,13 @@ Appen bruker en enkel global `state`. Endringer skjer hovedsakelig via `setState
 
 Dette er praktisk, men gjør funksjonen kritisk. Endringer her bør gjøres forsiktig.
 
+Oppskriftssøk oppdaterer trefflisten direkte mens brukeren skriver, uten full `setState` for hvert tastetrykk. På mobil vises de første treffene som kompakte, trykkbare forslag rett under søkefeltet, slik at de fortsatt er synlige når tastaturet dekker nedre del av skjermen. Full oppskriftsliste og filtre beholdes under forslagene.
+
+Planleggerfanen bruker en oversikt-først-modell: hovedflaten viser kompakte dagkort for uken, mens redigering av planstatus, middag, type, porsjoner og notat skjer i et bottom sheet for valgt dag. Ukeforslag åpnes fra en fast handlingsknapp og viser valg for å fylle ledige dager, bytte åpne forslag eller senere koble på nye middager fra eksterne kilder. Denne flyten bruker eksisterende uke- og planstate og endrer ikke Firestore-dataformatet.
+
 ## Synk
 
-Firebase Firestore brukes med anonym innlogging og en fast familie-ID. Firebase SDK-lasting, anonym innlogging og Firestore-referanser ligger i `src/sync/firebase.js`. `src/sync/writes.js` bygger writes for scopes som profile, shopping, meals og weeks. `app.js` eier fortsatt hvordan remote snapshots patches inn i lokal state, når lagring planlegges og hvordan UI-status vises.
+Firebase Firestore brukes med anonym innlogging og en fast familie-ID. Firebase SDK-lasting, anonym innlogging og Firestore-referanser ligger i `src/sync/firebase.js`. `src/sync/reads.js` bygger lokale patches fra remote snapshots, og `src/sync/writes.js` bygger writes for scopes som profile, shopping, meals og weeks. `app.js` eier fortsatt når snapshots skal aksepteres, når lagring planlegges og hvordan UI-status vises.
 
 Data er splittet i flere dokumenter/collections:
 
@@ -77,7 +88,7 @@ Data er splittet i flere dokumenter/collections:
 - meals
 - weeks
 
-Synkstrategien bruker `clientUpdatedAt`, `pendingRemoteScopes` og `pendingWeekKeys` for å unngå at eldre remote data overskriver lokale endringer.
+Synkstrategien bruker `clientUpdatedAt`, `pendingRemoteScopes` og `pendingWeekKeys` for å unngå at eldre remote data overskriver lokale endringer. Før Firestore-writes utføres, leser write-laget remote `clientUpdatedAt` for samme dokument. Hvis remote er nyere enn lokal state, droppes lokal write slik at en gammel device ikke kan overskrive nyere planlegging. Manglende remote dokumenter seedes bare ved eksplisitt førstegangsoppsett/migrering eller når lokal state faktisk har `pendingLocalSync`.
 
 ## PWA og oppdatering
 
@@ -102,7 +113,7 @@ Prioritert rekkefølge:
 5. Dele CSS i logiske områder.
 6. Legge til enkle tester for handleliste, mengder, ukeplan og synkbeskyttelse.
 
-Første testområder er etablert i `tests/domain/meals.test.mjs`, `tests/domain/shopping.test.mjs`, `tests/domain/suggestions.test.mjs`, `tests/domain/weeks.test.mjs`, `tests/sync/firebase.test.mjs`, `tests/sync/state.test.mjs` og `tests/sync/writes.test.mjs`.
+Første testområder er etablert i `tests/domain/meals.test.mjs`, `tests/domain/shopping.test.mjs`, `tests/domain/suggestions.test.mjs`, `tests/domain/weeks.test.mjs`, `tests/render/calendar.test.mjs`, `tests/render/meals.test.mjs`, `tests/render/planner.test.mjs`, `tests/render/setup.test.mjs`, `tests/render/shopping.test.mjs`, `tests/sync/firebase.test.mjs`, `tests/sync/reads.test.mjs`, `tests/sync/state.test.mjs` og `tests/sync/writes.test.mjs`.
 
 ## Foreslått fremtidig mappestruktur
 
@@ -117,8 +128,15 @@ src/
     weeks.js
   sync/
     firebase.js
+    reads.js
     state.js
     writes.js
+  render/
+    calendar.js
+    meals.js
+    planner.js
+    setup.js
+    shopping.js
   state.js
   sync.js
   render/

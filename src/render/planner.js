@@ -7,71 +7,159 @@ export function renderPlannerRowView(options = {}) {
     isPlannedMeal = true,
     summaryTitle = "",
     summaryText = "",
+    mealId = "",
+    mealTitle = "",
+    typeLabel = "",
+    planModeLabel = "",
+    dayServings = 1,
+    escapeHtml = String,
+  } = options;
+
+  const hasMeal = Boolean(mealId && mealTitle && isPlannedMeal);
+  const statusText = isPlannedMeal
+    ? [typeLabel, `${dayServings} personer`].filter(Boolean).join(" · ")
+    : planModeLabel;
+  const title = hasMeal ? mealTitle : summaryTitle;
+  const text = hasMeal ? summaryText : summaryText;
+
+  return `
+    <article class="planner-day-card ${hasMeal ? "planned" : "empty"} ${locked ? "locked" : ""}" data-edit-planner-day="${index}">
+      <div class="planner-card-top">
+        <div>
+          <p class="planner-card-day">${escapeHtml(day)}</p>
+          <p class="planner-card-date">${escapeHtml(dateLabel)}</p>
+        </div>
+        <div class="planner-card-actions">
+          ${locked ? '<span class="planner-lock-badge">Låst</span>' : ""}
+          ${isPlannedMeal ? `<button class="icon-button planner-refresh-btn" type="button" data-random-day="${index}" ${locked ? "disabled" : ""} aria-label="Foreslå ny middag">↻</button>` : ""}
+        </div>
+      </div>
+      <div class="planner-card-main">
+        ${hasMeal ? `
+          <p class="planner-card-meta">${escapeHtml(statusText)}</p>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(text)}</p>
+        ` : `
+          <div class="planner-empty-target">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(text)}</span>
+          </div>
+        `}
+      </div>
+      <div class="planner-card-footer">
+        ${hasMeal ? `<button class="button secondary compact" type="button" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
+        <button class="button ghost compact" type="button" data-open-meal-picker="${index}">${hasMeal ? "Bytt" : "Legg til"}</button>
+      </div>
+    </article>
+  `;
+}
+
+export function renderPlannerDaySheetView(options = {}) {
+  const {
+    open = false,
+    day = "",
+    dateLabel = "",
+    index = 0,
+    locked = false,
+    isPlannedMeal = true,
+    mealId = "",
+    mealTitle = "",
     dayMode = "home",
     dayNote = "",
     dayType = "weekday",
     dayServings = 1,
-    mealId = "",
-    mealTitle = "",
-    typeLabel = "",
-    reason = "",
     planModeEntries = [],
     suitabilityEntries = [],
     escapeHtml = String,
   } = options;
 
+  if (!open) return "";
+
   return `
-    <div class="planner-row">
-      <div class="planner-day-block">
-        <div>
-          <div class="planner-day">${escapeHtml(day)}</div>
-          <div class="day-date">${escapeHtml(dateLabel)}</div>
+    <div class="modal-backdrop planner-sheet-backdrop active" data-close-planner-day>
+      <section class="modal planner-sheet active" onclick="event.stopPropagation()" aria-label="Rediger ${escapeHtml(day)}">
+        <div class="modal-header">
+          <div>
+            <h3>${escapeHtml(day)}</h3>
+            <p class="modal-subtitle">${escapeHtml(dateLabel)}</p>
+          </div>
+          <button class="modal-close" type="button" data-close-planner-day aria-label="Lukk">×</button>
         </div>
-        <button class="toggle-chip ${locked ? "active" : ""}" data-lock-day="${index}">${locked ? "Låst" : "Åpen"}</button>
-      </div>
-      <div class="planner-summary ${!isPlannedMeal || mealId ? "" : "empty"}">
-        <strong>${escapeHtml(summaryTitle)}</strong>
-        <span>${escapeHtml(summaryText)}</span>
-      </div>
-      <div class="planner-meal-block">
-        <div class="planner-controls">
+        <div class="modal-body planner-sheet-body">
           <label class="planner-control">
             <span>Plan</span>
             <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${escapeHtml(day)}">
               ${planModeEntries.map(([value, option]) => `<option value="${escapeHtml(value)}" ${dayMode === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
             </select>
           </label>
-        ${!isPlannedMeal ? `
-          <label class="planner-control wide">
-            <span>Notat</span>
-            <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="F.eks. rester fra taco eller middag hos svigefar">
-          </label>
-        ` : `
-          <label class="planner-control">
-            <span>Type</span>
-            <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${escapeHtml(day)}">
-              ${suitabilityEntries.map(([value, label]) => `<option value="${escapeHtml(value)}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-            </select>
-          </label>
-          <label class="planner-control persons">
-            <span>Personer</span>
-            <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
-          </label>
-          <label class="planner-control wide">
-            <span>Middag</span>
-            <button class="select select-trigger-btn" type="button" data-open-meal-picker="${index}">
-              <span>${mealTitle ? escapeHtml(mealTitle) : "Velg middag..."}</span>
-              <span class="chevron">▾</span>
-            </button>
-          </label>
-          ${mealTitle ? `<p class="planner-reason">${escapeHtml(typeLabel)} · ${escapeHtml(reason)}</p>` : ""}
-        `}
+          ${!isPlannedMeal ? `
+            <label class="planner-control wide">
+              <span>Notat</span>
+              <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="F.eks. bursdag, rester eller middag ute">
+            </label>
+          ` : `
+            <label class="planner-control">
+              <span>Middag</span>
+              <button class="select select-trigger-btn" type="button" data-open-meal-picker="${index}">
+                <span>${mealTitle ? escapeHtml(mealTitle) : "Velg middag..."}</span>
+                <span class="chevron">▾</span>
+              </button>
+            </label>
+            <div class="planner-sheet-grid">
+              <label class="planner-control">
+                <span>Type</span>
+                <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${escapeHtml(day)}">
+                  ${suitabilityEntries.map(([value, label]) => `<option value="${escapeHtml(value)}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+                </select>
+              </label>
+              <label class="planner-control persons">
+                <span>Personer</span>
+                <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
+              </label>
+            </div>
+          `}
         </div>
-      </div>
-      <div class="planner-actions">
-        ${!isPlannedMeal ? "" : `<button class="button secondary compact" data-random-day="${index}" ${locked ? "disabled" : ""}>Forslag</button>`}
-        ${mealId && isPlannedMeal ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}">Oppskrift</button>` : ""}
-      </div>
+        <div class="modal-footer planner-sheet-footer">
+          <button class="button secondary" type="button" data-lock-day="${index}">${locked ? "Lås opp dagen" : "Lås dagen"}</button>
+          ${isPlannedMeal ? `<button class="button" type="button" data-random-day="${index}" ${locked ? "disabled" : ""}>Foreslå ny</button>` : ""}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+export function renderPlannerActionSheetView(options = {}) {
+  const { open = false } = options;
+  if (!open) return "";
+
+  return `
+    <div class="modal-backdrop planner-sheet-backdrop active" data-close-planner-actions>
+      <section class="modal planner-action-sheet active" onclick="event.stopPropagation()" aria-label="Foreslå ukemeny">
+        <div class="modal-header">
+          <div>
+            <h3>Foreslå ukemeny</h3>
+            <p class="modal-subtitle">Velg hvordan appen skal hjelpe med planleggingen.</p>
+          </div>
+          <button class="modal-close" type="button" data-close-planner-actions aria-label="Lukk">×</button>
+        </div>
+        <div class="planner-action-list">
+          <button class="planner-action-option" type="button" data-fill-week>
+            <strong>Bare fra mine middager</strong>
+            <span>Fyll ledige dager og behold det som allerede er valgt.</span>
+          </button>
+          <button class="planner-action-option" type="button" data-replace-open-week>
+            <strong>Foreslå hele åpne uken på nytt</strong>
+            <span>Bytter middager på dager som ikke er låst.</span>
+          </button>
+          <button class="planner-action-option disabled" type="button" disabled>
+            <strong>Oppdag nye middager</strong>
+            <span>Kommer senere når AI/nettoppskrifter kobles på.</span>
+          </button>
+        </div>
+        <div class="modal-footer planner-sheet-footer">
+          <button class="button secondary" type="button" data-close-planner-actions>Avbryt</button>
+        </div>
+      </section>
     </div>
   `;
 }
@@ -81,35 +169,36 @@ export function renderPlannerView(options = {}) {
     weekRangeLabel = "",
     rowsHtml = "",
     advisorSummary = "",
+    daySheetHtml = "",
+    actionSheetHtml = "",
     addIconHtml = "",
     escapeHtml = String,
   } = options;
 
   return `
-    <section class="view-header planner-view-header">
-      <h2 class="view-title">Planlegg uken</h2>
-      <div class="planner-top-bar">
+    <section class="view-header planner-view-header planner-overview-header">
+      <div>
+        <h2 class="view-title">Planlegg uken</h2>
         <div class="week-nav-compact">
           <button class="button secondary week-arrow-btn" data-week="-1" aria-label="Forrige uke">←</button>
           <span class="week-nav-label">${escapeHtml(weekRangeLabel)}</span>
           <button class="button secondary week-arrow-btn" data-week="1" aria-label="Neste uke">→</button>
         </div>
-        <button class="button compact" data-fill-week>${addIconHtml} Fyll ledige dager</button>
       </div>
-      <div class="planner-secondary-actions">
-        <button class="text-action" data-week="0">Denne uken</button>
-        <span class="action-sep">·</span>
-        <button class="text-action" data-replace-open-week>Bytt åpne forslag</button>
-        <span class="action-sep">·</span>
-        <button class="text-action quiet" data-clear-week>Tøm uke</button>
-      </div>
+      <button class="button compact" data-open-planner-actions>${addIconHtml} Foreslå uke</button>
     </section>
-    <details class="advisor-panel">
+    <div class="planner-secondary-actions">
+      <button class="text-action" data-week="0">Denne uken</button>
+      <span class="action-sep">·</span>
+      <button class="text-action quiet" data-clear-week>Tøm uke</button>
+    </div>
+    <details class="advisor-panel compact-advisor">
       <summary>Rådgiverstatus</summary>
       <p class="status-note">${escapeHtml(advisorSummary)}</p>
     </details>
-    <section class="panel">
-      <div class="planner-list">${rowsHtml}</div>
-    </section>
+    <section class="planner-overview-list">${rowsHtml}</section>
+    <button class="planner-fab" type="button" data-open-planner-actions>${addIconHtml}<span>Foreslå uke</span></button>
+    ${daySheetHtml}
+    ${actionSheetHtml}
   `;
 }

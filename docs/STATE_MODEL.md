@@ -28,6 +28,8 @@ UI-state:
 - `selectedRecipeContext`
 - `editingShoppingItemId`
 - `mealPicker`
+- `plannerDaySheet`
+- `plannerActionsOpen`
 - `shoppingReview`
 - `generateModal`
 - `toast`
@@ -51,6 +53,8 @@ Synkstatus:
 
 - `clientUpdatedAt`
 - `pendingLocalSync`
+
+`clientUpdatedAt` er klientens siste tidspunkt for endring av synket domenedata. `pendingLocalSync` betyr at lokal state har endringer som ennå ikke er bekreftet skrevet til Firestore. Vanlig oppstart skal ikke alene gjøre lokal cache til en remote write.
 
 ## Firestore-splitting
 
@@ -134,6 +138,8 @@ Varer slås sammen basert på navn og enhet. Mengder slås sammen når begge kan
 Noen felter er kun midlertidige UI-flyter og bør ikke regnes som domenedata:
 
 - `mealPicker`
+- `plannerDaySheet`
+- `plannerActionsOpen`
 - `shoppingReview`
 - `generateModal`
 - `toast`
@@ -146,3 +152,5 @@ Noen felter er kun midlertidige UI-flyter og bør ikke regnes som domenedata:
 - `setState` lagrer og rendrer umiddelbart. Vær forsiktig med hyppige input-events.
 - Remote patches bevarer noe UI-state, men ikke alt. Nye UI-felter bør vurderes i `applyRemoteStatePatch` og `applyRemotePayload`.
 - Nye synkede felter må legges til i `syncedStateKeys`, `syncPayload`, `syncedScopesForPatch` og remote save/listener-logikk.
+- Firestore-writes skal sjekke remote `clientUpdatedAt` før skriving. Hvis remote er nyere enn lokal `clientUpdatedAt`, skal lokal cache ikke overskrive remote.
+- Manglende remote dokumenter skal ikke automatisk seedes fra lokal cache ved vanlig oppstart. Det er bare tillatt ved eksplisitt migrering/førstegangsoppsett eller når appen har `pendingLocalSync`.

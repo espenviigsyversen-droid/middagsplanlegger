@@ -13,7 +13,13 @@ node tests/domain/meals.test.mjs
 node tests/domain/shopping.test.mjs
 node tests/domain/suggestions.test.mjs
 node tests/domain/weeks.test.mjs
+node tests/render/calendar.test.mjs
+node tests/render/meals.test.mjs
+node tests/render/planner.test.mjs
+node tests/render/setup.test.mjs
+node tests/render/shopping.test.mjs
 node tests/sync/firebase.test.mjs
+node tests/sync/reads.test.mjs
 node tests/sync/state.test.mjs
 node tests/sync/writes.test.mjs
 ```
