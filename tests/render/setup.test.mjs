@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { renderMetadataRowsView, renderSetupPageView, renderSetupView } from "../../src/render/setup.js";
+import {
+  renderAppSettingsView,
+  renderFamilySettingsView,
+  renderMetadataRowsView,
+  renderSetupPageView,
+  renderSetupView,
+} from "../../src/render/setup.js";
 
 const escapeHtml = (value) => String(value ?? "").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
@@ -12,9 +18,25 @@ function testSetupRender() {
     appVersion: "v79",
     escapeHtml,
   });
-  assert.match(page, /Setup/);
+  assert.match(page, /Innstillinger/);
+  assert.match(page, /data-view="family-settings"/);
+  assert.match(page, /data-view="app-settings"/);
   assert.match(page, /Versjon v79/);
   assert.match(page, /data-view="categories"/);
+  assert.doesNotMatch(page, /Familienavn/);
+
+  const familyPage = renderFamilySettingsView({
+    family: { name: "Flo", familySize: 5, kidFriendlyPerWeek: 3, leftovers: true, reuseIngredients: false },
+    quickDays: ["Mandag"],
+    dayNames: ["Mandag", "Tirsdag"],
+    escapeHtml,
+  });
+  assert.match(familyPage, /Familienavn/);
+  assert.match(familyPage, /data-family="name"/);
+
+  const appPage = renderAppSettingsView({ appVersion: "v79", escapeHtml });
+  assert.match(appPage, /Oppdater app/);
+  assert.match(appPage, /Versjon v79/);
 
   const rows = renderMetadataRowsView({ entries: [["fisk", "Fisk"]], inputAttribute: "data-category-label", saveAttribute: "data-save-category", removeAttribute: "data-remove-category", editable: true, escapeHtml });
   assert.match(rows, /data-category-label="fisk"/);

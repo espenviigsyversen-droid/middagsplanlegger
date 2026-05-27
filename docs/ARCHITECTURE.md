@@ -18,7 +18,7 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/render/meals.js` inneholder HTML-malene for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/render/calendar.js` inneholder HTML-malene for kalender/forside.
 - `src/render/planner.js` inneholder HTML-malene for ukeplanleggeren, dagkort og planleggerens bottom sheets.
-- `src/render/setup.js` inneholder HTML-malene for setup og enkle metadata-sider.
+- `src/render/setup.js` inneholder HTML-malene for Innstillinger, familie-/app-undersider og enkle metadata-sider.
 - `styles.css` inneholder alle visuelle regler.
 - `service-worker.js` håndterer cache, offline-støtte og oppdateringsflyt.
 - `manifest.json` definerer PWA-navn, farger og ikoner.
@@ -47,7 +47,7 @@ Oppstart:
 - State/persistens: `loadState`, `saveState`, `setState`.
 - Importert domenelogikk: oppskrift/måltid fra `src/domain/meals.js`, mengder/handleliste fra `src/domain/shopping.js`, forslagpoeng fra `src/domain/suggestions.js` og uke/dato fra `src/domain/weeks.js`.
 - Importert synklogikk: Firebase-oppkobling fra `src/sync/firebase.js`, snapshot-lesing fra `src/sync/reads.js`, konflikt-/scopebeslutninger fra `src/sync/state.js` og write-bygging fra `src/sync/writes.js`.
-- Importert renderlogikk: kalender-HTML fra `src/render/calendar.js`, oppskrifts-HTML fra `src/render/meals.js`, planlegger-HTML fra `src/render/planner.js`, setup-HTML fra `src/render/setup.js` og handleliste-HTML fra `src/render/shopping.js`.
+- Importert renderlogikk: kalender-HTML fra `src/render/calendar.js`, oppskrifts-HTML fra `src/render/meals.js`, planlegger-HTML fra `src/render/planner.js`, innstillings-HTML fra `src/render/setup.js` og handleliste-HTML fra `src/render/shopping.js`.
 - Synk-hjelpere og Firestore payloads.
 - Rendering av modal- og komponentdeler.
 - Kalender, planlegger, oppskrifter, handleliste og oppsett.
@@ -55,6 +55,8 @@ Oppstart:
 - Event-binding i `bindEvents`.
 - App-rendering og service worker-registrering.
 - Firebase-init, listeners og remote save.
+
+Primærnavigasjonen ligger i bunnbaren og viser de fire daglige arbeidsflatene: Kalender, Planlegger, Oppskrifter og Handle. Innstillinger er en sekundær flate som åpnes fra tannhjulknappen i toppbaren, slik at administrasjon og metadata ikke konkurrerer med de vanlige middagsflytene.
 
 ## State og rendering
 

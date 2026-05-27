@@ -42,7 +42,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/render/calendar.js`: HTML-rendering for kalender/forside.
 - `src/render/planner.js`: HTML-rendering for ukeplanleggeren.
-- `src/render/setup.js`: HTML-rendering for setup og enkle metadata-sider.
+- `src/render/setup.js`: HTML-rendering for Innstillinger, familie-/app-undersider og enkle metadata-sider.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
 - `manifest.json`: PWA metadata.

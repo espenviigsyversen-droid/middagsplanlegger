@@ -2,21 +2,85 @@ export function renderSetupView(options = {}) {
   const {
     family = {},
     quickDays = [],
-    dayNames = [],
     counts = {},
     appVersion = "",
+    escapeHtml = String,
+  } = options;
+  const quickDayCount = Array.isArray(quickDays) ? quickDays.length : 0;
+  const familySummary = [
+    family.name || "Familie",
+    `${Math.max(1, Number(family.familySize) || 5)} personer`,
+    `${quickDayCount} raske ${quickDayCount === 1 ? "dag" : "dager"}`,
+  ].join(" · ");
+
+  return `
+    <section class="view-header">
+      <div>
+        <h2 class="view-title">Innstillinger</h2>
+        <p class="view-lead">Administrer familie, planlegging, data og appoppdatering.</p>
+      </div>
+    </section>
+    <section class="settings-section">
+      <h3 class="settings-section-title">Familie og planlegging</h3>
+      <div class="settings-list">
+        ${renderSettingsRowView({
+          title: "Familie",
+          subtitle: familySummary,
+          view: "family-settings",
+          escapeHtml,
+        })}
+        ${renderSettingsRowView({
+          title: "Middagspreferanser",
+          subtitle: "Ukemål for forslagmotoren",
+          view: "meal-preferences",
+          badge: counts.preferenceGoals || 0,
+          escapeHtml,
+        })}
+      </div>
+    </section>
+    <section class="settings-section">
+      <h3 class="settings-section-title">Datahåndtering</h3>
+      <div class="settings-list">
+        ${renderSettingsRowView({ title: "Kategorier", subtitle: "Brukes i oppskrifter og filtre", view: "categories", badge: counts.categories || 0, escapeHtml })}
+        ${renderSettingsRowView({ title: "Enheter", subtitle: "Mengder i oppskrifter og handleliste", view: "units", badge: counts.units || 0, escapeHtml })}
+        ${renderSettingsRowView({ title: "Tilberedningstid", subtitle: "Rask, middels og lengre middager", view: "prep-times", badge: counts.prepTimes || 0, escapeHtml })}
+        ${renderSettingsRowView({ title: "Passer til", subtitle: "Hverdag, helg og andre merker", view: "suitability", badge: counts.suitability || 0, escapeHtml })}
+        ${renderSettingsRowView({ title: "Planvalg", subtitle: "Middag hjemme, rester og spise borte", view: "plan-modes", badge: counts.planModes || 0, escapeHtml })}
+        ${renderSettingsRowView({ title: "Vareoppslag", subtitle: "Koble ingredienser til butikkategorier", view: "ingredient-mappings", badge: counts.ingredientMappings || 0, escapeHtml })}
+        ${renderSettingsRowView({ title: "Butikkategorier", subtitle: "Gruppering av handlelisten", view: "store-categories", badge: counts.storeCategories || 0, escapeHtml })}
+      </div>
+    </section>
+    <section class="settings-section">
+      <h3 class="settings-section-title">App</h3>
+      <div class="settings-list">
+        ${renderSettingsRowView({
+          title: "Oppdatering og versjon",
+          subtitle: `Versjon ${appVersion}`,
+          view: "app-settings",
+          escapeHtml,
+        })}
+      </div>
+    </section>
+  `;
+}
+
+export function renderFamilySettingsView(options = {}) {
+  const {
+    family = {},
+    quickDays = [],
+    dayNames = [],
     escapeHtml = String,
   } = options;
 
   return `
     <section class="view-header">
       <div>
-        <h2 class="view-title">Setup</h2>
-        <p class="view-lead">Styr familieinnstillinger, metadata og appoppdatering fra ett sted.</p>
+        <h2 class="view-title">Familie</h2>
+        <p class="view-lead">Familienavn, personer, raske dager og forslagregler.</p>
       </div>
+      <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
     <section class="panel setup-section">
-      <h2>Familie</h2>
       <div class="settings-grid">
         <div class="setting">
           <label for="familyName">Familienavn</label>
@@ -43,36 +107,56 @@ export function renderSetupView(options = {}) {
         </div>
       </div>
     </section>
-    <section class="panel setup-section">
-      <h2>Middagspreferanser</h2>
-      <p class="status-note">Sett myke mål for ukene. Rådgiveren prøver å treffe disse, men kan fortsatt velge praktisk hvis få middager passer.</p>
-      <div class="setup-menu">
-        <button class="setup-menu-item" data-view="meal-preferences">
-          <span>Ukemål for kategorier</span>
-          <strong>${counts.preferenceGoals || 0}</strong>
-        </button>
+  `;
+}
+
+export function renderAppSettingsView(options = {}) {
+  const {
+    appVersion = "",
+    escapeHtml = String,
+  } = options;
+
+  return `
+    <section class="view-header">
+      <div>
+        <h2 class="view-title">Oppdatering og versjon</h2>
+        <p class="view-lead">Bruk oppdatering etter publisering hvis appen ikke henter siste versjon automatisk.</p>
       </div>
+      <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
     <section class="panel setup-section">
-      <h2>Metadata</h2>
-      <div class="setup-menu">
-        <button class="setup-menu-item" data-view="categories"><span>Kategorier</span><strong>${counts.categories || 0}</strong></button>
-        <button class="setup-menu-item" data-view="units"><span>Enheter</span><strong>${counts.units || 0}</strong></button>
-        <button class="setup-menu-item" data-view="prep-times"><span>Tilberedningstid</span><strong>${counts.prepTimes || 0}</strong></button>
-        <button class="setup-menu-item" data-view="suitability"><span>Passer til</span><strong>${counts.suitability || 0}</strong></button>
-        <button class="setup-menu-item" data-view="plan-modes"><span>Plan</span><strong>${counts.planModes || 0}</strong></button>
-        <button class="setup-menu-item" data-view="ingredient-mappings"><span>Vareoppslag</span><strong>${counts.ingredientMappings || 0}</strong></button>
-        <button class="setup-menu-item" data-view="store-categories"><span>Butikkategorier</span><strong>${counts.storeCategories || 0}</strong></button>
-      </div>
-    </section>
-    <section class="panel setup-section">
-      <h2>App</h2>
-      <p class="status-note">Bruk denne etter publisering hvis appen ikke henter siste versjon automatisk. Middager og innstillinger i nettleseren beholdes.</p>
+      <p class="status-note">Middager og innstillinger i nettleseren beholdes når appen oppdateres.</p>
       <div class="app-update-row">
         <button class="button" data-refresh-app>Oppdater app</button>
         <span class="app-version-pill">Versjon ${escapeHtml(appVersion)}</span>
       </div>
     </section>
+  `;
+}
+
+function renderSettingsRowView(options = {}) {
+  const {
+    title = "",
+    subtitle = "",
+    view = "",
+    badge = null,
+    escapeHtml = String,
+  } = options;
+  const badgeHtml = badge === null || badge === undefined
+    ? ""
+    : `<strong class="settings-row-badge">${escapeHtml(badge)}</strong>`;
+
+  return `
+    <button class="settings-row" data-view="${escapeHtml(view)}">
+      <span class="settings-row-text">
+        <span>${escapeHtml(title)}</span>
+        ${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ""}
+      </span>
+      <span class="settings-row-meta">
+        ${badgeHtml}
+        <span class="settings-row-chevron" aria-hidden="true">›</span>
+      </span>
+    </button>
   `;
 }
 

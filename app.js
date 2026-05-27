@@ -76,6 +76,8 @@ import {
   renderPlannerView,
 } from "./src/render/planner.js";
 import {
+  renderAppSettingsView,
+  renderFamilySettingsView,
   renderMetadataAddFormView,
   renderMetadataRowsView,
   renderSetupPageView,
@@ -324,7 +326,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v87";
+const APP_VERSION = "v88";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -691,6 +693,7 @@ function icon(name) {
     add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
     swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m17 1 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 23-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
     shopping: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg>',
   };
   return icons[name] || "";
 }
@@ -1331,6 +1334,8 @@ function renderShoppingList() {
 
 function renderShell(viewHtml) {
   const isRecipeView = state.activeView === "recipe";
+  const settingsViews = new Set(["setup", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
+  const isSettingsView = settingsViews.has(state.activeView);
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
   const toast = renderToast();
@@ -1348,7 +1353,12 @@ function renderShell(viewHtml) {
               <p class="brand-subtitle">Planlegg uka med gode middager</p>
             </div>
           </div>
-          <div class="sync-pill"><span class="sync-dot"></span> ${escapeHtml(syncStatusText())}</div>
+          <div class="topbar-actions">
+            <div class="sync-pill"><span class="sync-dot"></span> ${escapeHtml(syncStatusText())}</div>
+            <button class="topbar-settings-button ${isSettingsView ? "active" : ""}" data-view="setup" aria-label="Innstillinger" title="Innstillinger">
+              ${icon("settings")}
+            </button>
+          </div>
         </div>
       </header>`}
       <main class="content">${viewHtml}</main>
@@ -1358,7 +1368,6 @@ function renderShell(viewHtml) {
           ${navButton("planner", "Planlegger", "plan")}
           ${navButton("meals", "Oppskrifter", "meals")}
           ${navButton("shopping", "Handle", "shopping")}
-          ${navButton("setup", "Setup", "profile")}
         </div>
       </nav>
     </div>
@@ -1854,6 +1863,22 @@ function renderSetup() {
       ingredientMappings: Object.keys(state.metadata?.ingredientMappings || {}).length,
       storeCategories: STORE_CATEGORIES.length + (state.metadata?.storeCategories || []).filter((c) => !STORE_CATEGORIES.some((b) => b.key === c.key)).length,
     },
+    appVersion: APP_VERSION,
+    escapeHtml,
+  });
+}
+
+function renderFamilySettings() {
+  return renderFamilySettingsView({
+    family: state.family,
+    quickDays: state.family.quickDays,
+    dayNames,
+    escapeHtml,
+  });
+}
+
+function renderAppSettings() {
+  return renderAppSettingsView({
     appVersion: APP_VERSION,
     escapeHtml,
   });
@@ -3141,6 +3166,8 @@ function render() {
     shopping: renderShoppingList,
     recipe: renderMealDetail,
     setup: renderSetup,
+    "family-settings": renderFamilySettings,
+    "app-settings": renderAppSettings,
     "meal-preferences": renderMealPreferencesSetup,
     categories: renderCategoriesSetup,
     units: renderUnitsSetup,
