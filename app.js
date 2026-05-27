@@ -326,7 +326,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v88";
+const APP_VERSION = "v89";
 
 let state = loadState();
 const app = document.querySelector("#app");
