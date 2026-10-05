@@ -49,7 +49,7 @@ const context = vm.createContext({
   FormData: class { constructor(form) { return form.values; } },
 });
 vm.runInContext(source, context);
-vm.runInContext("let renders = 0; render = () => { renders += 1; };", context);
+vm.runInContext("const renderWithDom = render; let renders = 0; render = () => { renders += 1; };", context);
 const run = (code) => vm.runInContext(code, context);
 const snapshot = (code) => JSON.parse(JSON.stringify(run(code)));
 const element = (properties = {}) => ({
@@ -57,6 +57,14 @@ const element = (properties = {}) => ({
   addEventListener(name, callback) { this.handlers[name] = callback; },
   focus() {}, select() {},
 });
+assert.equal(run("state.activeView"), "shopping");
+assert.equal(run("state.previousView"), "shopping");
+run('state.activeView = "planner"; state.previousView = "meals"; saveState();');
+assert.equal(run("loadState().activeView"), "shopping");
+assert.equal(run("loadState().previousView"), "shopping");
+run('state.activeView = "shopping"; renderShell("");');
+assert.deepEqual([...app.innerHTML.matchAll(/class="nav-button[^"]*" data-view="([^"]+)"/g)].map(match => match[1]),
+  ["shopping", "calendar", "planner", "meals"]);
 const initialData = snapshot("syncPayload()");
 run('state.weekOffset = 2; state.mealPicker = { open: true, dayIndex: 1, query: "" };');
 const search = element({ value: "Lasagne <ny>" });
@@ -150,7 +158,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v92");
+assert.equal(exported.appVersion, "v93");
 assert.deepEqual(exported.data, snapshot("syncPayload()"));
 assert.equal(downloads.at(-1).clicked, true);
 assert.match(downloads.at(-1).download, /^middagsapp-backup-\d{4}-\d{2}-\d{2}\.json$/);
@@ -202,4 +210,63 @@ assert.equal(backupErrors.length, 2);
 assert.equal(context.button.disabled, false);
 context.document.createElement = originalCreateElement;
 
+// Exercise shopping patches through real setState: stable timestamps, separate
+// sync queue, unchanged global sync clock, and backup retains the local list.
+selectors.clear();
+run('state.pendingLocalSync = false; state.clientUpdatedAt = 123; state.shoppingList = { items: [], generatedForWeek: "local-week" };');
+run('setState({ shoppingList: { ...state.shoppingList, items: [{ id: "new-1", name: "Melk" }, { id: "new-2", name: "Brød" }] } });');
+const created = snapshot("state.shoppingList.items");
+assert.equal(created[1].createdAt, created[0].createdAt + 1);
+assert.equal(run("state.clientUpdatedAt"), 123);
+assert.equal(run("state.pendingLocalSync"), false);
+assert.equal(run("shoppingSyncStatus"), "Synker");
+run('syncStatus = "Synket";');
+assert.equal(run("syncStatusText()"), "Synker");
+run('setState({ shoppingList: { ...state.shoppingList, items: state.shoppingList.items.map(item => ({ ...item, checked: true })) } });');
+assert.equal(run("state.shoppingList.items[0].createdAt"), created[0].createdAt);
+assert.equal(run("syncPayload().shoppingList.generatedForWeek"), "local-week");
+
+// Collection callbacks keep generatedForWeek and the global sync flags. Repeated
+// identical server content does not render or generate writes.
+const shoppingCalls = [];
+let itemsListener;
+const shoppingApi = {
+  doc: (ref, id) => ref + "/" + id,
+  serverTimestamp: () => "server",
+  runTransaction: async callback => callback({ get: async () => ({ exists: () => true, data: () => ({ migratedToItemsAt: "done" }) }) }),
+  setDoc: (...args) => { shoppingCalls.push(["add", ...args]); return Promise.resolve(); },
+  updateDoc: (...args) => { shoppingCalls.push(["update", ...args]); return Promise.resolve(); },
+  deleteDoc: (...args) => { shoppingCalls.push(["delete", ...args]); return Promise.resolve(); },
+  onSnapshot: (_ref, _options, listener) => { itemsListener = listener; },
+};
+context.shoppingConnection = { api: shoppingApi, refs: { shopping: "archive", shoppingItems: "items" } };
+await run("shoppingSync.start(shoppingConnection)");
+for (let index = 0; index < 6; index += 1) await Promise.resolve();
+const remoteItems = [{ id: "remote", name: "Egg", amount: "6", unit: "stk", category: "other", checked: false, custom: true, createdAt: 100 }];
+const remoteSnapshot = { docs: remoteItems.map(item => ({ id: item.id, data: () => ({ ...item, updatedAt: "server" }) })), metadata: { fromCache: false } };
+itemsListener(remoteSnapshot);
+assert.equal(run("state.shoppingList.generatedForWeek"), "local-week");
+assert.equal(run("state.clientUpdatedAt"), 123);
+assert.equal(run("state.pendingLocalSync"), false);
+const remoteRenderCount = run("renders");
+const remoteWriteCount = shoppingCalls.length;
+itemsListener(remoteSnapshot);
+assert.equal(run("renders"), remoteRenderCount);
+assert.equal(shoppingCalls.length, remoteWriteCount);
+
+// Real render restores text, cursor and focus after replacing the input node.
+const typedInput = element({ value: "Papri", selectionStart: 2, selectionEnd: 4, selectionDirection: "forward" });
+const replacementInput = element({ value: "", setSelectionRange(start, end, direction) { this.selection = [start, end, direction]; },
+  focus(options) { this.focusOptions = options; } });
+replacementInput.focus = (options) => { replacementInput.focusOptions = options; };
+selectors.set("[data-shopping-input]", [typedInput]);
+context.document.activeElement = typedInput;
+context.document.body.classList = { contains: () => false };
+context.document.querySelector = selector => selector === "#app" ? app : null;
+context.replacementInput = replacementInput;
+context.installNewInput = () => selectors.set("[data-shopping-input]", [replacementInput]);
+run('const savedShell = renderShell; renderShell = html => { savedShell(html); installNewInput(); }; state.activeView = "shopping"; renderWithDom();');
+assert.equal(replacementInput.value, "Papri");
+assert.deepEqual(replacementInput.selection, [2, 4, "forward"]);
+assert.deepEqual(JSON.parse(JSON.stringify(replacementInput.focusOptions)), { preventScroll: true });
 console.log("app workflow tests ok (local stubs; no network)");

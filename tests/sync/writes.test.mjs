@@ -46,15 +46,14 @@ async function testBuildDocumentWrites() {
     pendingLocalSync: true,
   });
 
-  assert.equal(writes.length, 2);
+  assert.equal(writes.length, 1);
   assert.deepEqual(calls[0], {
     type: "set",
     ref: "profile-ref",
     data: { family: { familySize: 4 }, clientUpdatedAt: 123, updatedAt: "server-time" },
     options: { merge: true },
   });
-  assert.equal(calls[1].ref, "shopping-ref");
-  assert.deepEqual(calls[1].data.shoppingList, { items: [{ name: "Pasta" }] });
+  assert.equal(calls.length, 1); // Shopping is never written to the archive, even when requested.
 }
 
 async function testBuildMealWritesAndDeletes() {
@@ -129,9 +128,9 @@ async function testSkipsStaleDocumentWrite() {
 async function testSkipsMissingRemoteWithoutPendingSync() {
   const { api, calls } = createFakeApi();
   const writes = await buildRemoteWrites({
-    scopes: ["shopping"],
-    state: { shoppingList: { items: [{ name: "Pasta" }] } },
-    refs: { shopping: "shopping-ref" },
+    scopes: ["profile"],
+    state: { family: { familySize: 4 } },
+    refs: { profile: "profile-ref" },
     api,
     updatedAt: "server-time",
     clientUpdatedAt: 100,

@@ -25,6 +25,7 @@ node tests/sync/firebase.test.mjs
 node tests/sync/reads.test.mjs
 node tests/sync/state.test.mjs
 node tests/sync/writes.test.mjs
+node tests/sync/shopping.test.mjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
@@ -145,3 +146,27 @@ Manuell kontroll etter publisering:
 1. Kontroller v92 på PC og iPhone. Last ned sikkerhetskopi på Windows og sjekk at JSON-filen finnes.
 2. På iPhone: test både lagring via delingsarket og avbrutt deling. Avbrudd skal ikke gi ny toast eller starte nedlasting.
 3. I en separat testkopi: blokker appmodulen eller en modulimport. Kontroller feiltekst og reload-knapp. Test også forsinket oppstart over 12 sekunder og at feilskjermen forsvinner når appen rendrer. Ikke slett data eller cacher for å simulere dette.
+
+## Utrulling av v93
+
+Eier håndterer commit og publisering fra Git-klonen med GitHub Desktop. Codex bruker fortsatt ingen Git-kommandoer.
+
+- Før publisering: alle enheter er på nett, viser «Synket» og har lik handleliste. Sikre eventuelle lokale endringer i v92 før oppdatering; migreringen bruker kun skydokumentet.
+- Etter publisering: lukk appen helt og åpne den igjen på alle enheter, og kontroller at de viser v93. Dette gjelder også et åpent PC-vindu. Bruk Oppdater app om gammel versjon fortsatt vises.
+- En enhet som fortsatt kjører v92 skriver til arkivdokumentet app/shopping og ser ikke varer lagt til i v93. Slike endringer overføres ikke.
+- Tilbakerulling til v92 gir listen slik den var ved migreringen, forutsatt at alle gamle klienter ble stoppet. Varer lagt til, endret eller slettet i v93 etter migreringen følger ikke med tilbake. Migreringsmarkøren gjør at ny oppstart i v93 ikke migrerer arkivet på nytt.
+- Arkitekten oppgir at gjeldende rekursive Firestore-regler tillater shoppingItems og transaksjonen for innloggede klienter. Dette er ikke kontrollert mot produksjon her. permission-denied under migrering gir Synk feilet, bevarer lokal liste og blokkerer handlelistelytteren til neste oppstart.
+
+### Akseptanse etter publisering
+
+1. Første enhet etter oppdatering: listen har samme varer, rekkefølge og avhuking som før.
+2. To enheter legger til hver sin vare samtidig: begge varene vises på begge.
+3. Én enhet huker av en vare mens den andre endrer mengden: begge endringer beholdes.
+4. Én enhet sletter en vare, den andre huker den av rett etterpå: varen forblir slettet uten feil.
+5. Generer fra plan og Fjern avhukede virker og synkes.
+6. Tekst, markering og fokus i Legg til vare bevares når den andre enheten legger til noe.
+7. Appen starter på Handleliste; menyen viser Handle, Kalender, Planlegger, Oppskrifter.
+8. Etter vellykket oppstart med synk: slå på flymodus og legg til en vare. Status skal ikke vise Synket. Slå på nett uten å lukke appen: varen vises på den andre enheten.
+9. Ukeplan, oppskrifter og innstillinger synkes som før. Kontroller også sikkerhetskopi på PC/iPhone og oppstartsvernet fra v92.
+
+17 lokale testskript og syntakskontroller kjøres før levering. Lokale SDK-/DOM-stubber erstatter ikke denne manuelle akseptansen. Service worker har bare fått versjonsbump og shopping-modulen i begge asset-listene; strategien er uendret.

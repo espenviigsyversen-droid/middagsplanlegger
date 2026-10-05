@@ -49,6 +49,8 @@ function testNormalizeShoppingList() {
   assert.equal(normalized.items[0].category, "other");
   assert.equal(normalized.items[0].checked, true);
   assert.equal(normalized.items[0].custom, false);
+  assert.equal(normalizeShoppingList({ items: [{ id: "a", name: "Melk", createdAt: 123 }] }).items[0].createdAt, 123);
+  assert.equal(normalizeShoppingList({ items: [{ id: "a", name: "Melk", createdAt: NaN }] }).items[0].createdAt, undefined);
 }
 
 function testShoppingMergeHelpers() {

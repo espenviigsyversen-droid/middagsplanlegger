@@ -9,13 +9,13 @@ import {
 
 function testPatchTouchesSyncedData() {
   assert.equal(patchTouchesSyncedData({ activeView: "shopping" }), false);
-  assert.equal(patchTouchesSyncedData({ shoppingList: { items: [] } }), true);
+  assert.equal(patchTouchesSyncedData({ shoppingList: { items: [] } }), false);
   assert.equal(patchTouchesSyncedData({ plansByWeek: {} }), true);
 }
 
 function testSyncedScopesForPatch() {
   assert.deepEqual(syncedScopesForPatch({ activeView: "planner" }), []);
-  assert.deepEqual(syncedScopesForPatch({ family: {}, shoppingList: {} }), ["profile", "shopping"]);
+  assert.deepEqual(syncedScopesForPatch({ family: {}, shoppingList: {} }), ["profile"]);
   assert.deepEqual(syncedScopesForPatch({ plansByWeek: {}, dayNotesByWeek: {} }), ["weeks"]);
   assert.deepEqual(syncedScopesForPatch({ meals: [], metadata: {} }), ["metadata", "meals"]);
 }

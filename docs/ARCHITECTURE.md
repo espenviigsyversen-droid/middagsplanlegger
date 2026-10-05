@@ -15,6 +15,7 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/sync/reads.js` bygger lokale state-patches fra Firestore snapshots for oppskrifter og uker.
 - `src/sync/state.js` inneholder rene synkbeslutninger: hvilke scopes som er endret, hvilke uker som må lagres, og når remote data er eldre enn lokale endringer.
 - `src/sync/writes.js` bygger Firestore writes for de ulike sync-scopene uten å eie appens render- eller statusflyt.
+- `src/sync/shopping.js` håndterer migrering og separat varebasert handlelistesynk fra v93.
 - `src/render/shopping.js` inneholder HTML-malene for handlelistevisningen, vareeditor, vareforslag og shopping review modal.
 - `src/render/meals.js` inneholder HTML-malene for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/render/calendar.js` inneholder HTML-malene for kalender/forside.
@@ -28,12 +29,12 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 
 ## Runtime-modell
 
-Appen har ingen bundler og ingen installerte npm-avhengigheter. Lokale moduler importeres direkte som ES-moduler. Firebase SDK lastes dynamisk fra Google CDN i `app.js`.
+Appen har ingen bundler og ingen installerte npm-avhengigheter. Lokale moduler importeres direkte som ES-moduler. Firebase SDK lastes dynamisk fra Google CDN i `src/sync/firebase.js`.
 
 Oppstart:
 
 1. `index.html` viser loading screen.
-2. `app.js` leser state fra `localStorage` og starter nye økter på kalender/forside.
+2. `app.js` leser state fra `localStorage` og starter nye økter på Handleliste.
 3. `render()` tegner aktiv visning.
 4. Loading screen fjernes.
 5. Firebase anonym innlogging og Firestore-synk startes.
@@ -59,7 +60,7 @@ Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fa
 - App-rendering og service worker-registrering.
 - Firebase-init, listeners og remote save.
 
-Primærnavigasjonen ligger i bunnbaren og viser de fire daglige arbeidsflatene: Kalender, Planlegger, Oppskrifter og Handle. Innstillinger er en sekundær flate som åpnes fra tannhjulknappen i toppbaren, slik at administrasjon og metadata ikke konkurrerer med de vanlige middagsflytene.
+Primærnavigasjonen ligger i bunnbaren og viser de fire daglige arbeidsflatene: Handle, Kalender, Planlegger og Oppskrifter. Innstillinger er en sekundær flate som åpnes fra tannhjulknappen i toppbaren, slik at administrasjon og metadata ikke konkurrerer med de vanlige middagsflytene.
 
 ## State og rendering
 
@@ -94,18 +95,30 @@ Eksporten er et øyeblikksbilde av denne enheten, ikke en bekreftet fersk kopi f
 
 ## Synk
 
-Firebase Firestore brukes med anonym innlogging og en fast familie-ID. Firebase SDK-lasting, anonym innlogging og Firestore-referanser ligger i `src/sync/firebase.js`. `src/sync/reads.js` bygger lokale patches fra remote snapshots, og `src/sync/writes.js` bygger writes for scopes som profile, shopping, meals og weeks. `app.js` eier fortsatt når snapshots skal aksepteres, når lagring planlegges og hvordan UI-status vises.
+Firebase Firestore brukes med anonym innlogging og en fast familie-ID. Firebase SDK-lasting, anonym innlogging og Firestore-referanser ligger i `src/sync/firebase.js`. `src/sync/reads.js` bygger lokale patches fra remote snapshots, og `src/sync/writes.js` bygger writes for scopes som profile, preferences, metadata, meals og weeks. `app.js` eier fortsatt når snapshots skal aksepteres, når lagring planlegges og hvordan UI-status vises.
 
 Data er splittet i flere dokumenter/collections:
 
 - profile
 - preferences
 - metadata
-- shopping
+- shoppingItems (ett dokument per vare; app/shopping er arkiv)
 - meals
 - weeks
 
-Synkstrategien bruker `clientUpdatedAt`, `pendingRemoteScopes` og `pendingWeekKeys` for å unngå at eldre remote data overskriver lokale endringer. Før Firestore-writes utføres, leser write-laget remote `clientUpdatedAt` for samme dokument. Hvis remote er nyere enn lokal state, droppes lokal write slik at en gammel device ikke kan overskrive nyere planlegging. Manglende remote dokumenter seedes bare ved eksplisitt førstegangsoppsett/migrering eller når lokal state faktisk har `pendingLocalSync`.
+For profile, preferences, metadata, meals og weeks bruker synkstrategien `clientUpdatedAt`, `pendingRemoteScopes` og `pendingWeekKeys` for å unngå at eldre remote data overskriver lokale endringer. Før Firestore-writes utføres, leser write-laget remote `clientUpdatedAt` for samme dokument. Hvis remote er nyere enn lokal state, droppes lokal write slik at en gammel device ikke kan overskrive nyere planlegging. Manglende remote dokumenter seedes bare ved eksplisitt førstegangsoppsett/migrering eller når lokal state faktisk har `pendingLocalSync`.
+
+## Handlelistesynk fra v93
+
+Modulen src/sync/shopping.js eier separat varebasert synk. Brukerflytene sender fortsatt ny items-liste til setState; appen normaliserer varene, tildeler nye varer createdAt = nå + indeks og sender en diff umiddelbart. Eksisterende createdAt beholdes. Bare endrede felt sendes med updateDoc; nye varer bruker setDoc og slettinger deleteDoc. Ingen debounce, forhåndslesing eller writeBatch brukes for disse operasjonene. Handlelisteendringer påvirker ikke global clientUpdatedAt/pendingLocalSync, og generatedForWeek er bare lokal.
+
+Etter innlogging gjennomføres migrering i én Firestore-transaksjon: app/shopping leses; uten migratedToItemsAt opprettes shoppingItems fra skyens shoppingList, med eksisterende ID-er og createdAt = fast starttid 0 + indeks. Arkivet får bare migratedToItemsAt med merge. Transaksjonsretry leser markøren på nytt; parallelle migreringer oppretter dermed ikke listen på nytt. Manglende skydata gir tom migrering. Lokal cache brukes aldri til migreringen.
+
+Deretter sendes minnekøen i registrert rekkefølge og collection-lytteren startes uten å vente på write-bekreftelser. Lytteren ber om metadataendringer og ignorerer cache-snapshots fram til første serversnapshot; senere brukes alle snapshots. Varer sorteres på createdAt og deretter ID. Remote-patcher erstatter bare items, beholder generatedForWeek og skriver ikke tilbake. Identisk innhold utløser ingen ny innholdsrender. Rendering fra synk/status bevarer tekst, markering og fokus i manuelt varefelt.
+
+Synker vises mens operasjoner venter eller før første serversnapshot. Bare bekreftede operasjoner tas ut av pending-tellingen; updateDoc/not-found er et stille avsluttet forsøk mot en slettet vare. Andre feil gir Synk feilet, som ikke skjules av senere snapshots eller andre scopelyttere. Migreringsfeil beholder lokal liste, sender ikke minnekøen og starter ikke handlelistelytteren; neste oppstart forsøker migreringen igjen. Andre scopelyttere beholder sin eksisterende logikk.
+
+Kjent begrensning: køen er bare i minnet. Offline-endringer sendes når nettet kommer tilbake så lenge appen forblir åpen og synken allerede er startet. Ved mislykket migrering kreves ny oppstart. Usynkede v92-endringer overføres ikke, og første serversnapshot kan erstatte dem. Gamle v92-klienter bruker arkivet og deler ikke videre handleliste med v93. Utrulling og tilbakerulling er beskrevet i docs/RELEASE.md.
 
 ## PWA og oppdatering
 

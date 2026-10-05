@@ -74,12 +74,6 @@ export async function buildRemoteWrites(options = {}) {
     }
   }
 
-  if (uniqueScopes.includes("shopping")) {
-    if (await canWriteRemoteRef({ ref: refs.shopping, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
-      writes.push(api.setDoc(refs.shopping, { shoppingList: state.shoppingList, clientUpdatedAt, updatedAt }, { merge: true }));
-    }
-  }
-
   if (uniqueScopes.includes("meals")) {
     const currentMealIds = new Set((state.meals || []).map((meal) => meal.id));
     for (const mealId of pendingMealDeletes) {

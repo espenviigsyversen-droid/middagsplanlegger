@@ -9,7 +9,6 @@ export const SYNCED_STATE_KEYS = [
   "servingsByWeek",
   "dayModesByWeek",
   "dayNotesByWeek",
-  "shoppingList",
 ];
 
 export const WEEK_SYNC_FIELDS = [
@@ -33,7 +32,6 @@ export function syncedScopesForPatch(patch) {
   if ("metadata" in patch) scopes.add("metadata");
   if ("meals" in patch) scopes.add("meals");
   if (WEEK_SYNC_FIELDS.some((field) => field in patch)) scopes.add("weeks");
-  if ("shoppingList" in patch) scopes.add("shopping");
   return [...scopes];
 }
 

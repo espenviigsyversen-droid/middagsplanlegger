@@ -55,6 +55,7 @@ import {
   buildWeeksRemotePatch,
   maxClientUpdatedAtFromDocs,
 } from "./src/sync/reads.js";
+import { createShoppingSync, diffShoppingItems } from "./src/sync/shopping.js";
 import { buildRemoteWrites } from "./src/sync/writes.js";
 import {
   renderCalendarView,
@@ -258,7 +259,7 @@ const defaultMeals = [
 ];
 
 const defaultState = {
-  activeView: "calendar",
+  activeView: "shopping",
   shoppingList: { items: [], generatedForWeek: null },
   generateModal: { open: false, selectedDays: [] },
   shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
@@ -273,7 +274,7 @@ const defaultState = {
   selectedMealId: null,
   selectedRecipeContext: null,
   keepScreenAwake: false,
-  previousView: "meals",
+  previousView: "shopping",
   weekOffset: 0,
   filters: { query: "", category: "all", flag: "all", sort: "category" },
   metadata: {
@@ -332,7 +333,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v92";
+const APP_VERSION = "v93";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -345,6 +346,21 @@ const pendingWeekKeys = new Set();
 let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
+let shoppingSyncStatus = null;
+const shoppingSync = createShoppingSync({
+  onItems: (items) => {
+    if (JSON.stringify(items) === JSON.stringify(state.shoppingList.items)) return;
+    state.shoppingList = { ...state.shoppingList, items };
+    saveState();
+    render();
+  },
+  onStatus: (status) => {
+    if (shoppingSyncStatus === status) return;
+    shoppingSyncStatus = status;
+    // The existing sync listeners may also set status. Keep shopping pending/error visible.
+    render();
+  },
+});
 
 function loadState() {
   const saved = localStorage.getItem("middagsapp-state");
@@ -360,8 +376,8 @@ function normalizeStateForStartup(nextState) {
   const normalized = normalizeState(nextState);
   return {
     ...normalized,
-    activeView: "calendar",
-    previousView: "calendar",
+    activeView: "shopping",
+    previousView: "shopping",
     selectedMealId: null,
     selectedRecipeContext: null,
     editingMealId: null,
@@ -554,14 +570,26 @@ function patchTouchesSyncedData(patch) {
 
 function setState(patch) {
   const previousState = state;
+  if ("shoppingList" in patch) {
+    const previousItems = new Map(state.shoppingList.items.map((item) => [item.id, item]));
+    const createdAt = Date.now();
+    patch = { ...patch, shoppingList: normalizeShoppingList({ ...patch.shoppingList,
+      items: (patch.shoppingList?.items || []).map((item, index) => ({ ...item,
+        createdAt: previousItems.get(item.id)?.createdAt ?? item.createdAt ?? (createdAt + index),
+      })),
+    }) };
+  }
   state = { ...state, ...patch };
   if (patchTouchesSyncedData(patch)) {
     state.clientUpdatedAt = Date.now();
     state.pendingLocalSync = true;
   }
   saveState();
-  render();
+  render(false);
   syncWakeLock();
+  if ("shoppingList" in patch && !applyingRemoteState) {
+    shoppingSync.enqueue(diffShoppingItems(previousState.shoppingList.items, state.shoppingList.items));
+  }
   scheduleRemoteSaveForPatch(patch, previousState);
 }
 
@@ -655,7 +683,6 @@ function applyRemotePayload(payload) {
     servingsByWeek: payload.servingsByWeek,
     dayModesByWeek: payload.dayModesByWeek,
     dayNotesByWeek: payload.dayNotesByWeek,
-    shoppingList: payload.shoppingList,
     clientUpdatedAt: remoteClientUpdatedAt,
     pendingLocalSync: false,
   };
@@ -679,6 +706,8 @@ function applyRemotePayload(payload) {
 }
 
 function syncStatusText() {
+  if (shoppingSyncStatus === "Synk feilet") return shoppingSyncStatus;
+  if (shoppingSyncStatus === "Synker" && syncStatus !== "Synk feilet") return shoppingSyncStatus;
   return syncStatus;
 }
 
@@ -1404,10 +1433,10 @@ function renderShell(viewHtml) {
       <main class="content">${viewHtml}</main>
       <nav class="bottom-nav">
         <div class="bottom-nav-inner">
+          ${navButton("shopping", "Handle", "shopping")}
           ${navButton("calendar", "Kalender", "calendar")}
           ${navButton("planner", "Planlegger", "plan")}
           ${navButton("meals", "Oppskrifter", "meals")}
-          ${navButton("shopping", "Handle", "shopping")}
         </div>
       </nav>
     </div>
@@ -3298,7 +3327,10 @@ function bindEvents() {
   });
 }
 
-function render() {
+function render(preserveShoppingInput = true) {
+  const oldInput = preserveShoppingInput ? app.querySelector("[data-shopping-input]") : null;
+  const draft = oldInput ? { value: oldInput.value, focused: document.activeElement === oldInput,
+    start: oldInput.selectionStart, end: oldInput.selectionEnd, direction: oldInput.selectionDirection } : null;
   const views = {
     calendar: renderCalendar,
     planner: renderPlanner,
@@ -3320,6 +3352,16 @@ function render() {
   syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
+  const newInput = draft ? app.querySelector("[data-shopping-input]") : null;
+  if (newInput) {
+    newInput.value = draft.value;
+    const suggestions = app.querySelector("[data-shopping-suggestions]");
+    if (suggestions) suggestions.innerHTML = renderShoppingSuggestions(draft.value);
+    if (draft.focused) {
+      newInput.focus({ preventScroll: true });
+      if (draft.start != null) newInput.setSelectionRange(draft.start, draft.end, draft.direction);
+    }
+  }
   hideLoadingScreen();
 }
 
@@ -3404,7 +3446,12 @@ async function initFirebaseSync() {
         window.middagsplanServerTimestamp = firestoreApi.serverTimestamp;
         syncStatus = "Synk aktiv";
         render();
-        await migrateLegacyStateIfNeeded(firestoreApi.getDoc, firestoreApi.getDocs);
+        try {
+          await migrateLegacyStateIfNeeded(firestoreApi.getDoc, firestoreApi.getDocs);
+        } catch {
+          markSyncFailed();
+        }
+        await shoppingSync.start({ api: firestoreApi, refs: remoteRefs });
         startSplitSyncListeners(firestoreApi.onSnapshot);
       },
     });
@@ -3474,16 +3521,6 @@ function startSplitSyncListeners(onSnapshot) {
     }
     applyRemoteDocument("preferences", snapshot.data(), (data) => {
       applyRemoteStatePatch({ mealPreferences: data.mealPreferences, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
-    });
-  }, markSyncFailed);
-
-  onSnapshot(remoteRefs.shopping, (snapshot) => {
-    if (!snapshot.exists()) {
-      if (state.pendingLocalSync) scheduleRemoteSave(0, ["shopping"]);
-      return;
-    }
-    applyRemoteDocument("shopping", snapshot.data(), (data) => {
-      applyRemoteStatePatch({ shoppingList: data.shoppingList, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
     });
   }, markSyncFailed);
 
@@ -3573,10 +3610,10 @@ function markSyncFailed() {
 
 async function saveAllRemoteState(options = {}) {
   Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks", "shopping"], options);
+  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks"], options);
 }
 
-function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks", "shopping"]) {
+function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks"]) {
   if (!remoteRefs.profile || applyingRemoteState) return;
   scopes.forEach((scope) => pendingRemoteScopes.add(scope));
   const key = [...new Set(scopes)].sort().join("-");

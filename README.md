@@ -9,7 +9,7 @@ Appen kan kjøres uten byggsteg og publiseres som vanlige statiske filer, for ek
 - Ukekalender og planlegger for middager.
 - Oppskriftsdatabase med kategorier, ingredienser, porsjoner og steg.
 - Forslagmotor for å fylle åpne dager.
-- Handleliste med butikkategorier.
+- Handleliste som startside, med butikkategorier og Firestore-dokument per vare.
 - Gjennomgang av ingredienser før varer legges til i handlelisten.
 - Familieinnstillinger, raske dager og preferanser.
 - Lokal lagring i nettleseren.
@@ -27,7 +27,7 @@ http://127.0.0.1:8765/
 Prosjektmappen:
 
 ```text
-C:\Users\espen\Downloads\00_Organisert\02_Prosjekter_og_apper\Middagsapp
+C:\Users\espen\Documents\GitHub\middagsplanlegger
 ```
 
 ## Viktige filer
@@ -36,6 +36,7 @@ C:\Users\espen\Downloads\00_Organisert\02_Prosjekter_og_apper\Middagsapp
 - `app.js`: hovedlogikk, state, rendering, hendelser og Firebase-synk.
 - `src/domain/meals.js`: rene oppskrifts- og måltidshjelpere.
 - `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner.
+- `src/sync/shopping.js`: migrering, vareendringer, minnekø og handlelistelytter.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner.
 - `styles.css`: all styling og responsiv layout.
 - `service-worker.js`: PWA-cache og oppdateringsstrategi.
@@ -66,6 +67,8 @@ node tests/domain/weeks.test.mjs
 ```
 
 ## Publisering
+
+Arbeidsmappen er Git-klonen. Eier håndterer commit og publisering med GitHub Desktop; Codex bruker ingen Git-kommandoer. Utrullingsplanen for v93 i `docs/RELEASE.md` må følges på alle enheter.
 
 Appen har manuelt versjonsnummer. Når kode, CSS, HTML eller service worker endres, bump versjonen i:
 

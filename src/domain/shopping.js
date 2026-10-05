@@ -39,6 +39,7 @@ export function normalizeShoppingList(shoppingList = {}) {
       category: String(item.category || "other"),
       checked: Boolean(item.checked),
       custom: Boolean(item.custom),
+      ...(Number.isFinite(item.createdAt) ? { createdAt: item.createdAt } : {}),
     })).filter((item) => item.name),
   };
 }

@@ -4,6 +4,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 
 ## Arbeidsregler
 
+- Arbeidsmappen er Git-klonen `C:\Users\espen\Documents\GitHub\middagsplanlegger`. Eier håndterer commit og publisering med GitHub Desktop.
 - Ikke bruk git-kommandoer i denne lokale prosjektkopien.
 - Jobb kun innenfor prosjektmappen.
 - Bruk trygge lokale kontroller, særlig `node --check app.js` og `node --check service-worker.js`.
@@ -14,6 +15,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i oppstartsvern/lasteskjerm: kjør `node tests/app/startup.test.mjs` (tester også syntaksen i det innebygde HTML-skriptet).
 - Etter endringer i forslagmotor/poengregler: kjør `node tests/domain/suggestions.test.mjs`.
 - Etter endringer i uke-/datologikk: kjør `node tests/domain/weeks.test.mjs`.
+- Etter endringer i handlelistesynk: kjør `node tests/sync/shopping.test.mjs`.
 - Etter endringer i synk-/konfliktlogikk: kjør `node tests/sync/state.test.mjs`.
 - Etter endringer i Firebase-oppkobling/referanser: kjør `node tests/sync/firebase.test.mjs`.
 - Etter endringer i remote snapshot-/patch-bygging: kjør `node tests/sync/reads.test.mjs`.
@@ -25,9 +27,9 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i setup-rendering: kjør `node tests/render/setup.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
-- Synk-writes skal beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`.
+- For profile, preferences, metadata, meals og weeks skal synk-writes beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
-- Appen skal starte nye økter på kalender/forside, selv om siste lagrede view var noe annet.
+- Appen skal starte nye økter på Handleliste, selv om siste lagrede view var noe annet.
 
 ## Viktige filer
 
@@ -41,7 +43,8 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/sync/firebase.js`: Firebase SDK-lasting, anonym innlogging og bygging av Firestore-referanser.
 - `src/sync/reads.js`: bygging av lokale patches fra Firestore snapshots for meals og weeks.
 - `src/sync/state.js`: rene synkbeslutninger for scopes, ukeendringer og remote-konfliktbeskyttelse.
-- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata, shopping, meals og weeks.
+- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata, meals og weeks.
+- `src/sync/shopping.js`: migrering, varebasert synk, minnekø og handlelistelytter.
 - `src/render/shopping.js`: HTML-rendering for handleliste, vareeditor, vareforslag og shopping review modal.
 - `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/render/calendar.js`: HTML-rendering for kalender/forside.
@@ -83,3 +86,13 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Sikkerhetskopi eksporterer kun `syncPayload()` fra denne enheten. Ikke bygg import eller lov gjenoppretting uten en egen plan for validering og synkkonflikter.
 - Fra v92 brukes fil-deling kun ved grov peker og støttet fil-deling. Andre delingsfeil enn avbrudd skal falle tilbake til lenkenedlasting; feil ved nedlasting logges.
 - Oppstartsvernet må ligge som et vanlig innebygd skript før appmodulen, slik at det virker selv når moduler mangler. Det skal aldri slette lokal state eller cacher.
+
+## Handlelistesynk fra v93
+
+- Handleliste er startside og første fane; begge oppstarts-view er shopping.
+- Handlevarer synkes separat via src/sync/shopping.js til families/{familyId}/shoppingItems/{itemId}.
+- Nye varer får createdAt lokalt; oppdateringer skriver bare endrede felt med updateDoc. Slettede varer skal ikke gjenopprettes av en sen oppdatering.
+- Handlelistepatcher skal ikke endre global clientUpdatedAt/pendingLocalSync eller bruke det gamle shopping-scopet. Sikkerhetskopien beholder hele den lokale shoppingList.
+- Migrering leser kun app/shopping i én transaksjon. shoppingList-feltet i arkivet skal aldri endres/slettes av v93; bare migratedToItemsAt legges til.
+- Minnekø sendes etter migrering, før collection-lytteren startes. Cache-snapshots ignoreres fram til første serversnapshot. Migreringsfeil beholder lokal liste og blokkerer handlelistelytteren til neste oppstart.
+- Ingen overføring av usynkede v92-endringer eller varig offline-kø. Følg utrullingsplanen i docs/RELEASE.md; v92 og v93 deler ikke løpende handleliste.
