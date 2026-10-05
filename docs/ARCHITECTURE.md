@@ -8,6 +8,7 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `app.js` inneholder hoveddelen av appen: data, state, rendering, hendelser, forslagmotor, handlelisteflyt og Firebase-synk.
 - `src/domain/meals.js` inneholder rene oppskrifts- og måltidshjelpere som kan testes og videreutvikles uten UI.
 - `src/domain/shopping.js` inneholder rene mengde- og handlelistefunksjoner som kan testes og videreutvikles uten UI.
+- `src/domain/backup.js` bygger en versjonert eksport av domenedata og et datert filnavn. Modulen kjenner ikke UI, nedlasting eller Firebase.
 - `src/domain/suggestions.js` inneholder rene poengregler for forslagmotoren, mens historikk og state fortsatt eies av `app.js`.
 - `src/domain/weeks.js` inneholder rene uke- og datofunksjoner som kan testes og videreutvikles uten UI.
 - `src/sync/firebase.js` laster Firebase SDK, logger inn anonymt og bygger Firestore-referanser.
@@ -77,6 +78,18 @@ Oppskriftssøk oppdaterer trefflisten direkte mens brukeren skriver, uten full `
 
 Planleggerfanen bruker en oversikt-først-modell: hovedflaten viser kompakte dagkort for uken, mens redigering av planstatus, middag, type, porsjoner og notat skjer i et bottom sheet for valgt dag. Ukeforslag åpnes fra en fast handlingsknapp og viser valg for å fylle ledige dager, bytte åpne forslag eller senere koble på nye middager fra eksterne kilder. Denne flyten bruker eksisterende uke- og planstate og endrer ikke Firestore-dataformatet.
 
+Fra v91 kan middagsvelgeren opprette en hurtigmiddag direkte fra søket. Eksakt tittelmatch (uten hensyn til store/små bokstaver) skjuler opprettingsraden. Enter oppretter bare når søket har null treff. Middagen bruker eksisterende format, uten kategori eller tilberedningstid. Oppretting og plassering i valgt uke skjer i én domenepatch; eventuell toast er en separat UI-patch. Oppskriftslisten og detaljvisningen bruker den rene `mealNeedsRecipe`-funksjonen for å vise manglende oppskrift.
+
+`getStoreCategories()` bruker `orderStoreCategories` fra handledomenet. Den lagrede nøkkelrekkefølgen brukes i handlelisten og kategorivelgere, mens automatisk ingredienskategorisering beholder sin tidligere prioritet. Flytting endrer bare metadata og gjenoppretter sidens scrollposisjon.
+
+## Sikkerhetskopi
+
+Innstillinger → Oppdatering og versjon tilbyr en lokal JSON-eksport. `app.js` sender en kopi av `syncPayload()` til `buildBackup` og håndterer filnedlasting eller deling. Eksporten inkluderer familie, preferanser, metadata, middager, alle lokale uke-maps, handleliste og `clientUpdatedAt`, men ikke UI-state eller Firebase-innlogging.
+
+Filen har `app: "middagsapp"`, `exportVersion: 1`, `appVersion`, `familyId`, `exportedAt` og `data`. Filnavnet bruker enhetens lokale dato; `exportedAt` er et ISO-tidspunkt i UTC. Filen kan inneholde familienavn, notater og andre private opplysninger og bør oppbevares privat.
+
+Eksporten er et øyeblikksbilde av denne enheten, ikke en bekreftet fersk kopi fra Firestore. Den venter ikke på synk og skriver ikke remote data. Filstøtte i Web Share API åpner delingsarket; ellers brukes en Blob-lenke med `download`. Avbrutt deling gir ingen feilmelding. Toasten «Sikkerhetskopi lagret.» betyr at nettleseren har startet nedlasting eller fullført deling, ikke at appen kan kontrollere hvor filen ble lagret. Import/gjenoppretting inngår ikke i v91.
+
 ## Synk
 
 Firebase Firestore brukes med anonym innlogging og en fast familie-ID. Firebase SDK-lasting, anonym innlogging og Firestore-referanser ligger i `src/sync/firebase.js`. `src/sync/reads.js` bygger lokale patches fra remote snapshots, og `src/sync/writes.js` bygger writes for scopes som profile, shopping, meals og weeks. `app.js` eier fortsatt når snapshots skal aksepteres, når lagring planlegges og hvordan UI-status vises.
@@ -124,6 +137,7 @@ Dette krever en planlagt refaktor, ikke en liten hurtigendring.
 ```text
 src/
   domain/
+    backup.js
     shopping.js
     meals.js
     suggestions.js

@@ -114,6 +114,18 @@ Ingredienser normaliseres til:
 - `amount`
 - `unit`
 
+Fra v91 kan en hurtigmiddag opprettes med kun navn og eksisterende standardfelter. `categories`, `ingredients`, `steps`, `keyIngredients` og `suitability` er tomme lister, mens `prepTime` og `recipeUrl` er tomme strenger. Verken kategorien Kjøtt eller tilberedningstiden Rask tildeles automatisk ved lagring av en slik middag.
+
+«Mangler oppskrift» er avledet via `mealNeedsRecipe`: ingen ingredienser, ingen steg og tom/blank `recipeUrl`. Beskrivelse alene regnes ikke som oppskrift. Det lagres eller synkes ikke noe nytt statusfelt på middagen. Hurtigmiddager kan foreslås av eksisterende forslagmotor (`excludeFromSuggestions: false`).
+
+## Metadata og butikkategorier
+
+`metadata.storeCategoryOrder` er et valgfritt felt fra v91: en liste med innebygde eller egendefinerte kategorinøkler, inkludert `other` (Annet). Alt annet enn en liste normaliseres til `[]`. Manglende/tom liste bevarer tidligere standardrekkefølge.
+
+Kjente nøkler vises først i lagret rekkefølge; ukjente nøkler ignoreres og duplikater vises bare én gang. Kategorier som ikke er nevnt, legges til slutt i standardrekkefølge. Ved oppretting av en egen kategori lagres hele den viste rekkefølgen med den nye nøkkelen sist. Sletting fjerner nøkkelen fra rekkefølgen og flytter kategoriens varekoblinger til `other` som tidligere.
+
+Dette er en additiv utvidelse inne i eksisterende metadata, ikke en ny Firestore-sti eller et nytt synk-scope. Ingen migrering kreves; gamle data mangler bare den valgfrie rekkefølgen. `syncPayload`, write-bygging og listeners behandler allerede metadata som et objekt og er uendret. Visningsrekkefølgen endrer ikke automatisk ingredienskategorisering.
+
 ## Handleliste
 
 `shoppingList` har:
@@ -146,6 +158,12 @@ Noen felter er kun midlertidige UI-flyter og bør ikke regnes som domenedata:
 - editor-drafts
 
 `normalizeState` nullstiller flere slike felter ved oppstart.
+
+`shoppingReview.missingIngredients` er kun UI-state: en liste med middagsnavn og dag/dato for planlagte middager uten ingredienser. Den vises som en advarsel i gjennomgangen, men inngår ikke i synk eller sikkerhetskopi. Hvis ingen valgte middager har ingredienser, åpnes ingen gjennomgang; brukeren får en toast.
+
+## Eksportformat
+
+Sikkerhetskopi har `exportVersion: 1` og inneholder en kopi av `syncPayload()` under `data`, sammen med appversjon, familie-ID og eksporttid. Eksport skriver ikke state eller Firestore. UI-state, innlogging og synk-køer eksporteres ikke. Sikkerhetskopien har ingen automatisk gjenoppretting i v91.
 
 ## Viktige risikopunkter
 

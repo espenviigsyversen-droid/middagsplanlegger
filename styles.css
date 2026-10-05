@@ -1178,6 +1178,12 @@ button {
   min-width: 0;
 }
 
+.missing-recipe-chip {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
 .card-actions {
   display: flex;
   gap: 6px;
@@ -1476,6 +1482,15 @@ button {
 
 .shopping-review-body.week-review {
   gap: 14px;
+}
+
+.shopping-review-warning {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--surface-strong);
+  color: var(--text);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .shopping-review-group {
@@ -2234,6 +2249,31 @@ button {
   grid-template-columns: minmax(0, 1fr) auto 34px;
 }
 
+.metadata-row.editable.store-category-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.store-category-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metadata-row .store-category-actions .icon-button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.store-category-actions .button {
+  min-height: 44px;
+}
+
+.store-category-actions .icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .metadata-row.plan-mode-row {
   grid-template-columns: minmax(0, 1fr) minmax(150px, 0.8fr) auto 34px;
 }
@@ -2483,6 +2523,15 @@ button {
 
   .metadata-row.editable {
     grid-template-columns: 1fr 1fr 42px;
+  }
+
+  .metadata-row.editable.store-category-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .store-category-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .metadata-row.plan-mode-row,
@@ -2764,6 +2813,17 @@ button {
 .meal-picker-item:hover {
   border-color: var(--brand);
   background: rgba(31, 122, 92, 0.03);
+}
+
+.meal-picker-item.quick-meal-item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  border-color: var(--brand);
+}
+
+.quick-meal-item .meal-picker-item-title {
+  overflow-wrap: anywhere;
 }
 
 .meal-picker-item:active {

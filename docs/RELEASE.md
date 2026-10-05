@@ -11,6 +11,8 @@ node --check app.js
 node --check service-worker.js
 node tests/domain/meals.test.mjs
 node tests/domain/shopping.test.mjs
+node tests/domain/backup.test.mjs
+node tests/app/workflows.test.mjs
 node tests/domain/suggestions.test.mjs
 node tests/domain/weeks.test.mjs
 node tests/render/calendar.test.mjs
@@ -112,3 +114,20 @@ Appens hovedfiler kjøres network-first:
 Andre appfiler kan serveres fra cache først.
 
 Når nye lokale JavaScript-moduler legges til under `src/`, må de også legges inn i `ASSETS` i `service-worker.js` for offline/PWA-bruk.
+
+## Leveranse v91
+
+`src/domain/backup.js` er lagt til både `ASSETS` og `NETWORK_FIRST_ASSETS`. Cache-navn, appversjon og alle tre versjonsparametre i `index.html` er v91. Service worker-strategi, synklogikk, startvisning og bunnmeny er uendret.
+
+De 15 lokale testskriptene dekker domene, rendering, synk og de nye brukerflytene. `tests/app/workflows.test.mjs` kjører ekte appfunksjoner med lokale DOM-stubber uten Firebase-oppstart eller nettverk. Dette erstatter ikke test i ekte nettleser eller på iPhone.
+
+Manuell kontroll etter publisering:
+
+1. Opprett en ny middag fra søk i valgt uke/dag. Kontroller navn, toast og at velgeren lukkes. Test også Enter med null treff og at en eksisterende tittel ikke kan opprettes på nytt via hurtigflyten.
+2. Finn middagen under Annet og med filteret Mangler oppskrift. Rediger og lagre uten kategori/tilberedningstid; kontroller at disse fortsatt er tomme.
+3. Generer handleliste med både komplette og ingrediensløse middager. Kontroller advarselen og at ingen varer legges til fra ingrediensløse middager. Velg bare ingrediensløse middager og kontroller toasten.
+4. Flytt butikkategorier, også Annet, uten at siden hopper. Legg til en ny kategori og kontroller at den ligger sist. Kontroller handlelisten etter omstart og synk til en annen enhet.
+5. Last ned sikkerhetskopi på PC og les JSON-filen. På iPhone: åpne delingsarket, velg lagringssted og kontroller filen. Avbryt også delingen og kontroller at det ikke kommer en feil.
+6. Kontroller at eksisterende oppskrifter, planer og handleliste er beholdt. Bekreft v91 ved Oppdater app på begge enheter.
+
+Nedlasting/deling bekrefter ikke faktisk lagring på disk. Kontroller selv at eksportfilen finnes. Den inneholder data fra denne enheten og kan inneholde personopplysninger. Det finnes foreløpig ingen import/gjenoppretting.

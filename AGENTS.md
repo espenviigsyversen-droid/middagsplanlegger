@@ -9,6 +9,8 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Bruk trygge lokale kontroller, særlig `node --check app.js` og `node --check service-worker.js`.
 - Etter endringer i oppskrifts-/måltidslogikk: kjør `node tests/domain/meals.test.mjs`.
 - Etter endringer i handleliste-/mengdelogikk: kjør `node tests/domain/shopping.test.mjs`.
+- Etter endringer i sikkerhetskopi: kjør `node tests/domain/backup.test.mjs`.
+- Etter endringer i hurtigmiddag, butikkategorirekkefølge eller sikkerhetskopiflyt: kjør `node tests/app/workflows.test.mjs` (lokale DOM-stubber, ingen nettverkstilgang).
 - Etter endringer i forslagmotor/poengregler: kjør `node tests/domain/suggestions.test.mjs`.
 - Etter endringer i uke-/datologikk: kjør `node tests/domain/weeks.test.mjs`.
 - Etter endringer i synk-/konfliktlogikk: kjør `node tests/sync/state.test.mjs`.
@@ -32,6 +34,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `app.js`: hovedlogikk, state, rendering, hendelser, Firebase-synk og brukerflyter.
 - `src/domain/meals.js`: rene oppskrifts- og måltidshjelpere uten UI- eller Firebase-avhengighet.
 - `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner uten UI- eller Firebase-avhengighet.
+- `src/domain/backup.js`: bygging av versjonert sikkerhetskopi og filnavn uten UI- eller Firebase-avhengighet.
 - `src/domain/suggestions.js`: rene poengregler for forslagmotoren uten UI- eller Firebase-avhengighet.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner uten UI- eller Firebase-avhengighet.
 - `src/sync/firebase.js`: Firebase SDK-lasting, anonym innlogging og bygging av Firestore-referanser.
@@ -70,3 +73,10 @@ Appen viser versjonen i App-panelet ved `Oppdater app`. Dette brukes for å kont
 5. Event-binding per view eller delegert eventhåndtering.
 
 Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før større endringer.
+
+## Nye flyter fra v91
+
+- Hurtigmiddag bruker eksisterende måltidsformat med tom kategori og tilberedningstid. `mealNeedsRecipe` er avledet; ikke lagre et eget mangler-oppskrift-felt.
+- Oppretting fra middagsvelgeren legger til middag, ukeplan og lukker velgeren i én domenepatch. Søk skal fortsatt oppdatere listen uten full render per tastetrykk.
+- `metadata.storeCategoryOrder` er valgfritt og synkes via eksisterende metadata-scope. Sortering skal ikke endre ingrediensenes kategorisering eller forslagmotoren.
+- Sikkerhetskopi eksporterer kun `syncPayload()` fra denne enheten. Ikke bygg import eller lov gjenoppretting uten en egen plan for validering og synkkonflikter.

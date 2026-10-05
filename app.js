@@ -1,8 +1,11 @@
 import {
+  createQuickMeal,
   makeSlug,
   mealBaseServings,
+  mealNeedsRecipe,
   normalizeIngredients,
   normalizedRecipeUrl,
+  quickMealTitleForQuery,
   splitLines,
   splitList,
   uniqueMetadataKey,
@@ -11,10 +14,12 @@ import {
   formatShoppingAmount,
   mergeShoppingItems,
   normalizeShoppingList,
+  orderStoreCategories,
   parseAmount,
   scaleAmount,
   shoppingMergeKey,
 } from "./src/domain/shopping.js";
+import { backupFileName, buildBackup } from "./src/domain/backup.js";
 import {
   dateForWeekDay,
   daysBetweenDates,
@@ -279,6 +284,7 @@ const defaultState = {
     planModeOptions: defaultPlanModeOptions,
     ingredientMappings: {},
     storeCategories: [], // populated lazily via getStoreCategories() which falls back to STORE_CATEGORIES
+    storeCategoryOrder: [],
   },
   family: {
     name: "Familien",
@@ -326,7 +332,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v90";
+const APP_VERSION = "v91";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -397,6 +403,7 @@ function normalizeState(nextState) {
     planModeOptions: normalizePlanModeOptions(nextState.metadata?.planModeOptions),
     ingredientMappings: nextState.metadata?.ingredientMappings && typeof nextState.metadata.ingredientMappings === "object" ? nextState.metadata.ingredientMappings : {},
     storeCategories: Array.isArray(nextState.metadata?.storeCategories) ? nextState.metadata.storeCategories : [],
+    storeCategoryOrder: Array.isArray(nextState.metadata?.storeCategoryOrder) ? nextState.metadata.storeCategoryOrder : [],
   };
   if (nextState.metadata.categoryLabels.kjott === "Kjott") {
     nextState.metadata.categoryLabels.kjott = "Kjøtt";
@@ -768,13 +775,10 @@ function renderMealPickerModal() {
   `;
 }
 
-function renderMealPickerListItems(query = "", dayIndex) {
+function mealsMatchingPickerQuery(query = "") {
   const labels = getCategoryLabels();
   const normalizedQuery = query.toLowerCase().trim();
-  const plan = currentPlan();
-  const selectedMealId = plan[dayIndex] || "";
-
-  const filteredMeals = sortedMeals().filter((meal) => {
+  return sortedMeals().filter((meal) => {
     if (!normalizedQuery) return true;
     const titleMatch = meal.title.toLowerCase().includes(normalizedQuery);
     const descMatch = (meal.description || "").toLowerCase().includes(normalizedQuery);
@@ -782,8 +786,22 @@ function renderMealPickerListItems(query = "", dayIndex) {
     const ingrMatch = (meal.keyIngredients || []).some((ingr) => ingr.toLowerCase().includes(normalizedQuery));
     return titleMatch || descMatch || catMatch || ingrMatch;
   });
+}
 
-  let html = "";
+function renderMealPickerListItems(query = "", dayIndex) {
+  const labels = getCategoryLabels();
+  const selectedMealId = currentPlan()[dayIndex] || "";
+  const filteredMeals = mealsMatchingPickerQuery(query);
+  const quickTitle = quickMealTitleForQuery(query, state.meals);
+
+  let html = quickTitle ? `
+    <button class="meal-picker-item quick-meal-item" type="button" data-create-quick-meal>
+      <span class="meal-picker-item-details">
+        <span class="meal-picker-item-title">+ Legg til «${escapeHtml(quickTitle)}» som ny middag</span>
+        <span class="meal-picker-item-desc">Oppskriften kan fylles ut senere</span>
+      </span>
+    </button>
+  ` : "";
 
   // 1. Clear choice / Reset option
   html += `
@@ -854,6 +872,22 @@ function renderMealPickerListItems(query = "", dayIndex) {
   }
 
   return html;
+}
+
+function addQuickMealForPicker() {
+  const picker = state.mealPicker;
+  if (!picker?.open || picker.dayIndex === null) return;
+  const title = quickMealTitleForQuery(picker.query, state.meals);
+  if (!title) return;
+  const meal = createQuickMeal(title, makeMealId(title));
+  const weekKey = getWeekKey();
+  const plan = { ...currentPlan(), [picker.dayIndex]: meal.id };
+  setState({
+    meals: [...state.meals, meal],
+    plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: plan },
+    mealPicker: { open: false, dayIndex: null, query: "" },
+  });
+  showToast(`«${title}» er lagt til. Oppskriften kan fylles ut senere.`);
 }
 
 
@@ -1021,7 +1055,7 @@ function getStoreCategories() {
     .filter((cat) => cat.key && !builtInKeys.has(cat.key) && cat.key !== "other")
     .map((cat) => ({ ...cat, builtIn: false }));
   const other = { key: "other", label: configuredByKey.get("other")?.label || "Annet", builtIn: true };
-  return [...builtIns, ...custom, other];
+  return orderStoreCategories([...builtIns, ...custom, other], state.metadata?.storeCategoryOrder);
 }
 
 function mergeGeneratedShoppingItems(generatedItems) {
@@ -1082,19 +1116,24 @@ function createMealShoppingReview(meal) {
 
 function createWeekShoppingReview(selectedDays) {
   const shortDayNames = ["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"];
+  const missingIngredients = [];
   const groups = selectedDays
     .filter(({ dayMode }) => dayPlansMeal(dayMode))
     .map(({ weekKey, dayIndex, date, meal }) => {
       const plan = state.plansByWeek?.[weekKey] || {};
       const servings = state.servingsByWeek?.[weekKey] || {};
       const plannedMeal = meal || getMeal(plan[dayIndex]);
-      if (!plannedMeal?.ingredients?.length) return null;
+      if (!plannedMeal) return null;
+      const ingredients = (plannedMeal.ingredients || []).filter((ingredient) => ingredient.name?.trim());
+      if (!ingredients.length) {
+        missingIngredients.push(`${plannedMeal.title} (${shortDayNames[date.getDay()]} ${formatDate(date)})`);
+        return null;
+      }
 
       const base = mealBaseServings(plannedMeal);
       const target = Math.max(1, Number(servings[dayIndex]) || state.family.familySize);
       const ratio = base > 0 ? target / base : 1;
-      const items = plannedMeal.ingredients
-        .filter((ingredient) => ingredient.name?.trim())
+      const items = ingredients
         .map((ingredient) => createShoppingItemFromIngredient(ingredient, ratio, false));
 
       if (!items.length) return null;
@@ -1115,6 +1154,7 @@ function createWeekShoppingReview(selectedDays) {
     title: "Se over handlelisten",
     groups,
     selectedItemIds,
+    missingIngredients,
   };
 }
 
@@ -1349,7 +1389,7 @@ function renderShell(viewHtml) {
           <div class="brand">
             <div class="brand-mark">M</div>
             <div>
-              <h1 class="brand-title">${state.family.name} sin middagsplan</h1>
+              <h1 class="brand-title">${escapeHtml(state.family.name)} sin middagsplan</h1>
               <p class="brand-subtitle">Planlegg uka med gode middager</p>
             </div>
           </div>
@@ -1608,6 +1648,7 @@ function filteredMeals() {
       || (state.filters.flag === "favorite" && meal.favorite)
       || (state.filters.flag === "kid" && meal.kidFriendly)
       || (state.filters.flag === "quick" && meal.prepTime === "quick")
+      || (state.filters.flag === "needs-recipe" && mealNeedsRecipe(meal))
       || (state.filters.flag.startsWith("suitability:") && (meal.suitability || []).includes(state.filters.flag.replace("suitability:", "")));
     return matchesQuery && matchesCategory && matchesFlag;
   });
@@ -1748,13 +1789,13 @@ function saveMealFromForm(form) {
     description: String(formData.get("description") || "").trim(),
     recipeUrl: normalizedRecipeUrl(formData.get("recipeUrl")),
     baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
-    categories: categories.length ? categories : ["kjott"],
+    categories,
     suitability: formData.getAll("suitability"),
     kidFriendly: formData.has("kidFriendly"),
     favorite: formData.has("favorite"),
     excludeFromSuggestions: formData.has("excludeFromSuggestions"),
     leftovers: String(formData.get("leftovers") || "none"),
-    prepTime: String(formData.get("prepTime") || "quick"),
+    prepTime: String(formData.get("prepTime") || ""),
     minDaysBetween: Math.max(1, Number(formData.get("minDaysBetween")) || 14),
     ingredients,
     keyIngredients: ingredients.map((item) => item.name.toLowerCase()),
@@ -2101,18 +2142,23 @@ function renderIngredientMappingsSetup() {
 }
 
 function renderStoreCategoriesSetup() {
-  const rows = getStoreCategories().map((cat) => `
-    <div class="metadata-row editable">
+  const categories = getStoreCategories();
+  const rows = categories.map((cat, index) => `
+    <div class="metadata-row editable store-category-row">
       <input class="input" data-store-cat-label="${escapeHtml(cat.key)}" value="${escapeHtml(cat.label)}" aria-label="Butikkategori ${escapeHtml(cat.label)}">
-      <button class="button secondary compact" data-save-store-cat="${escapeHtml(cat.key)}">Lagre</button>
-      <button class="icon-button" data-remove-store-cat="${escapeHtml(cat.key)}" title="Fjern kategori" ${cat.builtIn ? "disabled" : ""}>&times;</button>
+      <div class="store-category-actions">
+        <button class="icon-button" type="button" data-move-store-cat="${escapeHtml(cat.key)}" data-direction="-1" aria-label="Flytt ${escapeHtml(cat.label)} opp" title="Flytt opp" ${index === 0 ? "disabled" : ""}>▲</button>
+        <button class="icon-button" type="button" data-move-store-cat="${escapeHtml(cat.key)}" data-direction="1" aria-label="Flytt ${escapeHtml(cat.label)} ned" title="Flytt ned" ${index === categories.length - 1 ? "disabled" : ""}>▼</button>
+        <button class="button secondary compact" type="button" data-save-store-cat="${escapeHtml(cat.key)}">Lagre</button>
+        <button class="icon-button" type="button" data-remove-store-cat="${escapeHtml(cat.key)}" aria-label="Fjern ${escapeHtml(cat.label)}" title="Fjern kategori" ${cat.builtIn ? "disabled" : ""}>&times;</button>
+      </div>
     </div>
   `).join("");
   return `
     <section class="view-header">
       <div>
         <h2 class="view-title">Butikkategorier</h2>
-        <p class="view-lead">Navnene kan tilpasses slik dere faktisk finner varene i butikken. Innebygde kategorier kan endres, men ikke slettes.</p>
+        <p class="view-lead">Legg kategoriene i den rekkefølgen dere går gjennom butikken. Rekkefølgen styrer handlelisten.</p>
       </div>
       <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
@@ -2124,6 +2170,53 @@ function renderStoreCategoriesSetup() {
       </form>
     </section>
   `;
+}
+
+function moveStoreCategory(key, direction) {
+  const keys = getStoreCategories().map((category) => category.key);
+  const index = keys.indexOf(key);
+  const target = index + direction;
+  if (index < 0 || ![-1, 1].includes(direction) || target < 0 || target >= keys.length) return;
+  [keys[index], keys[target]] = [keys[target], keys[index]];
+  const scrollY = window.scrollY;
+  setState({ metadata: { ...state.metadata, storeCategoryOrder: keys } });
+  app.querySelector(`[data-move-store-cat="${CSS.escape(key)}"][data-direction="${direction}"]`)?.focus({ preventScroll: true });
+  window.scrollTo(0, scrollY);
+}
+
+async function downloadBackup(button) {
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    const now = new Date();
+    const backup = buildBackup({ data: syncPayload(), appVersion: APP_VERSION, familyId: FAMILY_ID, now });
+    const name = backupFileName(now);
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const file = typeof File === "function" ? new File([blob], name, { type: blob.type }) : null;
+    let canShare = false;
+    try {
+      canShare = file && typeof navigator.share === "function" && Boolean(navigator.canShare?.({ files: [file] }));
+    } catch {
+      // Some browsers expose canShare but reject file capability checks.
+    }
+    if (canShare) {
+      await navigator.share({ files: [file] });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+    showToast("Sikkerhetskopi lagret.");
+  } catch (error) {
+    if (error?.name !== "AbortError") showToast("Kunne ikke lagre sikkerhetskopien. Prøv igjen.");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 
@@ -2551,6 +2644,14 @@ function bindEvents() {
       }
     });
 
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.isComposing && !mealsMatchingPickerQuery(searchInput.value).length) {
+        event.preventDefault();
+        state.mealPicker.query = searchInput.value;
+        addQuickMealForPicker();
+      }
+    });
+
     // Automatically focus input field and select all text to make editing swift
     searchInput.focus();
     searchInput.select();
@@ -2577,6 +2678,10 @@ function bindEvents() {
   const pickerList = app.querySelector(".meal-picker-list");
   if (pickerList) {
     pickerList.addEventListener("click", (e) => {
+      if (e.target.closest("[data-create-quick-meal]")) {
+        addQuickMealForPicker();
+        return;
+      }
       const item = e.target.closest("[data-select-meal]");
       if (item) {
         const mealId = item.dataset.selectMeal;
@@ -2933,6 +3038,7 @@ function bindEvents() {
   });
 
   app.querySelector("[data-refresh-app]")?.addEventListener("click", refreshApp);
+  app.querySelector("[data-download-backup]")?.addEventListener("click", (event) => downloadBackup(event.currentTarget));
 
   app.querySelector("[data-generate-list]")?.addEventListener("click", () => {
     const upcoming = getUpcomingDays(9);
@@ -2965,6 +3071,8 @@ function bindEvents() {
     const review = createWeekShoppingReview(selectedDays);
     if (review?.open) {
       setState({ generateModal: { open: false, selectedDays: [] }, shoppingReview: review });
+    } else {
+      showToast("Ingen av de valgte middagene har ingredienser.");
     }
   });
 
@@ -3072,7 +3180,12 @@ function bindEvents() {
     const configured = Array.isArray(state.metadata?.storeCategories) ? state.metadata.storeCategories : [];
     const allKeys = Object.fromEntries(getStoreCategories().map((c) => [c.key, c.label]));
     const nextKey = uniqueMetadataKey(key, allKeys);
-    setState({ metadata: { ...state.metadata, storeCategories: [...configured.filter((c) => c.key !== nextKey), { key: nextKey, label }] } });
+    const storeCategoryOrder = [...getStoreCategories().map((category) => category.key), nextKey];
+    setState({ metadata: {
+      ...state.metadata,
+      storeCategories: [...configured.filter((c) => c.key !== nextKey), { key: nextKey, label }],
+      storeCategoryOrder,
+    } });
     e.currentTarget.reset();
   });
 
@@ -3088,19 +3201,24 @@ function bindEvents() {
     });
   });
 
+  app.querySelectorAll("[data-move-store-cat]").forEach((button) => {
+    button.addEventListener("click", () => moveStoreCategory(button.dataset.moveStoreCat, Number(button.dataset.direction)));
+  });
+
   app.querySelectorAll("[data-remove-store-cat]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.removeStoreCat;
       const builtInKeys = new Set(STORE_CATEGORIES.map((c) => c.key));
       if (builtInKeys.has(key) || key === "other") return;
       const storeCategories = (state.metadata?.storeCategories || []).filter((c) => c.key !== key);
+      const storeCategoryOrder = (state.metadata?.storeCategoryOrder || []).filter((categoryKey) => categoryKey !== key);
       const mappings = Object.fromEntries(Object.entries(state.metadata?.ingredientMappings || {}).map(([ingredient, catKey]) => [
         ingredient,
         catKey === key ? "other" : catKey,
       ]));
       const items = (state.shoppingList?.items || []).map((item) => item.category === key ? { ...item, category: "other" } : item);
       setState({
-        metadata: { ...state.metadata, storeCategories, ingredientMappings: mappings },
+        metadata: { ...state.metadata, storeCategories, storeCategoryOrder, ingredientMappings: mappings },
         shoppingList: { ...state.shoppingList, items },
       });
     });
