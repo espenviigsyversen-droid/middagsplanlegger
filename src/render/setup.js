@@ -131,6 +131,11 @@ export function renderAppSettingsView(options = {}) {
         <span class="app-version-pill">Versjon ${escapeHtml(appVersion)}</span>
       </div>
     </section>
+    <section class="settings-section backup-section">
+      <h3 class="settings-section-title">Sikkerhetskopi</h3>
+      <p class="status-note">Inneholder oppskrifter, ukeplaner, handleliste og innstillinger slik de ligger på denne enheten.</p>
+      <button class="button secondary" type="button" data-download-backup>Last ned sikkerhetskopi</button>
+    </section>
   `;
 }
 

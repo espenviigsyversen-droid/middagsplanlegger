@@ -86,3 +86,12 @@ export function mergeShoppingItems(existingItems, incomingItems) {
 
   return merged;
 }
+
+export function orderStoreCategories(categories, order = []) {
+  const byKey = new Map(categories.map((category) => [category.key, category]));
+  const orderedKeys = new Set((Array.isArray(order) ? order : []).filter((key) => byKey.has(key)));
+  return [
+    ...Array.from(orderedKeys, (key) => byKey.get(key)),
+    ...categories.filter((category) => !orderedKeys.has(category.key)),
+  ];
+}

@@ -66,6 +66,7 @@ export function renderShoppingReviewModalView(options = {}) {
           <button class="modal-close" type="button" data-close-shopping-review aria-label="Lukk">×</button>
         </div>
         <div class="${bodyClass}">
+          ${review.missingIngredients?.length ? `<p class="shopping-review-warning" role="status">Mangler ingredienser: ${escapeHtml(review.missingIngredients.join(", "))}</p>` : ""}
           ${groups || `<div class="shopping-empty">Ingen varer å legge til.</div>`}
         </div>
         <div class="modal-footer">

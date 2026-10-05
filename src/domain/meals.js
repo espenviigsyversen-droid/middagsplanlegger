@@ -45,3 +45,34 @@ export function splitList(value) {
 export function splitLines(value) {
   return String(value || "").split("\n").map((item) => item.trim()).filter(Boolean);
 }
+
+export function mealNeedsRecipe(meal) {
+  return !meal?.ingredients?.length && !meal?.steps?.length && !String(meal?.recipeUrl || "").trim();
+}
+
+export function createQuickMeal(title, id) {
+  return {
+    id,
+    title: String(title || "").trim(),
+    description: "",
+    recipeUrl: "",
+    baseServings: 4,
+    categories: [],
+    kidFriendly: false,
+    favorite: false,
+    excludeFromSuggestions: false,
+    leftovers: "none",
+    prepTime: "",
+    minDaysBetween: 14,
+    keyIngredients: [],
+    ingredients: [],
+    suitability: [],
+    steps: [],
+  };
+}
+
+export function quickMealTitleForQuery(query, meals = []) {
+  const title = String(query || "").trim();
+  if (!title || meals.some((meal) => String(meal.title || "").trim().toLowerCase() === title.toLowerCase())) return "";
+  return title;
+}

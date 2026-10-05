@@ -1,3 +1,5 @@
+import { mealNeedsRecipe } from "../domain/meals.js";
+
 export function renderCategoryChipsView(meal, labels = {}, escapeHtml = String) {
   return (meal.categories || []).map((cat) => `<span class="chip ${escapeHtml(cat)}">${escapeHtml(labels[cat] || cat)}</span>`).join("");
 }
@@ -26,6 +28,7 @@ export function renderMealCardView(options = {}) {
       <div class="meal-card-head">
         <div class="meal-card-main">
           <p class="meal-title">${escapeHtml(meal.title)}</p>
+          ${mealNeedsRecipe(meal) ? '<span class="chip missing-recipe-chip">Mangler oppskrift</span>' : ""}
         </div>
         <div class="card-actions">
           <button class="icon-button meal-open-btn" type="button" data-view-meal="${escapeHtml(meal.id)}" aria-label="Åpne oppskrift">□</button>
@@ -127,6 +130,7 @@ export function renderMealsView(options = {}) {
           <option value="favorite" ${filters.flag === "favorite" ? "selected" : ""}>Favoritter</option>
           <option value="kid" ${filters.flag === "kid" ? "selected" : ""}>Barnevennlig</option>
           <option value="quick" ${filters.flag === "quick" ? "selected" : ""}>Rask middag</option>
+          <option value="needs-recipe" ${filters.flag === "needs-recipe" ? "selected" : ""}>Mangler oppskrift</option>
           ${suitabilityEntries.map(([value, label]) => `<option value="suitability:${escapeHtml(value)}" ${filters.flag === `suitability:${value}` ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
         </select>
       </div>
@@ -173,10 +177,11 @@ export function renderMealDetailView(options = {}) {
           <button class="button secondary wake-button ${keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${escapeHtml(wakeText)}</button>
           ${meal.recipeUrl ? `<a class="button secondary" href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
           <button class="button secondary" data-add-to-shopping="${escapeHtml(meal.id)}">${shoppingIconHtml} Legg i handleliste</button>
-          <button class="button secondary" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
+          <button class="button ${mealNeedsRecipe(meal) ? "" : "secondary"}" data-edit-meal="${escapeHtml(meal.id)}">${mealNeedsRecipe(meal) ? "Legg inn oppskrift" : "Rediger"}</button>
         </div>
       </div>
       ${wakeSupported ? "" : '<p class="wake-note">Denne nettleseren støtter ikke å holde skjermen våken fra web-appen.</p>'}
+      ${mealNeedsRecipe(meal) ? '<p class="empty-recipe-text">Ingen oppskrift lagt inn ennå</p>' : ""}
       <div class="recipe-columns">
         <section class="recipe-section">
           <h3>Ingredienser</h3>
@@ -285,6 +290,7 @@ export function renderMealEditorView(options = {}) {
           <div class="setting">
             <label for="mealPrep">Tilberedningstid</label>
             <select id="mealPrep" class="select" name="prepTime">
+              ${renderOption("", "Ikke angitt", meal.prepTime || "", escapeHtml)}
               ${prepTimeEntries.map(([value, label]) => renderOption(value, label, meal.prepTime, escapeHtml)).join("")}
             </select>
           </div>
