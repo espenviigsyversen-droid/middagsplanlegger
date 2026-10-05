@@ -6,19 +6,52 @@
     <meta name="theme-color" content="#246b5b">
     <title>Middagsplanlegger</title>
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="manifest" href="manifest.json?v=91">
+    <link rel="manifest" href="manifest.json?v=92">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="styles.css?v=91">
+    <link rel="stylesheet" href="styles.css?v=92">
   </head>
   <body>
     <div class="app-loading-screen" id="app-loading-screen" aria-live="polite">
       <div class="app-loading-content">
         <img class="app-loading-icon" src="icons/icon.svg" alt="">
         <div class="app-loading-spinner" aria-hidden="true"></div>
-        <p>Synker middagsplanen...</p>
+        <p id="app-loading-message">Synker middagsplanen...</p>
+        <button class="button secondary" type="button" id="app-loading-retry" hidden>Last inn på nytt</button>
       </div>
     </div>
     <div id="app"></div>
-  <script type="module" src="app.js?v=91"></script>
+    <script>
+      (() => {
+        const app = document.getElementById("app");
+        const screen = document.getElementById("app-loading-screen");
+        const spinner = screen.querySelector(".app-loading-spinner");
+        const message = document.getElementById("app-loading-message");
+        const retry = document.getElementById("app-loading-retry");
+        const hasRendered = () => Boolean(app.innerHTML.trim());
+        const stopWatching = () => {
+          clearTimeout(timeout);
+          window.removeEventListener("error", showStartupError, true);
+          observer.disconnect();
+        };
+        const showStartupError = () => {
+          if (hasRendered()) {
+            stopWatching();
+            return;
+          }
+          spinner.hidden = true;
+          message.textContent = "Appen kunne ikke starte. Sjekk nettforbindelsen og prøv igjen.";
+          retry.hidden = false;
+        };
+        const observer = new MutationObserver(() => {
+          if (hasRendered()) stopWatching();
+        });
+        observer.observe(app, { childList: true, subtree: true });
+        // Capture also catches load errors from the app module element below.
+        window.addEventListener("error", showStartupError, true);
+        const timeout = setTimeout(showStartupError, 12000);
+        retry.addEventListener("click", () => location.reload());
+      })();
+    </script>
+    <script type="module" src="app.js?v=92"></script>
   </body>
 </html>

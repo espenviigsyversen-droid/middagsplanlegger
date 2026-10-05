@@ -11,6 +11,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i handleliste-/mengdelogikk: kjør `node tests/domain/shopping.test.mjs`.
 - Etter endringer i sikkerhetskopi: kjør `node tests/domain/backup.test.mjs`.
 - Etter endringer i hurtigmiddag, butikkategorirekkefølge eller sikkerhetskopiflyt: kjør `node tests/app/workflows.test.mjs` (lokale DOM-stubber, ingen nettverkstilgang).
+- Etter endringer i oppstartsvern/lasteskjerm: kjør `node tests/app/startup.test.mjs` (tester også syntaksen i det innebygde HTML-skriptet).
 - Etter endringer i forslagmotor/poengregler: kjør `node tests/domain/suggestions.test.mjs`.
 - Etter endringer i uke-/datologikk: kjør `node tests/domain/weeks.test.mjs`.
 - Etter endringer i synk-/konfliktlogikk: kjør `node tests/sync/state.test.mjs`.
@@ -80,3 +81,5 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Oppretting fra middagsvelgeren legger til middag, ukeplan og lukker velgeren i én domenepatch. Søk skal fortsatt oppdatere listen uten full render per tastetrykk.
 - `metadata.storeCategoryOrder` er valgfritt og synkes via eksisterende metadata-scope. Sortering skal ikke endre ingrediensenes kategorisering eller forslagmotoren.
 - Sikkerhetskopi eksporterer kun `syncPayload()` fra denne enheten. Ikke bygg import eller lov gjenoppretting uten en egen plan for validering og synkkonflikter.
+- Fra v92 brukes fil-deling kun ved grov peker og støttet fil-deling. Andre delingsfeil enn avbrudd skal falle tilbake til lenkenedlasting; feil ved nedlasting logges.
+- Oppstartsvernet må ligge som et vanlig innebygd skript før appmodulen, slik at det virker selv når moduler mangler. Det skal aldri slette lokal state eller cacher.

@@ -332,7 +332,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v91";
+const APP_VERSION = "v92";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -2184,6 +2184,20 @@ function moveStoreCategory(key, direction) {
   window.scrollTo(0, scrollY);
 }
 
+function downloadBackupWithLink(blob, name) {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  try {
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+  } finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+}
+
 async function downloadBackup(button) {
   if (button.disabled) return;
   button.disabled = true;
@@ -2195,25 +2209,25 @@ async function downloadBackup(button) {
     const file = typeof File === "function" ? new File([blob], name, { type: blob.type }) : null;
     let canShare = false;
     try {
-      canShare = file && typeof navigator.share === "function" && Boolean(navigator.canShare?.({ files: [file] }));
+      canShare = file && Boolean(window.matchMedia?.("(pointer: coarse)").matches)
+        && typeof navigator.share === "function" && Boolean(navigator.canShare?.({ files: [file] }));
     } catch {
       // Some browsers expose canShare but reject file capability checks.
     }
     if (canShare) {
-      await navigator.share({ files: [file] });
+      try {
+        await navigator.share({ files: [file] });
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        downloadBackupWithLink(blob, name);
+      }
     } else {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      downloadBackupWithLink(blob, name);
     }
     showToast("Sikkerhetskopi lagret.");
   } catch (error) {
-    if (error?.name !== "AbortError") showToast("Kunne ikke lagre sikkerhetskopien. Prøv igjen.");
+    console.error("Kunne ikke lagre sikkerhetskopien.", error);
+    showToast("Kunne ikke lagre sikkerhetskopien. Prøv igjen.");
   } finally {
     button.disabled = false;
   }

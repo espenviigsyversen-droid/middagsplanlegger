@@ -78,6 +78,10 @@ body {
   font-weight: 750;
 }
 
+.app-loading-content [hidden] {
+  display: none;
+}
+
 @keyframes loadingSpin {
   to {
     transform: rotate(360deg);

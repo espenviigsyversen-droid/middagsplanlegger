@@ -19,6 +19,8 @@ source = source.replace(imports, "").replace(/render\(\);\s*initFirebaseSync\(\)
 const selectors = new Map();
 const timers = [];
 const downloads = [];
+const backupErrors = [];
+let coarsePointer = false;
 const storage = new Map();
 const app = {
   innerHTML: "",
@@ -26,9 +28,13 @@ const app = {
   querySelectorAll: (selector) => selectors.get(selector) || [],
 };
 const navigator = {};
-const window = { scrollY: 330, addEventListener() {}, scrollTo: (x, y) => { window.scrollY = y; } };
+const window = {
+  scrollY: 330, addEventListener() {}, scrollTo: (x, y) => { window.scrollY = y; },
+  matchMedia: (query) => { assert.equal(query, "(pointer: coarse)"); return { matches: coarsePointer }; },
+};
 const context = vm.createContext({
   ...bindings, structuredClone, Date, Blob, File, navigator, window,
+  console: { error: (...args) => backupErrors.push(args) },
   CSS: { escape: (value) => value },
   document: {
     querySelector: () => app,
@@ -144,11 +150,18 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v91");
+assert.equal(exported.appVersion, "v92");
 assert.deepEqual(exported.data, snapshot("syncPayload()"));
 assert.equal(downloads.at(-1).clicked, true);
 assert.match(downloads.at(-1).download, /^middagsapp-backup-\d{4}-\d{2}-\d{2}\.json$/);
 assert.equal(context.button.disabled, false);
+let shareCalls = 0;
+navigator.canShare = () => true;
+navigator.share = async () => { shareCalls += 1; };
+await run("downloadBackup(button)");
+assert.equal(shareCalls, 0); // Fine pointer must always use the link, even if canShare is true.
+assert.equal(downloads.at(-1).clicked, true);
+coarsePointer = true;
 navigator.share = async () => { throw Error("Capability check should fall back to download"); };
 navigator.canShare = () => { throw new Error("Unsupported capability check"); };
 await run("downloadBackup(button)");
@@ -165,11 +178,28 @@ await run("downloadBackup(button)");
 assert.deepEqual(JSON.parse(await sharedFile.text()).data, snapshot("syncPayload()"));
 navigator.share = async () => { const error = new Error("Cancelled"); error.name = "AbortError"; throw error; };
 run("state.toast = null;");
+const beforeCancel = downloads.length;
 await run("downloadBackup(button)");
 assert.equal(run("state.toast"), null);
-navigator.share = async () => { throw new Error("Denied"); };
+assert.equal(downloads.length, beforeCancel);
+assert.equal(context.button.disabled, false);
+navigator.share = async () => { const error = new Error("Denied"); error.name = "NotAllowedError"; throw error; };
+await run("downloadBackup(button)");
+assert.equal(downloads.length, beforeCancel + 2);
+assert.equal(downloads.at(-1).clicked, true);
+assert.equal(run("state.toast.message"), "Sikkerhetskopi lagret.");
+assert.equal(backupErrors.length, 0);
+const originalCreateElement = context.document.createElement;
+context.document.createElement = () => ({ click() { throw new Error("Download failed"); }, remove() {} });
 await run("downloadBackup(button)");
 assert.equal(run("state.toast.message"), "Kunne ikke lagre sikkerhetskopien. Prøv igjen.");
 assert.equal(context.button.disabled, false);
+assert.equal(backupErrors.length, 1);
+assert.equal(backupErrors[0][1].message, "Download failed");
+coarsePointer = false;
+await run("downloadBackup(button)");
+assert.equal(backupErrors.length, 2);
+assert.equal(context.button.disabled, false);
+context.document.createElement = originalCreateElement;
 
 console.log("app workflow tests ok (local stubs; no network)");

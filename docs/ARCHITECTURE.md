@@ -39,6 +39,8 @@ Oppstart:
 5. Firebase anonym innlogging og Firestore-synk startes.
 6. Remote data kan patche lokal state og trigge ny render.
 
+Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fanger feil før første render, inkludert lastingsfeil på appens script-element via en fangende `window.error`-lytter. Hvis appflaten fortsatt er tom etter 12 sekunder, vises samme feiltilstand: spinneren skjules, en forklaring vises og brukeren kan laste siden på nytt. En MutationObserver avslutter overvåkingen når appen har rendret. Eksisterende `hideLoadingScreen()` fjerner lasteskjermen også etter sen oppstart. Vernet er uavhengig av appens modulimporter og endrer ikke lagring, cacher eller navigasjon.
+
 ## Hovedområder i `app.js`
 
 `app.js` er foreløpig en stor fil. Den kan leses som disse logiske områdene:
@@ -88,7 +90,7 @@ Innstillinger → Oppdatering og versjon tilbyr en lokal JSON-eksport. `app.js` 
 
 Filen har `app: "middagsapp"`, `exportVersion: 1`, `appVersion`, `familyId`, `exportedAt` og `data`. Filnavnet bruker enhetens lokale dato; `exportedAt` er et ISO-tidspunkt i UTC. Filen kan inneholde familienavn, notater og andre private opplysninger og bør oppbevares privat.
 
-Eksporten er et øyeblikksbilde av denne enheten, ikke en bekreftet fersk kopi fra Firestore. Den venter ikke på synk og skriver ikke remote data. Filstøtte i Web Share API åpner delingsarket; ellers brukes en Blob-lenke med `download`. Avbrutt deling gir ingen feilmelding. Toasten «Sikkerhetskopi lagret.» betyr at nettleseren har startet nedlasting eller fullført deling, ikke at appen kan kontrollere hvor filen ble lagret. Import/gjenoppretting inngår ikke i v91.
+Eksporten er et øyeblikksbilde av denne enheten, ikke en bekreftet fersk kopi fra Firestore. Den venter ikke på synk og skriver ikke remote data. Fra v92 brukes Web Share API bare når fil-deling støttes og `matchMedia("(pointer: coarse)").matches` er sann. Ved fin peker brukes alltid en Blob-lenke med `download`, også når Windows rapporterer støtte for deling. `AbortError` avslutter uten nedlasting eller ny toast. Andre delingsfeil faller tilbake til lenkenedlasting. Hvis nedlastingen også feiler, logges feilen med `console.error` og en feil-toast vises. Toasten «Sikkerhetskopi lagret.» betyr at nettleseren har startet nedlasting eller fullført deling, ikke at appen kan kontrollere hvor filen ble lagret. Import/gjenoppretting er ikke bygget.
 
 ## Synk
 

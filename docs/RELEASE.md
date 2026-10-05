@@ -13,6 +13,7 @@ node tests/domain/meals.test.mjs
 node tests/domain/shopping.test.mjs
 node tests/domain/backup.test.mjs
 node tests/app/workflows.test.mjs
+node tests/app/startup.test.mjs
 node tests/domain/suggestions.test.mjs
 node tests/domain/weeks.test.mjs
 node tests/render/calendar.test.mjs
@@ -131,3 +132,16 @@ Manuell kontroll etter publisering:
 6. Kontroller at eksisterende oppskrifter, planer og handleliste er beholdt. Bekreft v91 ved Oppdater app på begge enheter.
 
 Nedlasting/deling bekrefter ikke faktisk lagring på disk. Kontroller selv at eksportfilen finnes. Den inneholder data fra denne enheten og kan inneholde personopplysninger. Det finnes foreløpig ingen import/gjenoppretting.
+
+## Retting v92
+
+- Alle HTML-versjonsparametre, appversjon og cache-navn er v92. Synklogikk, dataformat, navigasjon og service worker-strategi er uendret.
+- PC med fin peker bruker lenkenedlasting for sikkerhetskopi. Grov peker bruker fil-deling hvis støttet, men går videre med lenkenedlasting dersom deling feiler med annet enn `AbortError`.
+- Det innebygde oppstartsvernet viser en forklaring og «Last inn på nytt» ved feil før første render eller tom appflate etter 12 sekunder. Lokal state og cacher beholdes.
+- Alle 16 testskript kjøres før publisering. Oppstartstesten kompilerer også det innebygde skriptet i `index.html` og tester feil, tidsavbrudd, reload og sen render med lokale DOM-stubber.
+
+Manuell kontroll etter publisering:
+
+1. Kontroller v92 på PC og iPhone. Last ned sikkerhetskopi på Windows og sjekk at JSON-filen finnes.
+2. På iPhone: test både lagring via delingsarket og avbrutt deling. Avbrudd skal ikke gi ny toast eller starte nedlasting.
+3. I en separat testkopi: blokker appmodulen eller en modulimport. Kontroller feiltekst og reload-knapp. Test også forsinket oppstart over 12 sekunder og at feilskjermen forsvinner når appen rendrer. Ikke slett data eller cacher for å simulere dette.
