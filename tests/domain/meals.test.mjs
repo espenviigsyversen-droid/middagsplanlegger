@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  createQuickMeal,
   makeSlug,
   mealBaseServings,
+  mealNeedsRecipe,
   normalizeIngredients,
   normalizedRecipeUrl,
+  quickMealTitleForQuery,
   splitLines,
   splitList,
   uniqueMetadataKey,
@@ -59,5 +62,28 @@ testNormalizeIngredients();
 testRecipeUrlAndServings();
 testSlugAndUniqueKey();
 testSplitHelpers();
+
+const quickMeal = createQuickMeal("  Lasagne  ", "lasagne");
+assert.deepEqual(quickMeal, {
+  id: "lasagne", title: "Lasagne", description: "", recipeUrl: "", baseServings: 4,
+  categories: [], kidFriendly: false, favorite: false, excludeFromSuggestions: false,
+  leftovers: "none", prepTime: "", minDaysBetween: 14, keyIngredients: [],
+  ingredients: [], suitability: [], steps: [],
+});
+assert.equal(mealNeedsRecipe(quickMeal), true);
+assert.equal(mealNeedsRecipe({}), true);
+assert.equal(mealNeedsRecipe({ ...quickMeal, description: "Bare en middag", recipeUrl: "  " }), true);
+assert.equal(mealNeedsRecipe({ ...quickMeal, ingredients: [{ name: "Mel" }] }), false);
+assert.equal(mealNeedsRecipe({ ...quickMeal, steps: ["Kok"] }), false);
+assert.equal(mealNeedsRecipe({ ...quickMeal, recipeUrl: "https://example.com" }), false);
+assert.equal(quickMealTitleForQuery("  ", [quickMeal]), "");
+assert.equal(quickMealTitleForQuery(" lASAgne ", [quickMeal]), "");
+assert.equal(quickMealTitleForQuery(" taco ", [{ title: " Taco " }]), "");
+assert.equal(quickMealTitleForQuery(" LAS ", [quickMeal]), "LAS");
+assert.equal(quickMealTitleForQuery(" <ny> ", []), "<ny>");
+assert.equal(quickMealTitleForQuery(" middag "), "middag");
+const otherQuickMeal = createQuickMeal("Taco", "taco");
+otherQuickMeal.categories.push("kjott");
+assert.deepEqual(quickMeal.categories, []);
 
 console.log("meals domain tests ok");

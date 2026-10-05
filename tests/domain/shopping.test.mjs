@@ -5,6 +5,7 @@ import {
   mergeShoppingAmount,
   mergeShoppingItems,
   normalizeShoppingList,
+  orderStoreCategories,
   parseAmount,
   scaleAmount,
   shoppingMergeKey,
@@ -89,5 +90,20 @@ testFormatAndScaleAmount();
 testNormalizeShoppingList();
 testShoppingMergeHelpers();
 testMergeShoppingItems();
+
+const categories = [
+  { key: "produce", label: "Grønnsaker" },
+  { key: "meat", label: "Kjøtt" },
+  { key: "other", label: "Annet" },
+];
+const original = structuredClone(categories);
+assert.deepEqual(orderStoreCategories(categories, []), original);
+assert.deepEqual(orderStoreCategories(categories, null), original);
+assert.deepEqual(orderStoreCategories(categories, ["meat"]).map((cat) => cat.key), ["meat", "produce", "other"]);
+assert.deepEqual(orderStoreCategories(categories, ["unknown", "other", "other", "produce"]).map((cat) => cat.key), ["other", "produce", "meat"]);
+assert.deepEqual(orderStoreCategories(categories, ["unknown"]), original);
+assert.deepEqual(orderStoreCategories([], ["meat"]), []);
+assert.deepEqual(orderStoreCategories([...categories, { key: "new" }], ["other", "meat", "produce"]).map((cat) => cat.key), ["other", "meat", "produce", "new"]);
+assert.deepEqual(categories, original);
 
 console.log("shopping domain tests ok");

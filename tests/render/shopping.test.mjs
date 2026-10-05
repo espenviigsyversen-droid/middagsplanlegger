@@ -31,6 +31,7 @@ function testReviewRender() {
       mode: "week",
       title: "Se over",
       selectedItemIds: ["a"],
+      missingIngredients: ["Taco <ny> (Tir 2. juni)"],
       groups: [{ id: "g1", title: "Pasta", items: [{ id: "a", name: "Tagliatelle", amount: "1", unit: "pakke" }] }],
     },
     selectedCount: 1,
@@ -40,6 +41,8 @@ function testReviewRender() {
   assert.match(html, /week-review/);
   assert.match(html, /Legg til 1 vare/);
   assert.match(html, /Tagliatelle/);
+  assert.match(html, /Mangler ingredienser: Taco &lt;ny&gt; \(Tir 2. juni\)/);
+  assert.match(html, /shopping-review-warning/);
 }
 
 function testEditorRenderEscapesValues() {

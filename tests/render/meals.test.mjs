@@ -27,6 +27,7 @@ function testMealCardRender() {
       leftovers: "likely",
       suitability: ["weekday"],
       excludeFromSuggestions: true,
+      ingredients: [{ name: "Pasta" }],
     },
     categoryLabels: { pasta: "Pasta" },
     suitabilityLabels: { weekday: "Hverdag" },
@@ -38,6 +39,8 @@ function testMealCardRender() {
   assert.doesNotMatch(html, /Favoritt/);
   assert.doesNotMatch(html, /Kun oppskrift/);
   assert.doesNotMatch(html, /Rask/);
+  assert.doesNotMatch(html, /Mangler oppskrift/);
+  assert.match(renderMealCardView({ meal: { id: "ny", title: "Ny middag" } }), /Mangler oppskrift/);
 }
 
 function testMealsViewRender() {
@@ -58,6 +61,9 @@ function testMealsViewRender() {
   assert.match(html, /meal-search-suggestion/);
   assert.match(html, /Ny oppskrift/);
   assert.match(html, /Pasta/);
+  assert.match(html, /value="needs-recipe"/);
+  const missingFilter = renderMealsView({ filters: { flag: "needs-recipe" } });
+  assert.match(missingFilter, /value="needs-recipe" selected>Mangler oppskrift/);
 }
 
 function testMealSearchSuggestionsRender() {
@@ -91,6 +97,10 @@ function testMealDetailRender() {
   assert.match(html, /Tomat/);
   assert.match(html, /Kok pasta/);
   assert.match(html, /Åpne lenke/);
+  assert.doesNotMatch(html, /Ingen oppskrift lagt inn ennå/);
+  const missingDetail = renderMealDetailView({ meal: { id: "ny", title: "Ny" } });
+  assert.match(missingDetail, /Ingen oppskrift lagt inn ennå/);
+  assert.match(missingDetail, /data-edit-meal="ny">Legg inn oppskrift/);
 }
 
 function testMealEditorRender() {
@@ -125,6 +135,9 @@ function testMealEditorRender() {
   assert.match(html, /data-ingredient-row="0"/);
   assert.match(html, /data-step-row="0"/);
   assert.match(html, /Slett/);
+  const quickEditor = renderMealEditorView({ meal: { id: "ny", title: "Ny", prepTime: "" }, prepTimeEntries: [["quick", "Rask"]] });
+  assert.match(quickEditor, /value="" selected>Ikke angitt/);
+  assert.doesNotMatch(quickEditor, /value="quick" selected/);
 }
 
 testMealCardRender();

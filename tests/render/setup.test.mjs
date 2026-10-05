@@ -37,6 +37,9 @@ function testSetupRender() {
   const appPage = renderAppSettingsView({ appVersion: "v79", escapeHtml });
   assert.match(appPage, /Oppdater app/);
   assert.match(appPage, /Versjon v79/);
+  assert.match(appPage, /Sikkerhetskopi/);
+  assert.match(appPage, /data-download-backup/);
+  assert.match(appPage, /slik de ligger på denne enheten/);
 
   const rows = renderMetadataRowsView({ entries: [["fisk", "Fisk"]], inputAttribute: "data-category-label", saveAttribute: "data-save-category", removeAttribute: "data-remove-category", editable: true, escapeHtml });
   assert.match(rows, /data-category-label="fisk"/);
