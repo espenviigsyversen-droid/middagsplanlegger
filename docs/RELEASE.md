@@ -42,6 +42,18 @@ node functions/tests/index.test.cjs
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
 
+## Utrulling av v99
+
+v98 er publisert og i bruk. v99 er en klientoppdatering med erstatningsvalg i importpanelet, støtte for blandede tall og tydeligere porsjonsfelt. Functions, regler, domenemodell, minAppVersion 98 og service worker-strategien er uendret. Ingen serverpublisering eller nettverkskontroll inngår i leveransen.
+
+1. Eier publiserer appfilene samlet via GitHub Desktop, inkludert de endrede klientmodulene og v99-parametrene i index.html/service-worker.js.
+2. Lukk/åpne appen på PC og iPhone og kontroller v99. Minimumet skal fortsatt være 98; eksisterende administratorheving og restore skriver fortsatt 98.
+3. Importer i en oppskrift med ingredienser/steg, også etter at appen har vært i bakgrunnen. Valget skal bli synlig i panelet uten nettleserdialog. Erstatt bytter bare konfliktdeler og oppskriftsporsjoner når antallet er kjent; Behold bevarer dem. Tomme deler fylles straks. En ny import skal forkaste det gamle valget.
+4. Kontroller lukking/bytte av editor, kontobytte, gruppeoverskrifter, advarsler, og at Lagre/Avbryt fortsatt bestemmer hva som lagres. Ingen melding skal si «0 ingredienser og 0 steg».
+5. Prøv 2 1/2, 2½, 2 ½ og brøktegn i oppskriftsvisning og handleliste. Visningens avrunding er som før; handlelisten summerer tallverdiene. Kontroller den nye ledeteksten/hjelpeteksten ved Porsjoner i oppskriften.
+
+Lokale resultater og filoversikt står i docs/LEVERANSE_V99.md. Ekte PC/iPhone og import mot publisert server kontrolleres av eier etter apppublisering; denne oppgaven bruker ingen nettverk eller publisering.
+
 ## Utrulling av v98
 
 v97 er publisert og i bruk. v98 legger til valgfri ingrediensgruppe i eksisterende meals-format og lar handlevarer fra oppskrifter bruke grunnnavn og høyeste intervallmengde. Regler, dokumentstier, bruksgrenser, nøkkelhåndtering og service worker-strategi er uendret.

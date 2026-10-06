@@ -169,7 +169,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v98");
+assert.equal(exported.appVersion, "v99");
 assert.deepEqual(exported.data, snapshot("syncPayload()"));
 assert.equal(downloads.at(-1).clicked, true);
 assert.match(downloads.at(-1).download, /^middagsapp-backup-\d{4}-\d{2}-\d{2}\.json$/);
@@ -292,3 +292,8 @@ assert.equal(run('shoppingSuggestionSources().find(item => item.name === "hvitl�
 run('state.shoppingList.items = []; addShoppingItemByName("hvitløk, finhakket");');
 assert.equal(run("state.shoppingList.items[0].name"), "hvitløk, finhakket");
 assert.equal(run("state.meals[0].ingredients[0].name"), "hvitløk, finhakket");
+run('state.meals[0].ingredients = [{name:"mel",amount:"2 1/2",unit:"dl"},{name:"mel",amount:"1",unit:"dl"}];');
+const mixedWeek = snapshot('generateShoppingListItems([{weekKey:"2026-10-05",dayIndex:1,dayMode:"planned"}])');
+const mixedRecipe = snapshot('mergeShoppingItems([], createMealShoppingReview(getMeal("group-meal")).groups[0].items)');
+assert.equal(mixedWeek.length, 1); assert.equal(mixedWeek[0].amount, "3.5");
+assert.equal(mixedRecipe.length, 1); assert.equal(mixedRecipe[0].amount, "3.5");

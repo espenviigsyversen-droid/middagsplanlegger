@@ -3223,3 +3223,4 @@ button {
 .recipe-import-url-row .input { flex: 1; min-width: 0; }
 .recipe-import-panel .textarea { width: 100%; min-height: 160px; margin-bottom: 8px; }
 .recipe-import-panel p, .recipe-import-panel li { overflow-wrap: anywhere; }
+.recipe-import-choice .button-row { display: flex; flex-wrap: wrap; gap: 8px; }

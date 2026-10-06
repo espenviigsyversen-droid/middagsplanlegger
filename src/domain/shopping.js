@@ -1,6 +1,11 @@
 export function parseAmount(value) {
-  const text = String(value || "").trim().replace(",", ".");
+  const text = String(value ?? "").trim().replace(/[½¼¾]/g, char => ` ${({ "½": "1/2", "¼": "1/4", "¾": "3/4" })[char]}`).trim().replace(",", ".");
   if (!text) return null;
+  const mixed = text.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (mixed) {
+    const denominator = Number(mixed[3]);
+    return denominator ? Number(mixed[1]) + Number(mixed[2]) / denominator : null;
+  }
   const fraction = text.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
   if (fraction) {
     const numerator = Number(fraction[1]);
@@ -21,16 +26,10 @@ export function formatAmount(value) {
 }
 
 export function parseAmountRange(value) {
-  const text = String(value || "").trim().replace(/[½¼¾]/g, char => ({ "½": "1/2", "¼": "1/4", "¾": "3/4" })[char]);
+  const text = String(value || "").trim();
   const parts = text.split(/[-–]/);
   if (parts.length !== 2) return null;
-  const endpoint = part => {
-    const mixed = /^\s*(\d+)\s+(\d+\s*\/\s*\d+)\s*$/.exec(part);
-    if (!mixed) return parseAmount(part);
-    const fraction = parseAmount(mixed[2]);
-    return fraction === null ? null : Number(mixed[1]) + fraction;
-  };
-  const min = endpoint(parts[0]), max = endpoint(parts[1]);
+  const min = parseAmount(parts[0]), max = parseAmount(parts[1]);
   return min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max) && min <= max ? { min, max } : null;
 }
 

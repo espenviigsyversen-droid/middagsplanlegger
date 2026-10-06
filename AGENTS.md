@@ -139,3 +139,11 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Online administrator med v98 hever app/meta.minAppVersion til 98 ved én best-effort updateDoc per oppstart når minimumet er lavere. Feil er stille og prøves igjen ved neste oppstart. Vanlige medlemmer/offline-økter skal ikke skrive meta. Gjenoppretting oppretter minimum 98. Dette er den uttrykkelig godkjente unntaksflyten fra regelen om at vanlig domenesynk ikke skriver meta.
 - Serveren publiseres før klienten, med numerisk baseServings og additive group-felter for v97-kompatibilitet. Funksjonell kontroll krever at administrator først åpner v98 på nett, slik at eldre klienter stoppes før de kan fjerne grupper ved lagring.
 - Etter endringer: kjør alle eksisterende tester under tests/ og functions/tests/. Gruppene dekkes i meals/render/app/backup/restore-testene; versjonshevingen i access/access-startup; navn/intervaller i shopping/workflows; import og S3-uttrekk i functions-testene.
+
+## Importvalg og blandede tall fra v99
+
+- Ikke bruk window.confirm etter asynkron oppskriftsimport. Vis Erstatt/Behold i importpanelet; fyll tomme deler straks og behold konfliktdeler til valget. Les dagens skjema før erstatning og erstatt bare konfliktområdene. Andre confirm-kall, utløst direkte av klikk, beholdes.
+- recipeImportState.pending er separat minnetilstand. Aldri legg ventende respons i state, localStorage, syncPayload eller sikkerhetskopi. Forkast ved ny import, lukket/byttet editor og konto-/tilgangs-/synkøktendring. Bare Lagre lagrer oppskriften. Hent/Tolk tekst skal fortsatt virke mens valget venter.
+- parseAmount håndterer blandede tall og ½/¼/¾; parseAmountRange bruker samme tolking per ende. Nullnevner/ugyldig tekst avvises. Lagret mengdetekst og dagens avrunding beholdes.
+- Porsjonsfeltets tekst er «Porsjoner i oppskriften» med forklaring av mengdegrunnlaget. Feltet baseServings og minAppVersion 98 er uendret; aktuell appversjon/versjonsvakt er 99.
+- Kontroller tests/app/recipe-import.test.mjs (valg, livsløp, skjema og minnelagring), tests/domain/shopping.test.mjs, tests/app/workflows.test.mjs og tests/render/meals.test.mjs. Ved versjonsbump må blokkeringsfixturene i tests/app/access-startup.test.mjs ligge over aktuell appversjon. Kjør også alle øvrige testskript og node --check av kildefilene.

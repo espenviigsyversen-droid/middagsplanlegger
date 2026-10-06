@@ -211,8 +211,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v98";
-const APP_VERSION_NUMBER = 98;
+const APP_VERSION = "v99";
+const APP_VERSION_NUMBER = 99;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -239,7 +239,7 @@ let accountMembers = [];
 let accountMessage = "";
 let recipeImporter = null;
 let recipeImportSerial = 0;
-let recipeImportState = { editorId: null, busy: false, url: "", text: "", showText: false, message: "", warnings: [] };
+let recipeImportState = { editorId: null, busy: false, url: "", text: "", showText: false, message: "", warnings: [], pending: null };
 let aiKeyClient = null;
 let aiKeySession = "", aiKeyTarget = "", aiKeySerial = 0;
 let aiKeyEditorReturn = null;
@@ -1783,7 +1783,7 @@ function syncMealEditorDraftFromDom() {
 function resetRecipeImport() {
   recipeImportSerial += 1;
   recipeImportState = { editorId: state.editingMealId, busy: false,
-    url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [] };
+    url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [], pending: null };
 }
 
 function syncRecipeImportFields() {
@@ -1793,6 +1793,49 @@ function syncRecipeImportFields() {
   if (text) recipeImportState.text = text.value;
 }
 
+// Pending imports live only in recipeImportState, never in persisted/synced state.
+function applyRecipeImportToEditor(recipe, options = {}) {
+  const isNew = state.editingMealId === "new";
+  const base = isNew ? emptyMeal() : getMeal(state.editingMealId);
+  if (!base) return null;
+  const editorRows = getDraftIngredients(base);
+  const draft = { ...getDraftMeal(base), ingredients: editorRowsToIngredients(editorRows), steps: getDraftSteps(base) };
+  const hasIngredients = draft.ingredients.some(item => item.name.trim());
+  const hasSteps = draft.steps.some(step => step.trim());
+  const ingredients = recipe.ingredients?.length || 0, steps = recipe.steps?.length || 0;
+  const next = applyImportedRecipe(draft, recipe, { isNew, ...options });
+  const filledIngredients = ingredients && (!hasIngredients || options.replaceIngredients) ? ingredients : 0;
+  const filledSteps = steps && (!hasSteps || options.replaceSteps) ? steps : 0;
+  state.draftMeal = next;
+  state.draftIngredients = filledIngredients ? ingredientsToEditorRows(next.ingredients) : editorRows;
+  state.draftSteps = next.steps;
+  return { filledIngredients, filledSteps, changed: JSON.stringify(next) !== JSON.stringify(draft),
+    conflictIngredients: ingredients > 0 && hasIngredients, conflictSteps: steps > 0 && hasSteps };
+}
+
+function resolveRecipeImport(replace) {
+  const pending = recipeImportState.pending;
+  if (!pending) return;
+  if (!pending.valid()) { resetRecipeImport(); render(); return; }
+  // Read current form values, including edits made while the choice was visible.
+  syncMealEditorDraftFromDom();
+  syncRecipeImportFields();
+  recipeImportState.pending = null;
+  if (replace) {
+    const applied = applyRecipeImportToEditor({ ...pending.recipe,
+      ingredients: pending.conflictIngredients ? pending.recipe.ingredients : [],
+      steps: pending.conflictSteps ? pending.recipe.steps : [],
+    }, {
+      isNew: false, replaceIngredients: pending.conflictIngredients, replaceSteps: pending.conflictSteps,
+    });
+    const ingredients = pending.conflictIngredients ? applied?.filledIngredients || 0 : 0;
+    const steps = pending.conflictSteps ? applied?.filledSteps || 0 : 0;
+    recipeImportState.message = ingredients || steps
+      ? `Erstattet: ${ingredients} ingredienser og ${steps} steg. Se over før du lagrer.` : "Ingenting ble endret.";
+  } else recipeImportState.message = "Ingenting ble erstattet.";
+  render();
+}
+
 async function startRecipeImport(mode = "url") {
   if (!state.editingMealId || recipeImportState.busy || accessState.kind !== "ready" || accessState.offline
     || navigator.onLine === false || !firebaseConnection) return;
@@ -1800,6 +1843,7 @@ async function startRecipeImport(mode = "url") {
   if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
   syncMealEditorDraftFromDom();
   syncRecipeImportFields();
+  recipeImportState.pending = null;
   const url = normalizedRecipeUrl(recipeImportState.url);
   if ((mode === "url" && !url) || (mode === "text" && recipeImportState.text.trim().length < 20)) {
     recipeImportState.message = mode === "url" ? "Lim inn en lenke først." : "Lim inn oppskriftsteksten først.";
@@ -1830,30 +1874,19 @@ async function startRecipeImport(mode = "url") {
       if (result.code === "AI_NOT_CONFIGURED") await loadAiKeyStatus();
       return;
     }
-    const isNew = editorId === "new";
-    const base = isNew ? emptyMeal() : getMeal(editorId);
-    if (!base) return;
-    const editorRows = getDraftIngredients(base);
-    const draft = { ...getDraftMeal(base), ingredients: editorRowsToIngredients(editorRows), steps: getDraftSteps(base) };
-    const hasIngredients = draft.ingredients.some(item => item.name.trim());
-    const hasSteps = draft.steps.some(step => step.trim());
     const importedIngredients = result.recipe.ingredients?.length || 0;
     const importedSteps = result.recipe.steps?.length || 0;
-    const askIngredients = importedIngredients > 0 && hasIngredients;
-    const askSteps = importedSteps > 0 && hasSteps;
-    const question = askIngredients && askSteps ? "Erstatte ingredienser og fremgangsmåte med det importerte?"
-      : askIngredients ? "Erstatte ingrediensene med de importerte?" : "Erstatte fremgangsmåten med den importerte?";
-    const replace = (askIngredients || askSteps) ? window.confirm(question) : false;
-    const replaceIngredients = askIngredients && replace, replaceSteps = askSteps && replace;
-    const next = applyImportedRecipe(draft, result.recipe, { isNew, replaceIngredients, replaceSteps });
-    state.draftMeal = next;
-    state.draftIngredients = importedIngredients && (!hasIngredients || replaceIngredients) ? ingredientsToEditorRows(next.ingredients) : editorRows;
-    state.draftSteps = next.steps;
+    const applied = applyRecipeImportToEditor(result.recipe);
+    if (!applied) return;
+    if (applied.conflictIngredients || applied.conflictSteps) {
+      recipeImportState.pending = { recipe: result.recipe, valid,
+        conflictIngredients: applied.conflictIngredients, conflictSteps: applied.conflictSteps };
+    }
     let host = "innlimt tekst";
     try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
-    const filledIngredients = !hasIngredients || replaceIngredients ? importedIngredients : 0;
-    const filledSteps = !hasSteps || replaceSteps ? importedSteps : 0;
-    recipeImportState.message = `Importert fra ${host}: ${filledIngredients} ingredienser og ${filledSteps} steg. Se over før du lagrer.`;
+    recipeImportState.message = applied.filledIngredients || applied.filledSteps
+      ? `Importert fra ${host}: ${applied.filledIngredients} ingredienser og ${applied.filledSteps} steg. Se over før du lagrer.`
+      : applied.changed ? `Importert fra ${host}. Se over før du lagrer.` : "Ingenting ble endret.";
     recipeImportState.warnings = [...(result.warnings || [])];
     if (!importedIngredients || !importedSteps) recipeImportState.warnings.push("Lim inn teksten for det som mangler, og trykk Tolk tekst.");
   } catch {
@@ -1872,6 +1905,8 @@ function bindRecipeImportEvents() {
   });
   app.querySelector("[data-import-fetch]")?.addEventListener("click", () => startRecipeImport("url"));
   app.querySelector("[data-import-interpret]")?.addEventListener("click", () => startRecipeImport("text"));
+  app.querySelector("[data-import-replace]")?.addEventListener("click", () => resolveRecipeImport(true));
+  app.querySelector("[data-import-keep]")?.addEventListener("click", () => resolveRecipeImport(false));
   app.querySelectorAll("[data-import-from-link]").forEach(button => button.addEventListener("click", async () => {
     if (accessState.kind !== "ready" || accessState.offline || navigator.onLine === false) return;
     const meal = getMeal(button.dataset.importFromLink);
@@ -1917,6 +1952,7 @@ async function loadAiKeyStatus() {
 function syncAiKeyContext() {
   const session = `${syncGeneration}:${accessState.user?.uid || ""}:${accessState.kind}`;
   if (session !== aiKeySession) {
+    resetRecipeImport();
     aiKeySession = session; aiKeySerial += 1; aiKeyClient = null; aiKeyTarget = ""; aiKeyEditorReturn = null;
     aiKeyUi = { status: null, loading: false, busy: false, message: "" };
   }
@@ -3564,6 +3600,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  resetRecipeImport();
   syncEnabled = false;
   syncGeneration += 1;
   for (const unsubscribe of syncUnsubscribers.splice(0)) unsubscribe?.();

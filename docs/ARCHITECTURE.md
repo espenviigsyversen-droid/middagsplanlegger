@@ -41,7 +41,7 @@ Oppstart:
 3. Firebase melder innloggingsstatus. Lasteskjermen beholdes mens status og tilgang kontrolleres. Uten innlogging vises bare Google-knappen; popup åpnes kun fra knappetrykk, med kontovalg.
 4. Innlogget bruker må ha verifisert e-post og gyldig rolle i eget medlemsdokument. Deretter leses `app/meta` fra serveren. Uten markør vises oppsettskjermen; for høy minimumsversjon viser oppdateringsskjermen.
 5. Først etter godkjent medlemskap, oppsett og versjon vises appen og domenesynken startes. En tidligere godkjent enhet kan åpne lokale data uten nett med «Lokal lagring».
-6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over appens versjonsnummer (98 fra v98). Fra v98 hever online administratoroppstart minimumet til 98 med én best-effort updateDoc når det er lavere; ved feil fortsetter appen og neste oppstart prøver igjen. Vanlige medlemmer og offline-oppstart skriver ikke meta.
+6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over appens versjonsnummer (99 fra v99). Fra v98 hever online administratoroppstart minimumet til 98 med én best-effort updateDoc når det er lavere; ved feil fortsetter appen og neste oppstart prøver igjen. Vanlige medlemmer og offline-oppstart skriver ikke meta.
 
 Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fanger feil før første render, inkludert lastingsfeil på appens script-element via en fangende `window.error`-lytter. Hvis appflaten fortsatt er tom etter 12 sekunder, vises samme feiltilstand: spinneren skjules, en forklaring vises og brukeren kan laste siden på nytt. En MutationObserver avslutter overvåkingen når appen har rendret. Eksisterende `hideLoadingScreen()` fjerner lasteskjermen også etter sen oppstart. Vernet er uavhengig av appens modulimporter og endrer ikke lagring, cacher eller navigasjon.
 
@@ -139,6 +139,16 @@ ingredientBaseName brukes når oppskrifter lager handlevarer, når keyIngredient
 AI-instruksen ber om kildebaserte ingrediensgrupper, kommentar etter komma, numeriske intervaller, tydelig recipeYield/porsjonstekst og kort beskrivelse uten emojier/emneknagger/tittelgjentakelse. Servernormalisering tillater intervaller og fjerner enheten ved tom/ugyldig mengde, avgrenser grupper og fjerner gruppen hvis alle ingredienser har samme gruppe. Beskrivelse renses og tømmes hvis den bare gjentar tittelen. group er et tillegg i svaret og baseServings er fortsatt numerisk for v97-kompatibilitet.
 
 Uttrekk fra v98 behandler < som tekst når neste tegn ikke kan starte en tagg. header/footer inne i main/article beholdes. Under 500 tegn etter navigasjonsfjerning gir en ny lineær skanning med nav/header/footer beholdt, også ved uavsluttet nav. Det valgte lange tekstvinduet tar med inntil 500 tegn foran første signal, innenfor grensen og med alle valgte signaler bevart. Tidsbudsjett, inndatagrense, SSRF-vern, kvoter, nøkkelhåndtering og logger er uendret.
+
+## Erstatningsvalg og mengder fra v99
+
+Importkonflikter håndteres med to knapper i importpanelet, uten window.confirm etter det asynkrone kallet. Tomme ingrediens-/stegdeler fylles straks. De delene som allerede har innhold, beholdes til brukeren velger «Erstatt med det importerte» eller «Behold det jeg har». recipeImportState.pending holder respons, konfliktflagg og en gyldighetskontroll bare i minnet. Ny import, lukket/byttet editor og endret konto/tilgang/synkøkt forkaster resultatet; sene svar forblir beskyttet av serial, bruker og økt.
+
+Ved Erstatt leses skjemaet på nytt. applyImportedRecipe brukes bare med importerte ingredienser/steg for konfliktområdene, og utfylte metadata beholdes også for nye utkast. Gruppene oversettes til dagens overskriftsrader. Porsjoner følger ingrediensene når antallet er kjent. Behold forkaster responsen uten å erstatte noe; deler som allerede ble fylt, blir stående. Meldinger teller bare utfylte/erstattede deler, eller sier «Ingenting ble endret.» / «Ingenting ble erstattet.»; serveradvarsler beholdes. Hent/Tolk tekst kan starte en ny import mens valget venter. Ingen import eller valg lagrer oppskriften før Lagre.
+
+parseAmount støtter blandede tall og brøktegn: 2 1/2, 2½, 2 ½ og ½/¼/¾. parseAmountRange bruker samme tolking for begge ender. Skalering, oppskriftsgenererte handlevarer og summering bruker dermed samme tallverdi. Ugyldige former og nullnevner avvises; eksisterende avrunding i visningen beholdes. Mengdeteksten omskrives ikke i lagrede oppskrifter. Editorens «Porsjoner i oppskriften» forklarer at baseServings gjelder kildens mengder, og at ukeplan/handleliste regner om til familien.
+
+v99 endrer bare klienten. Functions, Firestore-regler, dokumentformat, minimum 98 og service worker-strategien er uendret.
 
 ## Synk
 

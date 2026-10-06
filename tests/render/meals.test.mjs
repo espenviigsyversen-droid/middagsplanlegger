@@ -154,6 +154,9 @@ function testMealEditorRender() {
   assert.match(html, /data-ingredient-row="0"/);
   assert.match(html, /data-step-row="0"/);
   assert.match(html, /Slett/);
+  assert.match(html, /Porsjoner i oppskriften/);
+  assert.match(html, /Antallet mengdene er beregnet for\. Ukeplan og handleliste regner om til familiens størrelse\./);
+  assert.match(html, /aria-describedby="mealBaseServingsHint"/);
   const quickEditor = renderMealEditorView({ meal: { id: "ny", title: "Ny", prepTime: "" }, prepTimeEntries: [["quick", "Rask"]] });
   assert.match(quickEditor, /value="" selected>Ikke angitt/);
   assert.doesNotMatch(quickEditor, /value="quick" selected/);
@@ -176,5 +179,19 @@ assert.match(groupedEditor, /data-move-ingredient-heading/); assert.match(groupe
 assert.match(groupedEditor, /maxlength="60"/); assert.match(groupedEditor, /data-ingredient-heading="true"/);
 const xssGroup = renderMealDetailView({ meal: { id: "group", title: "Test" }, ingredients: [{ name: "a, <script>", group: "<img>" }], escapeHtml });
 assert.doesNotMatch(xssGroup, /<img>|<script>/); assert.match(xssGroup, /&lt;img&gt;/);
+
+for (const [ingredients, steps, conflict] of [[true, true, "ingredienser og fremgangsmåte"], [true, false, "ingredienser"], [false, true, "fremgangsmåte"]]) {
+  const choice = renderMealEditorView({ meal: { title: "Test" }, importAvailable: true,
+    aiKeyStatus: { configured: true, status: "connected" },
+    recipeImport: { showText: true, warnings: ["Kontroller porsjonene"], pending: {
+      recipe: { ingredients: [{ name: "Vare" }], steps: ["Steg"] }, conflictIngredients: ingredients, conflictSteps: steps,
+    } }, escapeHtml });
+  assert.match(choice, new RegExp(`Oppskriften har allerede ${conflict}\\.`));
+  assert.match(choice, /data-import-replace>Erstatt med det importerte/);
+  assert.match(choice, /data-import-keep>Behold det jeg har/);
+  assert.match(choice, /data-import-fetch >Hent/);
+  assert.match(choice, /data-import-interpret >Tolk tekst/);
+  assert.match(choice, /Kontroller porsjonene/);
+}
 
 console.log("meals render tests ok");

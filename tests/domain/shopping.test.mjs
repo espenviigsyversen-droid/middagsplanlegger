@@ -30,6 +30,15 @@ function testParseAmount() {
   assert.equal(parseAmount("1/2"), 0.5);
   assert.equal(parseAmount("2 / 4"), 0.5);
   assert.equal(parseAmount("1/0"), null);
+  for (const value of ["2 1/2", "2½", "2 ½"]) assert.equal(parseAmount(value), 2.5);
+  for (const [glyph, fraction] of [["½", 0.5], ["¼", 0.25], ["¾", 0.75]]) {
+    assert.equal(parseAmount(glyph), fraction);
+    assert.equal(parseAmount(`2${glyph}`), 2 + fraction);
+    assert.equal(parseAmount(`2 ${glyph}`), 2 + fraction);
+  }
+  for (const value of ["2 1/0", "1 2 3", "ca 2", "2 ½ ½"]) assert.equal(parseAmount(value), null);
+  assert.deepEqual(parseAmountRange("2½–3 ¾"), { min: 2.5, max: 3.75 });
+  assert.deepEqual(parseAmountRange("2 1/2-3 1/2"), { min: 2.5, max: 3.5 });
 }
 
 function testFormatAndScaleAmount() {
@@ -40,6 +49,9 @@ function testFormatAndScaleAmount() {
   assert.equal(scaleAmount("1/2", 4, 8), "1");
   assert.equal(scaleAmount("litt", 4, 8), "litt");
   assert.equal(scaleAmount("2", 4, 4), "2");
+  assert.equal(scaleAmount("2 1/2", 4, 5), "3,25"); // Existing display rounds to quarters.
+  assert.equal(scaleAmount("2 1/2", 4, 4), "2 1/2");
+  assert.equal(scaleAmount("2½", 4, 8), "5");
 }
 
 function testNormalizeShoppingList() {
@@ -73,6 +85,7 @@ function testShoppingMergeHelpers() {
   assert.equal(mergeShoppingAmount("1", "2"), "3");
   assert.equal(mergeShoppingAmount("litt", "2"), "litt");
   assert.equal(mergeShoppingAmount("", "2"), "2");
+  assert.equal(mergeShoppingAmount("2 1/2", "1"), "3.5");
 }
 
 function testMergeShoppingItems() {

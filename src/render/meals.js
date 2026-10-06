@@ -317,6 +317,11 @@ export function renderMealEditorView(options = {}) {
         ${!importAvailable ? '<p class="field-hint">Oppskriftsimport krever innlogging og nett.</p>' : ""}
         ${recipeImport.busy ? '<p role="status">Henter oppskrift … Det kan ta opptil et halvt minutt.</p>' : ""}
         ${recipeImport.message ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
+        ${recipeImport.pending ? `<div class="recipe-import-choice" role="group" aria-label="Velg hva som skal erstattes">
+          <p role="status">Importen har ${recipeImport.pending.recipe.ingredients?.length || 0} ingredienser og ${recipeImport.pending.recipe.steps?.length || 0} steg. Oppskriften har allerede ${recipeImport.pending.conflictIngredients && recipeImport.pending.conflictSteps ? "ingredienser og fremgangsmåte" : recipeImport.pending.conflictIngredients ? "ingredienser" : "fremgangsmåte"}.</p>
+          <div class="button-row"><button class="button" type="button" data-import-replace>Erstatt med det importerte</button>
+          <button class="button secondary" type="button" data-import-keep>Behold det jeg har</button></div>
+        </div>` : ""}
         ${recipeImport.warnings?.length ? `<ul>${recipeImport.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul>` : ""}
         `}
       </section>
@@ -327,8 +332,9 @@ export function renderMealEditorView(options = {}) {
             <input id="mealTitle" class="input" name="title" required value="${escapeHtml(meal.title)}">
           </div>
           <div class="setting">
-            <label for="mealBaseServings">Porsjoner</label>
-            <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${baseServings}">
+            <label for="mealBaseServings">Porsjoner i oppskriften</label>
+            <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${baseServings}" aria-describedby="mealBaseServingsHint">
+            <p id="mealBaseServingsHint" class="field-hint">Antallet mengdene er beregnet for. Ukeplan og handleliste regner om til familiens størrelse.</p>
           </div>
         </div>
         <div class="form-row">
