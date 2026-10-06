@@ -27,7 +27,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i setup-rendering: kjør `node tests/render/setup.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
-- For profile, preferences, metadata, meals og weeks skal synk-writes beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`.
+- For profile, preferences, metadata og weeks skal synk-writes beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`. Fra v100 synkes meals med egne operasjoner per dokument, uten getDoc eller global tidsmarkør; se reglene nedenfor.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
 - Appen skal starte nye økter på Handleliste, selv om siste lagrede view var noe annet.
 
@@ -41,9 +41,11 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/domain/suggestions.js`: rene poengregler for forslagmotoren uten UI- eller Firebase-avhengighet.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner uten UI- eller Firebase-avhengighet.
 - `src/sync/firebase.js`: Firebase SDK-lasting, Google-innlogging og bygging av Firestore-referanser.
-- `src/sync/reads.js`: bygging av lokale patches fra Firestore snapshots for meals og weeks.
+- `src/sync/reads.js`: bygging av lokale patches fra Firestore snapshots for weeks.
 - `src/sync/state.js`: rene synkbeslutninger for scopes, ukeendringer og remote-konfliktbeskyttelse.
-- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata, meals og weeks.
+- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata og weeks.
+- `src/sync/meals.js`: normaliserte oppskriftsdiffer, operasjoner per dokument, minnekø og lytter med vern for ventende lokale endringer.
+- `src/sync/version.js`: én REQUIRED_MIN_APP_VERSION, brukt ved administratorheving og gjenoppretting.
 - `src/sync/shopping.js`: migrering, varebasert synk, minnekø og handlelistelytter.
 - `src/render/shopping.js`: HTML-rendering for handleliste, vareeditor, vareforslag og shopping review modal.
 - `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
@@ -122,7 +124,7 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Etter importendringer: kjør `node tests/domain/recipe-import.test.mjs`, `node tests/sync/recipe-import.test.mjs`, `node tests/app/recipe-import.test.mjs`, `node tests/render/meals.test.mjs`.
 - Serverkontroller: `node functions/tests/core.test.cjs`, `node functions/tests/extract.test.cjs`, `node functions/tests/addresses.test.cjs`, `node functions/tests/import.test.cjs`, `node functions/tests/index.test.cjs`. Kjør også node --check for index.js og alle functions/lib-filer.
 - Etter nøkkelendringer: kjør `node functions/tests/keys.test.cjs`, `node functions/tests/key-service.test.cjs`, `node functions/tests/diagnostics.test.cjs`, `node tests/sync/ai-key.test.mjs`, `node tests/render/ai-key.test.mjs` og `node tests/app/ai-key.test.mjs`, i tillegg til importtestene.
-- Functions-filer skal ikke inn i service worker. Nye klientmoduler må inn i begge asset-listene. Appens versjonsvakt følger aktuell versjon; fra v98 er minAppVersion ved oppsett 98 for å beskytte ingrediensgrupper.
+- Functions-filer skal ikke inn i service worker. Nye klientmoduler må inn i begge asset-listene. Appens versjonsvakt følger aktuell versjon; oppsett bruker REQUIRED_MIN_APP_VERSION (100 fra v100) for å beskytte ingrediensgrupper og oppskriftssynk per dokument.
 
 ## Delvis oppskriftsimport fra v97
 
@@ -147,3 +149,13 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - parseAmount håndterer blandede tall og ½/¼/¾; parseAmountRange bruker samme tolking per ende. Nullnevner/ugyldig tekst avvises. Lagret mengdetekst og dagens avrunding beholdes.
 - Porsjonsfeltets tekst er «Porsjoner i oppskriften» med forklaring av mengdegrunnlaget. Feltet baseServings og minAppVersion 98 er uendret; aktuell appversjon/versjonsvakt er 99.
 - Kontroller tests/app/recipe-import.test.mjs (valg, livsløp, skjema og minnelagring), tests/domain/shopping.test.mjs, tests/app/workflows.test.mjs og tests/render/meals.test.mjs. Ved versjonsbump må blokkeringsfixturene i tests/app/access-startup.test.mjs ligge over aktuell appversjon. Kjør også alle øvrige testskript og node --check av kildefilene.
+
+## Oppskriftssynk fra v100
+
+- Alle brukerendringer i lagrede oppskrifter skal gå gjennom setState med meals-patch. diffMeals normaliserer per ID og køer bare nye/endret innhold og slettede ID-er. Endret rekkefølge er ingen skriveoperasjon. Ikke gjeninnfør meals i global scope-synk, pendingMealDeleteIds eller automatisk cache-opplasting.
+- Upsert er setDoc av hele oppskriften med updatedAt, uten merge/getDoc/batch/transaksjon. Sletting er deleteDoc. normalizeMeals deles mellom oppstart, differ og skydata; updatedAt/clientUpdatedAt ignoreres. Tomt serverbilde er tom liste med unntak for konkrete ventende lokale operasjoner.
+- Minnekø og siste lokale operasjon per ID er runtime-state. Hvert snapshot får et løpenummer, og operasjonen husker siste nummer ved kølegging. Fjern siste lokale operasjon når SDK har kvittert og siste bilde er fra serveren uten ventende skrivinger, med høyere nummer enn operasjonens. Ikke sammenlign innhold: en annen enhets nyere versjon eller gjenopprettede oppskrift skal bli synlig. Kjør kontrollen både ved bilde og kvittering, og publiser oppdatert liste også ved kvittering. Ta samtidig inn andre oppskrifters fjernendringer. Cache ignoreres til første serverbilde. Avviste operasjoner beholdes med Synk feilet. Stopp forkaster kø/ventende tilstand/løpenummer og gjør gamle callbacks ugyldige. Ingen varig kø eller automatisk retry bygges.
+- onMeals skal ikke endre clientUpdatedAt/pendingLocalSync, utkast, UI eller ventende importvalg. Rene oppskriftsendringer skal ikke planlegge andre scopes. Sletting og hurtigmiddag endrer også ukeplan med dagens separate uke-synk; metadataopprydding skriver metadata/preferanser bare når disse faktisk er i patchen.
+- REQUIRED_MIN_APP_VERSION er 100 fra v100 og brukes av access/restore. Oppsett skriver meta sist som før. Administrator på nett hever minimumet én gang per oppstart; vanlige medlemmer/offline gjør ingen slik skriving. v99 og eldre må oppdateres før de kan skrive igjen. Appversjonen sammenlignes numerisk.
+- Importpanelet skal skjule «Ingenting ble endret.» mens et valg venter. formatShoppingAmount bruker komma; tolking skal fortsatt godta punktum.
+- Kjør node tests/sync/meals.test.mjs og node tests/app/meals-sync.test.mjs, i tillegg til relevante eksisterende state/reads/writes/access/restore/import/shopping-tester og alle testskript. Nye meals/version-moduler skal stå i begge service worker-listene. Functions og firestore.rules inngår ikke i v100-endringen.

@@ -66,7 +66,7 @@ export function normalizeShoppingList(shoppingList = {}) {
 export function formatShoppingAmount(num) {
   if (isNaN(num) || num === 0) return "";
   const rounded = parseFloat(num.toFixed(2));
-  return rounded % 1 === 0 ? String(rounded) : String(rounded);
+  return String(rounded).replace(".", ",");
 }
 
 export function shoppingMergeKey(item) {

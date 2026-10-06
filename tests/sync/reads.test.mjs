@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import {
-  buildMealsRemotePatch,
   buildWeeksRemotePatch,
   maxClientUpdatedAtFromDocs,
 } from "../../src/sync/reads.js";
@@ -16,19 +15,6 @@ function testMaxClientUpdatedAt() {
     fakeDoc("b", { clientUpdatedAt: 25 }),
     fakeDoc("c", {}),
   ]), 25);
-}
-
-function testBuildMealsRemotePatch() {
-  const patch = buildMealsRemotePatch([
-    fakeDoc("pasta", { title: "Pasta", clientUpdatedAt: 10, updatedAt: "server" }),
-    fakeDoc("remote-id", { id: "local-id", title: "Taco", clientUpdatedAt: 20 }),
-  ]);
-
-  assert.equal(patch.clientUpdatedAt, 20);
-  assert.deepEqual(patch.meals, [
-    { id: "pasta", title: "Pasta" },
-    { id: "local-id", title: "Taco" },
-  ]);
 }
 
 function testBuildWeeksRemotePatch() {
@@ -64,7 +50,6 @@ function testBuildWeeksRemotePatch() {
 }
 
 testMaxClientUpdatedAt();
-testBuildMealsRemotePatch();
 testBuildWeeksRemotePatch();
 
 console.log("sync reads tests ok");

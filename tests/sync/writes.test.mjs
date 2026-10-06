@@ -58,6 +58,7 @@ async function testBuildDocumentWrites() {
 
 async function testBuildMealWritesAndDeletes() {
   const { api, calls } = createFakeApi();
+  api.getDoc = () => { throw new Error("Legacy meals scope must not read recipes"); };
   await buildRemoteWrites({
     scopes: ["meals"],
     state: {
@@ -71,14 +72,9 @@ async function testBuildMealWritesAndDeletes() {
     updatedAt: "server-time",
     clientUpdatedAt: 456,
     pendingLocalSync: true,
-    pendingMealDeleteIds: new Set(["old-meal", "pasta"]),
   });
 
-  assert.equal(calls.length, 3);
-  assert.deepEqual(calls[0], { type: "delete", ref: { collectionRef: "meals-ref", id: "old-meal" } });
-  assert.equal(calls[1].ref.id, "pasta");
-  assert.equal(calls[2].ref.id, "taco");
-  assert.equal(calls[1].data.clientUpdatedAt, 456);
+  assert.equal(calls.length, 0, "Legacy meals scope must never write or delete recipes");
 }
 
 async function testBuildWeekWrites() {

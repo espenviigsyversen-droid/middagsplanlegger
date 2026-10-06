@@ -42,6 +42,21 @@ node functions/tests/index.test.cjs
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
 
+## Utrulling av v100
+
+v99 er publisert og i bruk. v100 flytter oppskrifter fra global scope-synk til operasjoner per dokument. Gamle klienter kan overskrive hele oppskriftslisten, så REQUIRED_MIN_APP_VERSION er 100 både ved administratorheving og restore. Functions, firestore.rules og oppskriftsstier beholdes; denne leveransen bruker ingen nettverk eller publisering.
+
+1. Før eiers publisering: la alle enheter vise Synket, ta en ny sikkerhetskopi på PC og lukk appen helt på øvrige enheter (også åpne PC-vinduer). Usynkede oppskriftsendringer fra v99 overføres ikke automatisk fra cache.
+2. Eier publiserer appfilene samlet via GitHub Desktop. De nye src/sync/meals.js og src/sync/version.js må følge med og er lagt i begge service worker-listene. Kontroller v100 på en administratorenhet på nett først.
+3. Administratoroppstart hever app/meta.minAppVersion til 100 når det er lavere. Kontroller at minimumet faktisk er 100 før gamle klienter brukes igjen. Heving er som før best effort; feil er stille og neste administratoroppstart prøver igjen. v99 skal få oppdateringsskjerm, og v100 skal slippe inn. Appen bruker numerisk sammenligning (100 > 99). Nye restore-oppsett skriver også 100.
+4. Oppdater/åpne de øvrige enhetene på nett. Kontroller lagring av én oppskrift, favoritt/merking, hurtigmiddag, sletting med ukeplan, og at andre oppskrifter er uendret. Prøv samtidig redigering av forskjellige oppskrifter på to enheter og et åpent editorutkast/ventende importvalg under fjernsynk.
+5. Tom sky-liste skal gi tom lokal liste; det finnes ingen automatisk opplasting fra cache. En konkret lokal operasjon som allerede venter i den åpne økten, beholdes til skriving/serverbekreftelse. Offline-oppstart starter ingen synk, og har ingen varig oppskriftskø. Første serverbilde ved ny oppstart kan erstatte lokale usynkede endringer. Ta sikkerhetskopi før omlasting hvis slike data må bevares.
+6. Kontroller R1 (ingen «Ingenting ble endret.» mens importvalg venter) og R2 (3,5 ved ny handlelistesummering; gamle 3.5 tolkes fortsatt). Backup/restore-format og flyt er uendret bortsett fra minimum 100. Ingen migrering eller server-/regelpublisering er nødvendig.
+
+Alle 38 lokale testskript og node --check av alle 35 kildefiler bestod. Se docs/LEVERANSE_V100.md for filoversikt, kontrollresultater og kartlegging av gamle oppstartsavhengigheter. Test på ekte PC/iPhone og mellom enheter gjenstår etter eiers apppublisering.
+
+Rettelse før publisering, fortsatt v100: ventende oppskriftsoperasjoner fjernes etter SDK-kvittering og et nyere serverbilde uten ventende skrivinger, ut fra bildets løpenummer. Innholdslikhet er ikke lenger påkrevd. Dette hindrer at en annen enhets nyere versjon skjules og status blir stående på Synker. Samme regel gjelder sletting/gjenoppretting av samme ID og begge hendelsesrekkefølger. Test også dette mellom to enheter etter publisering; lokal rettelse og kontrollresultater står i LEVERANSE_V100.md.
+
 ## Utrulling av v99
 
 v98 er publisert og i bruk. v99 er en klientoppdatering med erstatningsvalg i importpanelet, støtte for blandede tall og tydeligere porsjonsfelt. Functions, regler, domenemodell, minAppVersion 98 og service worker-strategien er uendret. Ingen serverpublisering eller nettverkskontroll inngår i leveransen.

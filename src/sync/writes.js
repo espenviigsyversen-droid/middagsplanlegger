@@ -43,7 +43,6 @@ export async function buildRemoteWrites(options = {}) {
     api = {},
     updatedAt,
     clientUpdatedAt = Date.now(),
-    pendingMealDeleteIds = [],
     pendingWeekKeys = [],
     currentWeekKey = "",
     weekPayload = () => ({}),
@@ -53,7 +52,6 @@ export async function buildRemoteWrites(options = {}) {
 
   const uniqueScopes = [...new Set(scopes)];
   const writes = [];
-  const pendingMealDeletes = pendingMealDeleteIds instanceof Set ? [...pendingMealDeleteIds] : [...pendingMealDeleteIds];
   const weekKeys = pendingWeekKeys instanceof Set ? [...pendingWeekKeys] : [...pendingWeekKeys];
 
   if (uniqueScopes.includes("profile")) {
@@ -71,24 +69,6 @@ export async function buildRemoteWrites(options = {}) {
   if (uniqueScopes.includes("metadata")) {
     if (await canWriteRemoteRef({ ref: refs.metadata, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
       writes.push(api.setDoc(refs.metadata, { metadata: state.metadata, clientUpdatedAt, updatedAt }, { merge: true }));
-    }
-  }
-
-  if (uniqueScopes.includes("meals")) {
-    const currentMealIds = new Set((state.meals || []).map((meal) => meal.id));
-    for (const mealId of pendingMealDeletes) {
-      if (!currentMealIds.has(mealId)) {
-        const ref = api.doc(refs.meals, mealId);
-        if (await canWriteRemoteRef({ ref, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
-          writes.push(api.deleteDoc(ref));
-        }
-      }
-    }
-    for (const meal of state.meals || []) {
-      const ref = api.doc(refs.meals, meal.id);
-      if (await canWriteRemoteRef({ ref, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
-        writes.push(api.setDoc(ref, { ...meal, clientUpdatedAt, updatedAt }, { merge: true }));
-      }
     }
   }
 

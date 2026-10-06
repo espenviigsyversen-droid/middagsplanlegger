@@ -281,7 +281,8 @@ noChange.values.description = recipe.description; noChange.values.recipeUrl = re
 noChange.run('state.meals[0].categories = ["fisk"];');
 noChange.form.values.getAll = field => field === "categories" ? ["fisk"] : [];
 await noChange.run('startRecipeImport("text")');
-assert.equal(noChange.run("recipeImportState.message"), "Ingenting ble endret.");
+assert.equal(noChange.run("recipeImportState.message"), "");
+assert.doesNotMatch(noChange.run("renderMealEditor()"), /Ingenting ble endret\./);
 assert.doesNotMatch(noChange.run("renderMealEditor()"), /0 ingredienser og 0 steg/);
 noChange.choose(false);
 assert.equal(noChange.run("recipeImportState.message"), "Ingenting ble erstattet.");

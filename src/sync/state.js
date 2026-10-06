@@ -1,7 +1,6 @@
 export const SYNCED_STATE_KEYS = [
   "family",
   "mealPreferences",
-  "meals",
   "metadata",
   "plansByWeek",
   "lockedPlansByWeek",
@@ -30,7 +29,6 @@ export function syncedScopesForPatch(patch) {
   if ("family" in patch) scopes.add("profile");
   if ("mealPreferences" in patch) scopes.add("preferences");
   if ("metadata" in patch) scopes.add("metadata");
-  if ("meals" in patch) scopes.add("meals");
   if (WEEK_SYNC_FIELDS.some((field) => field in patch)) scopes.add("weeks");
   return [...scopes];
 }

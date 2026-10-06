@@ -183,7 +183,7 @@ assert.doesNotMatch(xssGroup, /<img>|<script>/); assert.match(xssGroup, /&lt;img
 for (const [ingredients, steps, conflict] of [[true, true, "ingredienser og fremgangsmåte"], [true, false, "ingredienser"], [false, true, "fremgangsmåte"]]) {
   const choice = renderMealEditorView({ meal: { title: "Test" }, importAvailable: true,
     aiKeyStatus: { configured: true, status: "connected" },
-    recipeImport: { showText: true, warnings: ["Kontroller porsjonene"], pending: {
+    recipeImport: { showText: true, message: "Ingenting ble endret.", warnings: ["Kontroller porsjonene"], pending: {
       recipe: { ingredients: [{ name: "Vare" }], steps: ["Steg"] }, conflictIngredients: ingredients, conflictSteps: steps,
     } }, escapeHtml });
   assert.match(choice, new RegExp(`Oppskriften har allerede ${conflict}\\.`));
@@ -192,6 +192,7 @@ for (const [ingredients, steps, conflict] of [[true, true, "ingredienser og frem
   assert.match(choice, /data-import-fetch >Hent/);
   assert.match(choice, /data-import-interpret >Tolk tekst/);
   assert.match(choice, /Kontroller porsjonene/);
+  assert.doesNotMatch(choice, /Ingenting ble endret\./);
 }
 
 console.log("meals render tests ok");

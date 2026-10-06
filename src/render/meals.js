@@ -306,7 +306,7 @@ export function renderMealEditorView(options = {}) {
         ${!aiKeyStatus || !aiKeyStatus.configured || aiKeyStatus.status === "invalid" ? `
           <p role="status">${!importAvailable ? "Oppskriftsimport krever innlogging og nett." : !aiKeyStatus ? escapeHtml(aiKeyMessage || "Kontrollerer OpenAI-tilkoblingen …") : aiKeyStatus.status === "invalid" ? "OpenAI-nøkkelen virker ikke." : "Oppskriftsimport er ikke satt opp."}</p>
           ${isAdmin ? '<button class="button secondary" type="button" data-open-ai-settings>Åpne AI-innstillinger</button>' : '<p>Be en administrator legge inn OpenAI-nøkkel.</p>'}
-          ${recipeImport.message ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
+          ${recipeImport.message && !(recipeImport.pending && recipeImport.message === "Ingenting ble endret.") ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
         ` : `
         <label for="recipeImportUrl">Lenke til oppskrift</label>
         <div class="recipe-import-url-row"><input id="recipeImportUrl" class="input" type="url" inputmode="url" data-import-url value="${escapeHtml(recipeImport.url || "")}" maxlength="2000" placeholder="https://…" ${recipeImport.busy ? "disabled" : ""}>
@@ -316,7 +316,7 @@ export function renderMealEditorView(options = {}) {
           <button class="button secondary" type="button" data-import-interpret ${recipeImport.busy || !importAvailable ? "disabled" : ""}>Tolk tekst</button>` : ""}
         ${!importAvailable ? '<p class="field-hint">Oppskriftsimport krever innlogging og nett.</p>' : ""}
         ${recipeImport.busy ? '<p role="status">Henter oppskrift … Det kan ta opptil et halvt minutt.</p>' : ""}
-        ${recipeImport.message ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
+        ${recipeImport.message && !(recipeImport.pending && recipeImport.message === "Ingenting ble endret.") ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
         ${recipeImport.pending ? `<div class="recipe-import-choice" role="group" aria-label="Velg hva som skal erstattes">
           <p role="status">Importen har ${recipeImport.pending.recipe.ingredients?.length || 0} ingredienser og ${recipeImport.pending.recipe.steps?.length || 0} steg. Oppskriften har allerede ${recipeImport.pending.conflictIngredients && recipeImport.pending.conflictSteps ? "ingredienser og fremgangsmåte" : recipeImport.pending.conflictIngredients ? "ingredienser" : "fremgangsmåte"}.</p>
           <div class="button-row"><button class="button" type="button" data-import-replace>Erstatt med det importerte</button>

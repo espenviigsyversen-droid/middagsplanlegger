@@ -58,7 +58,7 @@ Synkstatus:
 - `clientUpdatedAt`
 - `pendingLocalSync`
 
-`clientUpdatedAt` er klientens siste tidspunkt for endring av domenedata i den opprinnelige scope-synken. Handlevarer er unntatt fra v93. `pendingLocalSync` gjelder den opprinnelige scope-synken og sporer ikke handlelisteendringer fra v93. Vanlig oppstart skal ikke alene gjøre lokal cache til en remote write.
+`clientUpdatedAt` er klientens siste tidspunkt for endring i den opprinnelige scope-synken (profile/preferences/metadata/weeks). Handlevarer er unntatt fra v93 og oppskrifter fra v100. `pendingLocalSync` gjelder bare disse fire scopes og sporer verken handleliste- eller oppskriftsoperasjoner. Oppskriftspatch alene endrer ingen av de to feltene. Vanlig oppstart skal ikke alene gjøre lokal cache til en remote write.
 
 ## Firestore-splitting
 
@@ -75,7 +75,7 @@ Appen synker ikke hele state som ett dokument lenger. Den bruker flere områder:
 Fra v95 finnes også:
 
 - `families/{FAMILY_ID}/members/{email}`: dokument-ID er e-post i små bokstaver; `{ role: "admin" | "member", addedAt, addedBy }`. Første manuelt opprettede administrator kan ha bare role.
-- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion: 95 }`. Bare administratorer skriver dette; alle medlemmer leser.
+- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion }`. Gjeldende minimum er 100 fra v100. Bare administratorer skriver dette; alle medlemmer leser.
 
 Fra utvidet v96 finnes serverprivate dokumenter, uten endringer i domenemodellen eller klientreglene:
 
@@ -89,7 +89,7 @@ KEY_ENCRYPTION_SECRET er en serverhemmelighet og bindes bare til krypterende/dek
 
 Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
 
-En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Fra v98 gjør tilgangsflyten én egen best-effort updateDoc til minAppVersion 98 ved online administratoroppstart når minimumet er lavere. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens versjonsnummer (99 fra v99), avsluttes synken og appen krever oppdatering. Nytt oppsett og gjenoppretting skriver minimum 98.
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Tilgangsflyten gjør én egen best-effort updateDoc til REQUIRED_MIN_APP_VERSION ved online administratoroppstart når minimumet er lavere. Denne konstanten er 100 fra v100 og brukes også ved restore. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens numeriske versjon (100 fra v100), avsluttes synken og appen krever oppdatering. v99 får dermed oppdateringsskjerm når minimumet er 100. Nytt oppsett og gjenoppretting skriver 100.
 
 Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
@@ -152,7 +152,17 @@ recipeImportState (URL, tekst, busy, meldinger, warnings og fra v99 pending) er 
 
 Serverens eneste nye lagring er `families/familien/private/importUsage` med UTC day, dailyCount og en kort liste av kalltidspunkter for rullerende vindu. Det er en privat teller, ikke oppskriftsdata. Klientens regler gir ikke tilgang; Admin SDK bruker én transaksjon på dette dokumentet. Members og øvrige domenesamlinger røres ikke av importfunksjonen.
 
-Fra v99 sammenlignes minAppVersion med appversjon 99; ved oppsett skrives fortsatt minimum 98. Ingen datamigrering eller automatisk omskriving av eksisterende oppskrifter utføres. baseServings lagres uendret, men ledeteksten er «Porsjoner i oppskriften» med forklaring av oppskriftens mengdegrunnlag.
+Fra v100 sammenlignes minAppVersion numerisk med appversjon 100; ved oppsett brukes den felles REQUIRED_MIN_APP_VERSION (100). Ingen datamigrering eller automatisk omskriving av eksisterende oppskrifter utføres. baseServings lagres uendret, og ledeteksten er «Porsjoner i oppskriften» med forklaring av oppskriftens mengdegrunnlag. «Ingenting ble endret.» skjules mens et importvalg venter.
+
+## Oppskriftsoperasjoner fra v100
+
+Lagrede oppskrifter ligger fortsatt i state.meals og eksporteres som før. normalizeMeals er felles for oppstart, differ og snapshots, og fjerner updatedAt/clientUpdatedAt fra den lokale oppskriften. Ny/endrede oppskrifter skrives som hele dokumentet med updatedAt, uten merge. Felt som fjernes, beholdes ikke i skyen. Ingen ny Firestore-sti, regel eller domenefelt innføres. Restore-flyten er ellers uendret og kan fortsatt skrive den historiske tidsmarkøren, som ignoreres ved lesing.
+
+mealsSync har bare minnetilstand: kø før start, antall SDK-operasjoner, siste lokale operasjon per ID, siste snapshot og løpenummer, serverSett/feil og generasjon. Hver operasjon husker løpenummeret ved kølegging. Den tilstanden inngår aldri i state, localStorage eller sikkerhetskopi. En ventende oppskriftsendring legges over snapshots til SDK har kvittert og siste bilde er fra serveren uten ventende skrivinger, med høyere løpenummer enn operasjonens. Innholdet sammenlignes ikke; dermed blir en nyere versjon fra en annen enhet synlig. Kontrollen kjøres ved både bilde og kvittering, med ny listepublisering hvis kvitteringen kommer sist. Et serverbilde fra før kølegging kan ikke fjerne operasjonen. Bare nyeste operasjon per ID gjelder. Andre ID-er oppdateres samtidig. Slettinger følger samme regel, også når en annen enhet har opprettet oppskriften på nytt. Avviste operasjoner beholdes med Synk feilet. Ingen feltvis flettealgoritme finnes for samtidige endringer på samme oppskrift; siste skriving av hele dokumentet vinner.
+
+onMeals sammenligner normalisert innhold per ID. Identisk liste/rekkefølgeendring alene gir ingen state-oppdatering. Ved endring byttes bare endrede oppskriftsobjekter; UI, editor-drafts, recipeImportState.pending, clientUpdatedAt og pendingLocalSync beholdes. En vanlig brukerendring via setState gir bare per-dokumentoperasjon, med unntak for andre felter som eksplisitt ligger i samme patch (for eksempel ukeplan ved sletting/hurtigmiddag).
+
+Første cache-bilde ignoreres; serverlisten er kilden ved oppstart og kan være tom. Global pendingLocalSync eller lokal cache utløser aldri oppskriftsopplasting. Offline-oppstart har ingen lytter/skriving/kø. Kø og lokale overlegg forsvinner ved stopp/kontobytte/omlasting, og lokale endringer kan erstattes av serverlisten. Feil beholdes synlig som Synk feilet; det finnes ingen varig kø eller automatisk gjeninnsending.
 
 ## Metadata og butikkategorier
 
@@ -185,6 +195,8 @@ Varer slås sammen basert på navn og enhet. Mengder slås sammen når begge kan
 Fra v98 brukes teksten før første komma som grunnnavn når oppskrifter lager varer. Det samme grunnnavnet brukes i keyIngredients, vareoppslag og ingrediensforslag. Lagret ingrediensnavn og manuelt innskrevet varenavn beholdes. Intervaller (bindestrek/tankestrek, desimaler og brøker) skaleres i begge ender i oppskriftsvisningen og bruker høyeste verdi i handlelisten/summeringen. Uten skalering beholdes oppskriftens mengdetekst.
 
 Fra v99 tolkes også blandede tall (2 1/2, 2½, 2 ½) og ½/¼/¾ numerisk, inkludert hver ende av intervaller. Den lagrede amount-strengen er uendret; skalering og handlelistesummering bruker den utvidede parseAmount. 2 1/0, 1 2 3 og ca 2 gir fortsatt null. Visningens avrunding og handlelistens formatering er beholdt.
+
+Fra v100 bruker formatShoppingAmount komma som desimaltegn (3,5). Eldre mengder med punktum tolkes fortsatt; lagrede strenger omskrives ikke ved innlasting.
 
 ### Firestore og migrering fra v93
 
@@ -231,5 +243,5 @@ Sikkerhetskopi har `exportVersion: 1` og inneholder en kopi av `syncPayload()` u
 - `setState` lagrer og rendrer umiddelbart. Vær forsiktig med hyppige input-events.
 - Remote patches bevarer noe UI-state, men ikke alt. Nye UI-felter bør vurderes i `applyRemoteStatePatch`.
 - Nye felter i den opprinnelige scope-synken må legges til i `syncedStateKeys`, `syncPayload`, `syncedScopesForPatch` og remote save/listener-logikk.
-- Firestore-writes for profile, preferences, metadata, meals og weeks skal sjekke remote `clientUpdatedAt` før skriving. Hvis remote er nyere enn lokal `clientUpdatedAt`, skal lokal cache ikke overskrive remote.
+- Firestore-writes for profile, preferences, metadata og weeks skal sjekke remote `clientUpdatedAt` før skriving. Hvis remote er nyere enn lokal `clientUpdatedAt`, skal lokal cache ikke overskrive remote. Meals bruker egne konkrete operasjoner fra v100, uten global tidsmarkør eller getDoc.
 - Manglende remote dokumenter skal ikke automatisk seedes fra lokal cache ved vanlig oppstart. Det er bare tillatt ved eksplisitt migrering/førstegangsoppsett eller når appen har `pendingLocalSync`.

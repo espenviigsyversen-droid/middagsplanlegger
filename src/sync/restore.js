@@ -1,4 +1,5 @@
 import { WEEK_SYNC_FIELDS } from "./state.js";
+import { REQUIRED_MIN_APP_VERSION } from "./version.js";
 import { emptyWeekPlan, emptyWeekLocks, emptyWeekDayTypes, emptyWeekServings,
   emptyWeekDayModes, emptyWeekDayNotes } from "../domain/weeks.js";
 
@@ -113,7 +114,7 @@ export function buildRestoreDocuments(backup, { email } = {}) {
       checked: item.checked, custom: item.custom, createdAt: index,
     } })),
     { path: ["app", "shopping"], data: {}, marker: "shopping" },
-    { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: 98 }, marker: "meta" },
+    { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: REQUIRED_MIN_APP_VERSION }, marker: "meta" },
   ];
   return documents;
 }
@@ -128,7 +129,7 @@ export function checkRestoreCollections(documents, existing = {}) {
   return true;
 }
 
-export async function executeRestore({ backup, email, role, api, refs, appVersion = 98, valid = () => true }) {
+export async function executeRestore({ backup, email, role, api, refs, appVersion = REQUIRED_MIN_APP_VERSION, valid = () => true }) {
   if (role !== "admin") throw new Error("Bare administratorer kan sette opp databasen.");
   const documents = buildRestoreDocuments(backup, { email });
   const assertCurrent = () => { if (!valid()) throw new Error("Oppsettet ble avbrutt fordi konto eller tilgang ble endret."); };

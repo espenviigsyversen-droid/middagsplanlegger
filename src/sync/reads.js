@@ -3,15 +3,6 @@ export function maxClientUpdatedAtFromDocs(docs = []) {
   return Math.max(...docs.map((doc) => Number(doc.data().clientUpdatedAt || 0)));
 }
 
-export function buildMealsRemotePatch(docs = []) {
-  const clientUpdatedAt = maxClientUpdatedAtFromDocs(docs);
-  const meals = docs.map((mealDoc) => {
-    const { clientUpdatedAt: _clientUpdatedAt, updatedAt: _updatedAt, ...meal } = mealDoc.data();
-    return { ...meal, id: meal.id || mealDoc.id };
-  });
-  return { meals, clientUpdatedAt };
-}
-
 export function buildWeeksRemotePatch(options = {}) {
   const {
     docs = [],

@@ -80,12 +80,14 @@ function testShoppingMergeHelpers() {
   assert.equal(formatShoppingAmount(NaN), "");
   assert.equal(formatShoppingAmount(0), "");
   assert.equal(formatShoppingAmount(1), "1");
-  assert.equal(formatShoppingAmount(1.25), "1.25");
+  assert.equal(formatShoppingAmount(1.25), "1,25");
   assert.equal(shoppingMergeKey({ name: " Pasta ", unit: " Pakke " }), "pasta__pakke");
   assert.equal(mergeShoppingAmount("1", "2"), "3");
   assert.equal(mergeShoppingAmount("litt", "2"), "litt");
   assert.equal(mergeShoppingAmount("", "2"), "2");
-  assert.equal(mergeShoppingAmount("2 1/2", "1"), "3.5");
+  assert.equal(mergeShoppingAmount("2 1/2", "1"), "3,5");
+  assert.equal(mergeShoppingAmount("2.5", "1"), "3,5");
+  assert.equal(mergeShoppingAmount("2,5", "1"), "3,5");
 }
 
 function testMergeShoppingItems() {

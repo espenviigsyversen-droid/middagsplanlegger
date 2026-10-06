@@ -5,6 +5,7 @@ import {
   mealNeedsRecipe,
   mealCanImportFromLink,
   normalizeIngredients,
+  normalizeMeals,
   ingredientBaseName,
   ingredientsToEditorRows,
   editorRowsToIngredients,
@@ -64,11 +65,11 @@ import { validateBackup, summarizeBackup, executeRestore } from "./src/sync/rest
 import { renderAccessScreen, renderAccountView } from "./src/render/account.js";
 import { initFirebaseClient } from "./src/sync/firebase.js";
 import {
-  buildMealsRemotePatch,
   buildWeeksRemotePatch,
   maxClientUpdatedAtFromDocs,
 } from "./src/sync/reads.js";
 import { createShoppingSync, diffShoppingItems } from "./src/sync/shopping.js";
+import { createMealsSync, diffMeals } from "./src/sync/meals.js";
 import { buildRemoteWrites } from "./src/sync/writes.js";
 import {
   renderCalendarView,
@@ -211,8 +212,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v99";
-const APP_VERSION_NUMBER = 99;
+const APP_VERSION = "v100";
+const APP_VERSION_NUMBER = 100;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -220,12 +221,12 @@ let wakeLock = null;
 const remoteRefs = {};
 const remoteSaveTimers = {};
 const pendingRemoteScopes = new Set();
-const pendingMealDeleteIds = new Set();
 const pendingWeekKeys = new Set();
 let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
 let shoppingSyncStatus = null;
+let mealsSyncStatus = null;
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
 let currentAuthUser = null;
@@ -245,6 +246,26 @@ let aiKeySession = "", aiKeyTarget = "", aiKeySerial = 0;
 let aiKeyEditorReturn = null;
 let aiKeyUi = { status: null, loading: false, busy: false, message: "" };
 let shoppingSync = makeShoppingSync();
+let mealsSync = makeMealsSync();
+
+function makeMealsSync() { return createMealsSync({
+  onMeals: (incoming) => {
+    const normalized = normalizeMeals(incoming);
+    const diff = diffMeals(state.meals, normalized);
+    if (!diff.upserts.length && !diff.removed.length) return;
+    const changed = new Set(diff.upserts.map(meal => meal.id));
+    const previous = new Map(state.meals.map(meal => [meal.id, meal]));
+    // Keep unchanged recipe objects and all editor/UI state intact.
+    state.meals = normalized.map(meal => changed.has(meal.id) ? meal : previous.get(meal.id));
+    saveState();
+    render();
+  },
+  onStatus: (status) => {
+    if (mealsSyncStatus === status) return;
+    mealsSyncStatus = status;
+    render();
+  },
+}); }
 
 function makeShoppingSync() { return createShoppingSync({
   onItems: (items) => {
@@ -325,14 +346,7 @@ function normalizeState(nextState) {
   }
   nextState.mealPreferences = normalizeMealPreferences(nextState.mealPreferences, nextState.metadata.categoryLabels);
   nextState.shoppingList = normalizeShoppingList(nextState.shoppingList);
-  nextState.meals = nextState.meals.map((meal) => ({
-    ...meal,
-    recipeUrl: String(meal.recipeUrl || "").trim(),
-    baseServings: Math.max(1, Number(meal.baseServings) || 4),
-    ingredients: normalizeIngredients(meal.ingredients, meal.keyIngredients),
-    keyIngredients: [...new Set(normalizeIngredients(meal.ingredients, meal.keyIngredients).map(item => ingredientBaseName(item.name).toLowerCase()))],
-    suitability: Array.isArray(meal.suitability) ? meal.suitability : [],
-  }));
+  nextState.meals = normalizeMeals(nextState.meals);
   const currentWeekKey = getWeekKey(nextState.weekOffset || 0);
   nextState.plansByWeek = nextState.plansByWeek || {};
   nextState.lockedPlansByWeek = nextState.lockedPlansByWeek || {};
@@ -470,6 +484,7 @@ function patchTouchesSyncedData(patch) {
 
 function setState(patch) {
   const previousState = state;
+  if ("meals" in patch) patch = { ...patch, meals: normalizeMeals(patch.meals) };
   if ("shoppingList" in patch) {
     const previousItems = new Map(state.shoppingList.items.map((item) => [item.id, item]));
     const createdAt = Date.now();
@@ -489,6 +504,9 @@ function setState(patch) {
   syncWakeLock();
   if ("shoppingList" in patch && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
     shoppingSync.enqueue(diffShoppingItems(previousState.shoppingList.items, state.shoppingList.items));
+  }
+  if ("meals" in patch && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
+    mealsSync.enqueue(diffMeals(previousState.meals, state.meals));
   }
   scheduleRemoteSaveForPatch(patch, previousState);
 }
@@ -533,12 +551,6 @@ function changedWeekKeys(patch, previousState) {
 function scheduleRemoteSaveForPatch(patch, previousState) {
   const scopes = syncedScopesForPatch(patch);
   if (!scopes.length) return;
-  if (scopes.includes("meals")) {
-    const currentMealIds = new Set((state.meals || []).map((meal) => meal.id));
-    (previousState?.meals || []).forEach((meal) => {
-      if (meal.id && !currentMealIds.has(meal.id)) pendingMealDeleteIds.add(meal.id);
-    });
-  }
   if (scopes.includes("weeks")) {
     changedWeekKeys(patch, previousState).forEach((weekKey) => pendingWeekKeys.add(weekKey));
   }
@@ -566,8 +578,9 @@ function applyRemoteStatePatch(patch) {
 }
 
 function syncStatusText() {
-  if (shoppingSyncStatus === "Synk feilet") return shoppingSyncStatus;
-  if (shoppingSyncStatus === "Synker" && syncStatus !== "Synk feilet") return shoppingSyncStatus;
+  const statuses = [syncStatus, shoppingSyncStatus, mealsSyncStatus];
+  if (statuses.includes("Synk feilet")) return "Synk feilet";
+  if (statuses.includes("Synker")) return "Synker";
   return syncStatus;
 }
 
@@ -1886,7 +1899,7 @@ async function startRecipeImport(mode = "url") {
     try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
     recipeImportState.message = applied.filledIngredients || applied.filledSteps
       ? `Importert fra ${host}: ${applied.filledIngredients} ingredienser og ${applied.filledSteps} steg. Se over før du lagrer.`
-      : applied.changed ? `Importert fra ${host}. Se over før du lagrer.` : "Ingenting ble endret.";
+      : applied.changed ? `Importert fra ${host}. Se over før du lagrer.` : recipeImportState.pending ? "" : "Ingenting ble endret.";
     recipeImportState.warnings = [...(result.warnings || [])];
     if (!importedIngredients || !importedSteps) recipeImportState.warnings.push("Lim inn teksten for det som mangler, og trykk Tolk tekst.");
   } catch {
@@ -3606,8 +3619,9 @@ function stopAllSync() {
   for (const unsubscribe of syncUnsubscribers.splice(0)) unsubscribe?.();
   Object.values(remoteSaveTimers).forEach(clearTimeout);
   for (const key of Object.keys(remoteSaveTimers)) delete remoteSaveTimers[key];
-  pendingRemoteScopes.clear(); pendingMealDeleteIds.clear(); pendingWeekKeys.clear();
+  pendingRemoteScopes.clear(); pendingWeekKeys.clear();
   shoppingSync.stop(); shoppingSync = makeShoppingSync(); shoppingSyncStatus = null;
+  mealsSync.stop(); mealsSync = makeMealsSync(); mealsSyncStatus = null;
   restoreBackup = null;
   accountMembers = []; accountMessage = "";
 }
@@ -3629,7 +3643,7 @@ function makeAccessSession(connection) {
       window.middagsplanSetDoc = (...args) => token === syncGeneration && syncEnabled ? api.setDoc(...args) : Promise.resolve();
       window.middagsplanDeleteDoc = (...args) => token === syncGeneration && syncEnabled ? api.deleteDoc(...args) : Promise.resolve();
       window.middagsplanServerTimestamp = api.serverTimestamp;
-      await shoppingSync.start({ api, refs, skipMigration: true });
+      await Promise.all([shoppingSync.start({ api, refs, skipMigration: true }), mealsSync.start({ api, refs })]);
       if (!valid() || token !== syncGeneration) return;
       startSplitSyncListeners((ref, next, error) => {
         const unsubscribe = api.onSnapshot(ref, (snapshot) => { if (valid() && token === syncGeneration) next(snapshot); },
@@ -3807,27 +3821,6 @@ function startSplitSyncListeners(onSnapshot) {
     });
   }, markSyncFailed);
 
-  onSnapshot(remoteRefs.meals, (snapshot) => {
-    if (snapshot.empty) {
-      if (state.pendingLocalSync && (state.meals || []).length) {
-        scheduleRemoteSave(0, ["meals"]);
-      } else {
-        pendingRemoteScopes.delete("meals");
-        applyRemoteStatePatch({ meals: [], pendingLocalSync: pendingRemoteScopes.size > 0 });
-        markSynced();
-      }
-      return;
-    }
-    const maxClientUpdatedAt = maxClientUpdatedAtFromDocs(snapshot.docs);
-    if (remoteDocumentIsOlder("meals", maxClientUpdatedAt)) return;
-    const remotePatch = buildMealsRemotePatch(snapshot.docs);
-    applyingRemoteState = true;
-    pendingRemoteScopes.delete("meals");
-    applyRemoteStatePatch({ ...remotePatch, pendingLocalSync: pendingRemoteScopes.size > 0 });
-    applyingRemoteState = false;
-    markSynced();
-  }, markSyncFailed);
-
   onSnapshot(remoteRefs.weeks, (snapshot) => {
     if (snapshot.empty) {
       if (state.pendingLocalSync) {
@@ -3892,7 +3885,7 @@ function markSyncFailed() {
   render();
 }
 
-function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks"]) {
+function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "weeks"]) {
   if (!syncEnabled || !remoteRefs.profile || applyingRemoteState) return;
   scopes.forEach((scope) => pendingRemoteScopes.add(scope));
   const key = [...new Set(scopes)].sort().join("-");
@@ -3938,14 +3931,12 @@ async function saveRemoteScopes(scopes, options = {}) {
     clientUpdatedAt,
     pendingLocalSync: state.pendingLocalSync,
     allowMissingRemoteWrite: Boolean(options.allowMissingRemoteWrite),
-    pendingMealDeleteIds,
     pendingWeekKeys,
     currentWeekKey: getWeekKey(),
     weekPayload,
   });
 
   if (token !== syncGeneration) return;
-  if (uniqueScopes.includes("meals")) pendingMealDeleteIds.clear();
   if (uniqueScopes.includes("weeks")) pendingWeekKeys.clear();
 
   await Promise.all(writes);

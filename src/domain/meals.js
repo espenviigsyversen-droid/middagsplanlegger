@@ -15,6 +15,18 @@ export function ingredientBaseName(name) {
   return whole.split(",", 1)[0].trim() || whole;
 }
 
+// Shared by startup, per-document diffs and remote recipe snapshots.
+export function normalizeMeals(meals = []) {
+  return (Array.isArray(meals) ? meals : []).map((value) => {
+    const { updatedAt: ignoredUpdatedAt, clientUpdatedAt: ignoredClientUpdatedAt, ...meal } = value;
+    const ingredients = normalizeIngredients(meal.ingredients, meal.keyIngredients);
+    return { ...meal, recipeUrl: String(meal.recipeUrl || "").trim(),
+      baseServings: Math.max(1, Number(meal.baseServings) || 4), ingredients,
+      keyIngredients: [...new Set(ingredients.map(item => ingredientBaseName(item.name).toLowerCase()))],
+      suitability: Array.isArray(meal.suitability) ? meal.suitability : [] };
+  });
+}
+
 // Headings exist only in the editor; persisted ingredients carry their group.
 export function ingredientsToEditorRows(ingredients = []) {
   const rows = [];

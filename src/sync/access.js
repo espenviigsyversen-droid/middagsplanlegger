@@ -1,4 +1,5 @@
 import { WEEK_SYNC_FIELDS } from "./state.js";
+import { REQUIRED_MIN_APP_VERSION } from "./version.js";
 
 export function stateForProject(saved, defaults, projectId) {
   const clean = structuredClone(defaults);
@@ -110,11 +111,11 @@ export function createAccessSession(options) {
         clearOffline(); onScreen({ kind: "setup", user, role }); return;
       }
       // One best-effort update per startup; only admins can write app/meta.
-      if (role === "admin" && appVersion >= 98 && Number(meta.minAppVersion || 0) < 98) {
+      if (role === "admin" && appVersion >= REQUIRED_MIN_APP_VERSION && Number(meta.minAppVersion || 0) < REQUIRED_MIN_APP_VERSION) {
         try {
-          await api.updateDoc(refs.meta, { minAppVersion: 98 });
+          await api.updateDoc(refs.meta, { minAppVersion: REQUIRED_MIN_APP_VERSION });
           if (!valid()) return;
-          meta.minAppVersion = 98;
+          meta.minAppVersion = REQUIRED_MIN_APP_VERSION;
         } catch { /* Retry at the next startup; ordinary access remains available. */ }
         if (!valid()) return;
       }
