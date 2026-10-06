@@ -77,9 +77,19 @@ Fra v95 finnes også:
 - `families/{FAMILY_ID}/members/{email}`: dokument-ID er e-post i små bokstaver; `{ role: "admin" | "member", addedAt, addedBy }`. Første manuelt opprettede administrator kan ha bare role.
 - `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion: 95 }`. Bare administratorer skriver dette; alle medlemmer leser.
 
+Fra utvidet v96 finnes serverprivate dokumenter, uten endringer i domenemodellen eller klientreglene:
+
+- `families/familien/private/openaiKey`: `{ v: 1, iv, tag, data, masked, status, updatedAt, updatedBy, checkedAt }`. iv/tag/data er base64 fra AES-256-GCM; status er connected, invalid eller unavailable. masked viser kun fire første og fire siste tegn. updatedBy er administratorens e-post, men returneres aldri til klienten og logges ikke.
+- `families/familien/private/keyUsage`: `{ calls: [millisekunder] }`, delt grense på 10 save/test-kontroller per rullerende 10 minutter.
+- `families/familien/private/importUsage`: eksisterende importgrense, 10 kall per 10 minutter og 40 per UTC-døgn. Nøkkelen kontrolleres før kvoten telles; manglende/uleselig nøkkel teller ikke.
+
+aiKeyStatus returnerer bare configured, masked, status, updatedAt, canManage og model (samt ok). Administratorer kan lagre, teste og slette gjennom aiKeySave, aiKeyTest og aiKeyDelete. Nøkkelen valideres mot modellen før den krypteres og lagres. Mislykket save beholder eksisterende dokument. Test oppdaterer status og checkedAt. Dekrypteringsfeil feiler lukket; import krever ny nøkkel og bruker ingen kvote. Sene test-/importresultater oppdaterer bare status hvis det krypterte innholdet fortsatt er det samme.
+
+KEY_ENCRYPTION_SECRET er en serverhemmelighet og bindes bare til krypterende/dekrypterende funksjoner. Klartekst fra administratorens passordfelt går direkte i den utgående forespørselen og feltet tømmes umiddelbart. Den lagres aldri i global state, localStorage, sikkerhetskopi eller logger. aiKeyUi er separat minnetilstand med begrenset status, venteflagg og norsk melding; den inneholder ingen nøkkel eller kryptert innhold og nullstilles ved endret bruker/tilgang/synkøkt. Ingen domenelytter eller vanlig synk berører private-dokumentene.
+
 Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
 
-En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig synk skriver aldri til meta. Hvis minAppVersion overstiger 95, avsluttes synken og appen krever oppdatering.
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig synk skriver aldri til meta. Hvis minAppVersion overstiger appens versjonsnummer (96 fra v96), avsluttes synken og appen krever oppdatering. Minimumet som skrives ved oppsett er fortsatt 95.
 
 Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
@@ -129,6 +139,16 @@ Ingredienser normaliseres til:
 Fra v91 kan en hurtigmiddag opprettes med kun navn og eksisterende standardfelter. `categories`, `ingredients`, `steps`, `keyIngredients` og `suitability` er tomme lister, mens `prepTime` og `recipeUrl` er tomme strenger. Verken kategorien Kjøtt eller tilberedningstiden Rask tildeles automatisk ved lagring av en slik middag.
 
 «Mangler oppskrift» er avledet via `mealNeedsRecipe`: ingen ingredienser, ingen steg og tom/blank `recipeUrl`. Beskrivelse alene regnes ikke som oppskrift. Det lagres eller synkes ikke noe nytt statusfelt på middagen. Hurtigmiddager kan foreslås av eksisterende forslagmotor (`excludeFromSuggestions: false`).
+
+## Oppskriftsutkast ved import fra v96
+
+Import bruker dagens meal-felter og dagens Lagre-flyt. applyImportedRecipe lager en kopi av utkastet; ingen lagret oppskrift endres før bekreftet Lagre. baseServings byttes sammen med ingredienser og steg; ellers beholdes den. Eksisterende utfylte metadata beholdes, mens nye oppskrifter får importfeltene. Identitet, favoritt/merking, forslagpreferanser og ukeplan påvirkes ikke.
+
+recipeImportState (URL, tekst, busy, meldinger og warnings) er runtime-state og inngår ikke i localStorage/syncPayload/sikkerhetskopi. draftMeal/draftIngredients/draftSteps er eksisterende UI-utkast og nullstilles ved oppstart/Avbryt. Importresponsen kaller ikke saveState eller setState med domenedata. Ingen nytt felt legges til meal eller Firestore.
+
+Serverens eneste nye lagring er `families/familien/private/importUsage` med UTC day, dailyCount og en kort liste av kalltidspunkter for rullerende vindu. Det er en privat teller, ikke oppskriftsdata. Klientens regler gir ikke tilgang; Admin SDK bruker én transaksjon på dette dokumentet. Members og øvrige domenesamlinger røres ikke av importfunksjonen.
+
+Fra v96 sammenlignes minAppVersion med 96; ved oppsett skrives fortsatt minimum 95. En ny versjon krever ingen datamigrering.
 
 ## Metadata og butikkategorier
 

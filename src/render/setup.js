@@ -4,6 +4,7 @@ export function renderSetupView(options = {}) {
     quickDays = [],
     counts = {},
     appVersion = "",
+    aiStatusSummary = "Ikke satt opp",
     escapeHtml = String,
   } = options;
   const quickDayCount = Array.isArray(quickDays) ? quickDays.length : 0;
@@ -54,6 +55,7 @@ export function renderSetupView(options = {}) {
       <h3 class="settings-section-title">App</h3>
       <div class="settings-list">
         ${renderSettingsRowView({ title: "Konto og medlemmer", subtitle: "Google-konto og familiens tilgang", view: "account-settings", escapeHtml })}
+        ${renderSettingsRowView({ title: "AI og oppskriftsimport", subtitle: aiStatusSummary, view: "ai-settings", escapeHtml })}
         ${renderSettingsRowView({
           title: "Oppdatering og versjon",
           subtitle: `Versjon ${appVersion}`,

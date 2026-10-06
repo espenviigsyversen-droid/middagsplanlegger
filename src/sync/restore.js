@@ -120,14 +120,14 @@ export function checkRestoreCollections(documents, existing = {}) {
   return true;
 }
 
-export async function executeRestore({ backup, email, role, api, refs, valid = () => true }) {
+export async function executeRestore({ backup, email, role, api, refs, appVersion = 95, valid = () => true }) {
   if (role !== "admin") throw new Error("Bare administratorer kan sette opp databasen.");
   const documents = buildRestoreDocuments(backup, { email });
   const assertCurrent = () => { if (!valid()) throw new Error("Oppsettet ble avbrutt fordi konto eller tilgang ble endret."); };
   assertCurrent();
   const meta = await api.getDocFromServer(refs.meta);
   assertCurrent();
-  if (meta.exists() && (meta.data().initializedAt || Number(meta.data().minAppVersion || 0) > 95)) {
+  if (meta.exists() && (meta.data().initializedAt || Number(meta.data().minAppVersion || 0) > appVersion)) {
     throw new Error("Databasen er allerede satt opp, eller appen må oppdateres. Last inn siden på nytt.");
   }
   const existing = {};
@@ -143,7 +143,7 @@ export async function executeRestore({ backup, email, role, api, refs, valid = (
     if (document.marker === "meta") {
       const latest = await api.getDocFromServer(refs.meta);
       assertCurrent();
-      if (latest.exists() && (latest.data().initializedAt || Number(latest.data().minAppVersion || 0) > 95)) {
+      if (latest.exists() && (latest.data().initializedAt || Number(latest.data().minAppVersion || 0) > appVersion)) {
         throw new Error("Oppsettet er endret på en annen enhet. Last inn siden på nytt.");
       }
     }

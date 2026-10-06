@@ -50,6 +50,10 @@ export function mealNeedsRecipe(meal) {
   return !meal?.ingredients?.length && !meal?.steps?.length && !String(meal?.recipeUrl || "").trim();
 }
 
+export function mealCanImportFromLink(meal) {
+  return Boolean(String(meal?.recipeUrl || "").trim()) && !meal?.ingredients?.length && !meal?.steps?.length;
+}
+
 export function createQuickMeal(title, id) {
   return {
     id,

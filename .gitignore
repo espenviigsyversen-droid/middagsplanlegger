@@ -1,2 +1,9 @@
 middagsapp-backup-*.json
 *.docx
+functions/node_modules/
+functions/.env*
+functions/.secret.local
+.local-tools/
+.npm-cache/
+firebase-debug*.log
+.firebase/

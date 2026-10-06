@@ -3,6 +3,7 @@ import {
   makeSlug,
   mealBaseServings,
   mealNeedsRecipe,
+  mealCanImportFromLink,
   normalizeIngredients,
   normalizedRecipeUrl,
   quickMealTitleForQuery,
@@ -20,6 +21,10 @@ import {
   shoppingMergeKey,
 } from "./src/domain/shopping.js";
 import { backupFileName, buildBackup } from "./src/domain/backup.js";
+import { applyImportedRecipe } from "./src/domain/recipe-import.js";
+import { createRecipeImporter } from "./src/sync/recipe-import.js";
+import { createAiKeyClient, sanitizeAiKeyStatus } from "./src/sync/ai-key.js";
+import { renderAiKeyView, aiKeyStatusLabel } from "./src/render/ai-key.js";
 import {
   dateForWeekDay,
   daysBetweenDates,
@@ -201,7 +206,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v95";
+const APP_VERSION = "v96";
+const APP_VERSION_NUMBER = 96;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -226,6 +232,13 @@ let restoreBackup = null;
 let accountBusy = false;
 let accountMembers = [];
 let accountMessage = "";
+let recipeImporter = null;
+let recipeImportSerial = 0;
+let recipeImportState = { editorId: null, busy: false, url: "", text: "", showText: false, message: "", warnings: [] };
+let aiKeyClient = null;
+let aiKeySession = "", aiKeyTarget = "", aiKeySerial = 0;
+let aiKeyEditorReturn = null;
+let aiKeyUi = { status: null, loading: false, busy: false, message: "" };
 let shoppingSync = makeShoppingSync();
 
 function makeShoppingSync() { return createShoppingSync({
@@ -1245,7 +1258,7 @@ function renderShoppingList() {
 function renderShell(viewHtml) {
   const displayedSyncStatus = syncStatusText();
   const isRecipeView = state.activeView === "recipe";
-  const settingsViews = new Set(["setup", "account-settings", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
+  const settingsViews = new Set(["setup", "account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
   const isSettingsView = settingsViews.has(state.activeView);
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
@@ -1573,6 +1586,7 @@ function renderMealDetail() {
     targetServings,
     shoppingIconHtml: icon("shopping"),
     scaleAmount,
+    importAvailable: accessState.kind === "ready" && !accessState.offline && navigator.onLine !== false,
     escapeHtml,
   });
 }
@@ -1615,6 +1629,11 @@ function renderMealEditor() {
     suitabilityEntries: suitabilityEntries(),
     prepTimeEntries: prepTimeEntries(),
     unitOptions: getUnitOptions(),
+    recipeImport: recipeImportState,
+    aiKeyStatus: aiKeyUi.status,
+    aiKeyMessage: aiKeyUi.message,
+    isAdmin: accessState.role === "admin",
+    importAvailable: accessState.kind === "ready" && !accessState.offline && navigator.onLine !== false,
     escapeHtml,
   });
 }
@@ -1721,8 +1740,9 @@ function syncDraftMealFromDom() {
     categories: formData.getAll("categories"),
     kidFriendly: formData.has("kidFriendly"),
     favorite: formData.has("favorite"),
+    excludeFromSuggestions: formData.has("excludeFromSuggestions"),
     leftovers: String(formData.get("leftovers") || "none"),
-    prepTime: String(formData.get("prepTime") || "quick"),
+    prepTime: String(formData.get("prepTime") || ""),
     minDaysBetween: Number(formData.get("minDaysBetween") || 14),
     suitability: formData.getAll("suitability"),
   };
@@ -1745,6 +1765,185 @@ function syncMealEditorDraftFromDom() {
   syncDraftStepsFromDom();
 }
 
+function resetRecipeImport() {
+  recipeImportSerial += 1;
+  recipeImportState = { editorId: state.editingMealId, busy: false,
+    url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [] };
+}
+
+function syncRecipeImportFields() {
+  const url = app.querySelector("[data-import-url]");
+  const text = app.querySelector("[data-import-text]");
+  if (url) recipeImportState.url = url.value;
+  if (text) recipeImportState.text = text.value;
+}
+
+async function startRecipeImport(mode = "url") {
+  if (!state.editingMealId || recipeImportState.busy || accessState.kind !== "ready" || accessState.offline
+    || navigator.onLine === false || !firebaseConnection) return;
+  if (!aiKeyUi.status?.configured || aiKeyUi.status.status === "invalid") return;
+  if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
+  syncMealEditorDraftFromDom();
+  syncRecipeImportFields();
+  const url = normalizedRecipeUrl(recipeImportState.url);
+  if ((mode === "url" && !url) || (mode === "text" && recipeImportState.text.trim().length < 20)) {
+    recipeImportState.message = mode === "url" ? "Lim inn en lenke først." : "Lim inn oppskriftsteksten først.";
+    recipeImportState.warnings = [];
+    render();
+    return;
+  }
+  const editorId = state.editingMealId, generation = syncGeneration, uid = accessState.user?.uid;
+  const serial = ++recipeImportSerial;
+  const valid = () => serial === recipeImportSerial && generation === syncGeneration && accessState.kind === "ready"
+    && accessState.user?.uid === uid && state.editingMealId === editorId && state.activeView === "meals";
+  recipeImportState.busy = true; recipeImportState.message = ""; recipeImportState.warnings = [];
+  render();
+  const input = { mode, categories: categoryEntries().map(([key, label]) => ({ key, label })), units: getUnitOptions(),
+    ...(mode === "url" ? { url } : { text: recipeImportState.text, ...(url ? { sourceUrl: url } : {}) }) };
+  try {
+    if (!recipeImporter) recipeImporter = createRecipeImporter({ firebaseApp: firebaseConnection.firebaseApp, sdkVersion: FIREBASE_SDK_VERSION });
+    const result = await recipeImporter(input);
+    if (!valid()) return;
+    // The form stays editable while waiting. Capture the most recent input.
+    syncMealEditorDraftFromDom();
+    if (!result.ok) {
+      if (result.code === "NEEDS_TEXT") {
+        recipeImportState.showText = true;
+        recipeImportState.message = "Instagram og Facebook kan ikke hentes automatisk. Kopier bildeteksten og lim den inn her.";
+        if (!state.draftMeal?.recipeUrl) state.draftMeal = { ...(state.draftMeal || {}), recipeUrl: url };
+      } else recipeImportState.message = result.message || "Kunne ikke importere oppskriften.";
+      if (result.code === "AI_NOT_CONFIGURED") await loadAiKeyStatus();
+      return;
+    }
+    const isNew = editorId === "new";
+    const base = isNew ? emptyMeal() : getMeal(editorId);
+    if (!base) return;
+    const draft = { ...getDraftMeal(base), ingredients: getDraftIngredients(base), steps: getDraftSteps(base) };
+    const hasContent = draft.ingredients.some(item => item.name.trim()) || draft.steps.some(step => step.trim());
+    const replaceContent = !isNew && hasContent ? window.confirm("Erstatte ingredienser og fremgangsmåte med det importerte?") : true;
+    const next = applyImportedRecipe(draft, result.recipe, { isNew, replaceContent });
+    state.draftMeal = next; state.draftIngredients = next.ingredients; state.draftSteps = next.steps;
+    let host = "innlimt tekst";
+    try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
+    recipeImportState.message = `Importert fra ${host}. Se over før du lagrer.`;
+    recipeImportState.warnings = result.warnings || [];
+  } catch {
+    if (valid()) recipeImportState.message = "Kunne ikke importere oppskriften. Prøv igjen.";
+  } finally {
+    if (valid()) { recipeImportState.busy = false; render(); }
+  }
+}
+
+function bindRecipeImportEvents() {
+  const form = app.querySelector("[data-meal-form]");
+  for (const event of ["input", "change"]) form?.addEventListener(event, syncMealEditorDraftFromDom);
+  for (const selector of ["[data-import-url]", "[data-import-text]"]) app.querySelector(selector)?.addEventListener("input", syncRecipeImportFields);
+  app.querySelector("[data-import-show-text]")?.addEventListener("click", () => {
+    syncMealEditorDraftFromDom(); syncRecipeImportFields(); recipeImportState.showText = true; render();
+  });
+  app.querySelector("[data-import-fetch]")?.addEventListener("click", () => startRecipeImport("url"));
+  app.querySelector("[data-import-interpret]")?.addEventListener("click", () => startRecipeImport("text"));
+  app.querySelectorAll("[data-import-from-link]").forEach(button => button.addEventListener("click", async () => {
+    if (accessState.kind !== "ready" || accessState.offline || navigator.onLine === false) return;
+    const meal = getMeal(button.dataset.importFromLink);
+    if (!mealCanImportFromLink(meal)) return;
+    setState({ activeView: "meals", previousView: "meals", editingMealId: meal.id, draftMeal: null,
+      draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
+    await loadAiKeyStatus();
+    if (state.editingMealId === meal.id && state.activeView === "meals") startRecipeImport("url");
+  }));
+}
+
+function aiKeyAvailable() {
+  return accessState.kind === "ready" && !accessState.offline && navigator.onLine !== false && !!firebaseConnection;
+}
+
+function getAiKeyClient() {
+  if (!aiKeyClient) aiKeyClient = createAiKeyClient({ firebaseApp: firebaseConnection.firebaseApp, sdkVersion: FIREBASE_SDK_VERSION });
+  return aiKeyClient;
+}
+
+async function loadAiKeyStatus() {
+  if (!aiKeyAvailable() || aiKeyUi.busy) return;
+  const serial = ++aiKeySerial, session = aiKeySession;
+  aiKeyUi.loading = true;
+  try {
+    const result = await getAiKeyClient().status();
+    if (serial !== aiKeySerial || session !== aiKeySession || !aiKeyAvailable()) return;
+    if (result.ok) { aiKeyUi.status = sanitizeAiKeyStatus(result); aiKeyUi.message = result.message || ""; }
+    else aiKeyUi.message = result.message;
+  } catch {
+    if (serial === aiKeySerial && session === aiKeySession) aiKeyUi.message = "Kunne ikke kontrollere OpenAI-tilkoblingen. Prøv igjen.";
+  } finally {
+    if (serial === aiKeySerial && session === aiKeySession) {
+      aiKeyUi.loading = false;
+      if (state.activeView === "meals" && state.editingMealId && app.querySelector("[data-meal-form]")) {
+        syncMealEditorDraftFromDom(); syncRecipeImportFields();
+      }
+      render();
+    }
+  }
+}
+
+function syncAiKeyContext() {
+  const session = `${syncGeneration}:${accessState.user?.uid || ""}:${accessState.kind}`;
+  if (session !== aiKeySession) {
+    aiKeySession = session; aiKeySerial += 1; aiKeyClient = null; aiKeyTarget = ""; aiKeyEditorReturn = null;
+    aiKeyUi = { status: null, loading: false, busy: false, message: "" };
+  }
+  const target = accessState.kind !== "ready" ? "" : state.activeView === "meals" && state.editingMealId
+    ? `editor:${state.editingMealId}` : ["setup", "ai-settings"].includes(state.activeView) ? state.activeView : "";
+  if (target !== aiKeyTarget) {
+    aiKeyTarget = target;
+    if (target && aiKeyAvailable()) void loadAiKeyStatus();
+  }
+}
+
+async function runAiKeyAction(action) {
+  if (!aiKeyAvailable() || accessState.role !== "admin" || aiKeyUi.busy || aiKeyUi.loading) return;
+  if (action === "delete" && !window.confirm("Slette familiens OpenAI-nøkkel? Oppskriftsimport blir utilgjengelig til en ny nøkkel legges inn.")) return;
+  const client = getAiKeyClient(), session = aiKeySession, serial = ++aiKeySerial;
+  // Read and clear the password field before rendering or awaiting anything.
+  const pending = action === "save" ? client.saveFromInput(app.querySelector("[data-ai-key-input]")) : client[action]();
+  aiKeyUi.busy = true; aiKeyUi.message = ""; render();
+  try {
+    const result = await pending;
+    if (session !== aiKeySession || serial !== aiKeySerial || !aiKeyAvailable()) return;
+    if (result.ok) {
+      aiKeyUi.status = sanitizeAiKeyStatus(result);
+      aiKeyUi.message = result.message || (action === "delete" ? "Nøkkelen er slettet." : "OpenAI er tilkoblet.");
+    } else aiKeyUi.message = result.message || "Kunne ikke kontrollere OpenAI-tilkoblingen.";
+  } catch {
+    if (session === aiKeySession && serial === aiKeySerial) aiKeyUi.message = "Kunne ikke kontakte serveren. Prøv igjen.";
+  } finally {
+    if (session === aiKeySession && serial === aiKeySerial) { aiKeyUi.busy = false; render(); }
+  }
+}
+
+function bindAiKeyEvents() {
+  for (const action of ["save", "test", "delete"]) app.querySelector(`[data-ai-key-${action}]`)?.addEventListener("click", () => runAiKeyAction(action));
+  app.querySelector("[data-open-ai-settings]")?.addEventListener("click", () => {
+    if (app.querySelector("[data-meal-form]")) syncMealEditorDraftFromDom();
+    syncRecipeImportFields();
+    aiKeyEditorReturn = state.editingMealId;
+    setState({ activeView: "ai-settings" });
+  });
+  app.querySelector("[data-ai-key-return-editor]")?.addEventListener("click", () => {
+    const editorId = aiKeyEditorReturn; aiKeyEditorReturn = null;
+    setState({ activeView: "meals", editingMealId: editorId });
+  });
+}
+
+function refreshAiKeyNetworkUi() {
+  if (accessState.kind !== "ready" || !["setup", "ai-settings", "meals"].includes(state.activeView)) return;
+  if (state.activeView === "meals" && !state.editingMealId) return;
+  if (app.querySelector("[data-meal-form]")) { syncMealEditorDraftFromDom(); syncRecipeImportFields(); }
+  render();
+  if (aiKeyAvailable()) void loadAiKeyStatus();
+}
+window.addEventListener("online", refreshAiKeyNetworkUi);
+window.addEventListener("offline", refreshAiKeyNetworkUi);
+
 function deleteCurrentMeal() {
   const mealId = state.editingMealId;
   if (!mealId || mealId === "new") return;
@@ -1762,6 +1961,7 @@ function deleteCurrentMeal() {
 
 function renderSetup() {
   return renderSetupView({
+    aiStatusSummary: aiKeyStatusLabel(aiKeyUi.status),
     family: state.family,
     quickDays: state.family.quickDays,
     dayNames,
@@ -3170,7 +3370,11 @@ function bindEvents() {
 }
 
 function render(preserveShoppingInput = true) {
+  syncAiKeyContext();
+  if (!state.editingMealId) aiKeyEditorReturn = null;
+  if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
   if (accessState.kind !== "ready") {
+    resetRecipeImport();
     syncMealPickerScrollLock(false);
     releaseWakeLock();
     app.innerHTML = renderAccessScreen({ access: accessState, summary: restoreBackup ? summarizeBackup(restoreBackup) : null, busy: accountBusy, escapeHtml });
@@ -3179,6 +3383,8 @@ function render(preserveShoppingInput = true) {
     return;
   }
   const oldInput = preserveShoppingInput ? app.querySelector("[data-shopping-input]") : null;
+  const oldKeyInput = state.activeView === "ai-settings" && !aiKeyUi.busy && !aiKeyUi.loading ? app.querySelector("[data-ai-key-input]") : null;
+  const keyInputValue = oldKeyInput?.value || "";
   const draft = oldInput ? { value: oldInput.value, focused: document.activeElement === oldInput,
     start: oldInput.selectionStart, end: oldInput.selectionEnd, direction: oldInput.selectionDirection } : null;
   const views = {
@@ -3189,6 +3395,8 @@ function render(preserveShoppingInput = true) {
     recipe: renderMealDetail,
     setup: renderSetup,
     "account-settings": () => renderAccountView({ email: accessState.user?.email || "", role: accessState.role, members: accountMembers, message: accountMessage, offline: accessState.offline, busy: accountBusy, escapeHtml }),
+    "ai-settings": () => renderAiKeyView({ status: aiKeyUi.status, isAdmin: accessState.role === "admin", available: aiKeyAvailable() && !aiKeyUi.loading,
+      busy: aiKeyUi.busy, returnToEditor: !!aiKeyEditorReturn, message: aiKeyUi.message, escapeHtml }),
     "family-settings": renderFamilySettings,
     "app-settings": renderAppSettings,
     "meal-preferences": renderMealPreferencesSetup,
@@ -3204,6 +3412,10 @@ function render(preserveShoppingInput = true) {
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
   bindAccountEvents();
+  bindRecipeImportEvents();
+  bindAiKeyEvents();
+  const newKeyInput = oldKeyInput ? app.querySelector("[data-ai-key-input]") : null;
+  if (newKeyInput) newKeyInput.value = keyInputValue;
   const newInput = draft ? app.querySelector("[data-shopping-input]") : null;
   if (newInput) {
     newInput.value = draft.value;
@@ -3309,7 +3521,7 @@ function showOfflineStartup() {
   stopAllSync();
   const flag = readOfflineMembership();
   if (offlineMemberMatches(flag, { projectId: firebaseConfig.projectId, familyId: FAMILY_ID })) {
-    if (Number(flag.minAppVersion || 0) > 95) accessState = { kind: "update" };
+    if (Number(flag.minAppVersion || 0) > APP_VERSION_NUMBER) accessState = { kind: "update" };
     else {
       accessState = { kind: "ready", user: { uid: flag.uid, email: flag.email }, role: flag.role, offline: true };
       syncStatus = "Lokal lagring";
@@ -3330,7 +3542,7 @@ function stopAllSync() {
 }
 function makeAccessSession(connection) {
   const { refs, firestoreApi: api } = connection;
-  return createAccessSession({ api, refs, projectId: firebaseConfig.projectId, familyId: FAMILY_ID, appVersion: 95,
+  return createAccessSession({ api, refs, projectId: firebaseConfig.projectId, familyId: FAMILY_ID, appVersion: APP_VERSION_NUMBER,
     readOffline: readOfflineMembership,
     writeOffline: (flag) => localStorage.setItem("middagsapp-membership", JSON.stringify(flag)),
     clearOffline: clearOfflineMembership, onStop: stopAllSync,
@@ -3444,6 +3656,7 @@ async function restoreDatabase(backup) {
   render();
   try {
     const data = await executeRestore({ backup, email: user.email.toLowerCase(), role: accessState.role,
+      appVersion: APP_VERSION_NUMBER,
       api: firebaseConnection.firestoreApi, refs: firebaseConnection.refs,
       valid: () => token === syncGeneration && accessState.kind === "setup" && accessState.user?.uid === user.uid });
     state = normalizeStateForStartup({ ...structuredClone(defaultState), ...data, projectId: firebaseConfig.projectId, pendingLocalSync: false });

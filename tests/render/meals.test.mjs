@@ -43,6 +43,25 @@ function testMealCardRender() {
   assert.match(renderMealCardView({ meal: { id: "ny", title: "Ny middag" } }), /Mangler oppskrift/);
 }
 
+function testRecipeImportRender() {
+  const meal = { id: "linked", title: "Lenke", description: "", recipeUrl: "https://example.com/recipe", ingredients: [], steps: [] };
+  const linked = renderMealDetailView({ meal, importAvailable: true, escapeHtml });
+  assert.match(linked, /data-import-from-link="linked"/);
+  assert.match(linked, /Hent fra lenke/);
+  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, ingredients: [{ name: "Fisk" }] }, escapeHtml }), /data-import-from-link/);
+  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, recipeUrl: "" }, escapeHtml }), /data-import-from-link/);
+  for (const isNew of [true, false]) {
+    const html = renderMealEditorView({ meal, isNew, importAvailable: true, aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { url: meal.recipeUrl, showText: true, text: "<script>bad</script>" }, escapeHtml });
+    assert.match(html, /Importer oppskrift/); assert.match(html, /data-import-fetch/); assert.match(html, /data-import-interpret/);
+    assert.doesNotMatch(html, /<script>/);
+    assert.ok(html.indexOf("recipe-import-panel") < html.indexOf("data-meal-form"));
+  }
+  const busy = renderMealEditorView({ meal, importAvailable: true, aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { busy: true, showText: true }, escapeHtml });
+  assert.match(busy, /data-import-fetch disabled/); assert.match(busy, /data-import-interpret disabled/);
+  assert.match(busy, /Henter oppskrift/);
+}
+testRecipeImportRender();
+
 function testMealsViewRender() {
   const html = renderMealsView({
     meals: [{ id: "pasta", title: "Pasta", description: "", categories: ["pasta"], suitability: [] }],

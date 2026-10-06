@@ -3200,3 +3200,12 @@ button {
 .member-list .select { width: auto; }
 .member-add-form { display: grid; gap: 12px; margin-top: 18px; }
 .member-add-form label { display: grid; gap: 6px; }
+
+/* Recipe import stays outside the save form and only fills an editor draft. */
+.recipe-import-panel { margin: 12px 0 20px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-strong); }
+.recipe-import-panel h3 { margin-top: 0; }
+.recipe-import-panel label { display: block; margin: 8px 0 6px; }
+.recipe-import-url-row { display: flex; gap: 8px; align-items: center; }
+.recipe-import-url-row .input { flex: 1; min-width: 0; }
+.recipe-import-panel .textarea { width: 100%; min-height: 160px; margin-bottom: 8px; }
+.recipe-import-panel p, .recipe-import-panel li { overflow-wrap: anywhere; }

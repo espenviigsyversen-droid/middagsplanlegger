@@ -38,7 +38,7 @@ export async function initFirebaseClient(options = {}) {
 
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const connection = { refs, firestoreApi,
+  const connection = { firebaseApp, refs, firestoreApi,
     signIn: () => signInWithPopup(auth, provider),
     signOut: () => signOut(auth),
   };

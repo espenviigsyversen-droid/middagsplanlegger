@@ -1,0 +1,20 @@
+"use strict";
+const assert = require("node:assert/strict");
+const { extractPage, durationMinutes } = require("../lib/extract.js");
+const script = data => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+const recipe = { "@type": ["Thing", "Recipe"], name: "Fish &amp; Chips", recipeYield: "4 servings", recipeIngredient: ["2 cups milk"],
+  recipeInstructions: [{ "@type": "HowToSection", name: "Steking", itemListElement: [{ "@type": "HowToStep", text: "Stek fisken" }, "Server"] }], totalTime: "PT1H5M" };
+const page = extractPage('<script type="application/ld+json">invalid</script>' + script({ "@graph": [{ "@type": "Person" }, recipe] }));
+assert.equal(page.source, "jsonld");
+assert.deepEqual(JSON.parse(page.input).recipeInstructions, ["Stek fisken", "Server"]);
+assert.equal(JSON.parse(page.input).name, "Fish & Chips");
+assert.equal(JSON.parse(page.input).totalMinutes, 65);
+assert.equal(extractPage(script([{ "@type": "Person" }, { ...recipe, recipeInstructions: "Stek. Server." }])).source, "jsonld");
+assert.deepEqual(JSON.parse(extractPage(script({ ...recipe, recipeInstructions: "Stek. Server." })).input).recipeInstructions, ["Stek. Server."]);
+assert.equal(JSON.parse(extractPage(script({ "@type": "Person" }) + script(recipe)).input).name, "Fish & Chips");
+const fallback = extractPage('<title>Tittel</title><meta content="Bedre tittel" property="og:title"><nav>skjul nav</nav><script>skjul script</script><style>skjul css</style><header>skjul header</header><footer>skjul footer</footer><p>1 &frac12; dl melk &#176;C</p>');
+assert.equal(fallback.source, "page-text"); assert.match(fallback.input, /Bedre tittel/);
+assert.match(fallback.input, /1 ½ dl melk °C/); assert.doesNotMatch(fallback.input, /skjul/);
+assert.equal(extractPage(`<p>${"a".repeat(20000)}</p>`).input.length, 12000);
+assert.equal(durationMinutes("P1DT30M"), 1470); assert.equal(durationMinutes("bad"), null);
+console.log("functions extract tests ok");

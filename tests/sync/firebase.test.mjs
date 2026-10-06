@@ -54,6 +54,7 @@ let ready;
 context.options = { familyId: "familien", sdkVersion: "stub", firebaseConfig: {},
   onAuthReady: async (connection) => { ready = connection; } };
 const client = await vm.runInContext("initFirebaseClient(options)", context);
+assert.ok(client.firebaseApp);
 assert.equal(popupCalls, 0);
 await client.signIn();
 assert.equal(popupCalls, 1);

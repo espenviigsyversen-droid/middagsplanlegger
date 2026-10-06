@@ -30,9 +30,36 @@ node tests/sync/access.test.mjs
 node tests/sync/restore.test.mjs
 node tests/app/access-startup.test.mjs
 node tests/render/account.test.mjs
+node tests/domain/recipe-import.test.mjs
+node tests/sync/recipe-import.test.mjs
+node tests/app/recipe-import.test.mjs
+node functions/tests/core.test.cjs
+node functions/tests/extract.test.cjs
+node functions/tests/addresses.test.cjs
+node functions/tests/import.test.cjs
+node functions/tests/index.test.cjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v96
+
+1. Ved første publisering: sett en tilfeldig KEY_ENCRYPTION_SECRET og publiser importRecipe og de fire aiKey-funksjonene etter FIREBASE_OPPSETT.md før appfilene publiseres. Behold krypteringshemmeligheten ved senere publiseringer. Ingen endring i Firestore-reglene.
+2. Publiser appfiler og alle nye src-moduler sammen, inkludert src/sync/ai-key.js og src/render/ai-key.js. Functions-kode publiseres via Firebase, ikke GitHub Pages eller service worker.
+3. Lukk og åpne appen på enhetene og kontroller v96. Eksisterende innlogging, databaseoppsett og domenedata beholdes.
+4. Administrator: åpne Innstillinger → AI og oppskriftsimport, lim inn OpenAI-nøkkelen og velg Lagre og valider. Kontroller Tilkoblet, maskert nøkkel og at feltet er tomt. Test tilkobling. Kontroller ugyldig nøkkel og manglende modelltilgang; eksisterende nøkkel skal beholdes ved mislykket lagring. Vanlig medlem skal bare se status, uten administratorknapper. Uten nett skal knapper være deaktivert.
+5. Test godt.no/tine.no, Instagram med innlimt tekst, engelsk tekst med cups, side uten oppskrift, eksisterende innhold med ja/nei på erstatning, snarveien Hent fra lenke og Avbryt. Før Lagre skal oppskriften være uendret på en annen enhet; etter Lagre skal vanlig synk fungere. Slett nøkkelen med bekreftelse, kontroller veiledning i editoren og legg nøkkelen inn på nytt.
+6. Kontroller vanlig lagring, ukeplan og handleliste. Versjonsblokkering testes med minAppVersion 97; sett tilbake etter kontroll. Nytt oppsett skriver fortsatt minimum 95.
+
+KEY_ENCRYPTION_SECRET kontrolleres med secrets:get og settes bare hvis den ikke finnes, med tilfeldig verdi sendt uten utskrift eller debuglogging. Byttes den, må en administrator legge inn OpenAI-nøkkelen på nytt. Ingen versjonsbump er gjort fordi v96-appfilene fortsatt ikke er publisert. Nøkkelen inngår aldri i lokal state eller sikkerhetskopi; importstatus lagres bare i minnet. Bare ved INTERNAL tillates strengt validerte errorName/errorCode, uten message eller stack.
+
+Før serverpublisering er klienten rettet: trimming og lokal nøkkelvalidering, egne SDK-feilmeldinger, tom lenke/kort tekst uten importkall eller busy, statusen «Kunne ikke kontrolleres» og nøytral invalid-argument-tekst fra serveren. Alle 36 lokale testskript og node --check av 33 kildefiler består. Detaljert resultat per publiseringssteg dokumenteres i LEVERANSE_V96_AI_NOKKEL.md.
+
+Reelle oppskriftssider og AI-modell er ikke funksjonelt testet. Serverpublisering og uinnlogget tilgangskontroll er gjennomført som dokumentert nedenfor. V95-klienter kan fortsatt brukes parallelt med v96; importen bruker eksisterende oppskriftsformat og påvirker først andre enheter etter dagens Lagre-flyt.
+
+Status 2026-10-06: Etter eiers uttrykkelige godkjenning er npm install utført i functions og functions/package-lock.json opprettet. KEY_ENCRYPTION_SECRET manglet og versjon 1 ble opprettet direkte fra tilfeldig generator via rør, uten lokal lagring, utskrift eller debuglogging. Firebase CLI 15.18.0 publiserte alle fem funksjoner med --only functions --project middagsplanlegger-6db4e. Første forsøk feilet for importRecipe ved det nettopp aktiverte Cloud Run-API-et; samme kommando lyktes etter mer enn tre minutter. Containerpolicy er én dag i europe-west1.
+
+functions:list bekrefter alle fem som callable v2 / europe-west1 / nodejs22. Uinnlogget POST til aiKeyStatus ga HTTP 401 og UNAUTHENTICATED. Ingen OpenAI-nøkkel er lagt inn, og aiKeySave/importRecipe er ikke kalt i skyen. Appfilene gjenstår å publisere med GitHub Desktop, og funksjonell import-/PC-/iPhone-akseptanse gjenstår. Firestore-regler er ikke publisert og ingen Git- eller slettingskommandoer er brukt. Se leveranserapporten for filoversikt og første forsøkets feiltekst.
 
 ## Utrulling av v95
 

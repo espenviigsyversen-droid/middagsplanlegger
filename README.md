@@ -8,6 +8,7 @@ Appen kan kjøres uten byggsteg og publiseres som vanlige statiske filer, for ek
 
 - Ukekalender og planlegger for middager.
 - Oppskriftsdatabase med kategorier, ingredienser, porsjoner og steg.
+- Import fra oppskriftslenke eller innlimt tekst til editorens utkast, med gjennomgang før lagring.
 - Forslagmotor for å fylle åpne dager.
 - Handleliste som startside, med butikkategorier og Firestore-dokument per vare.
 - Gjennomgang av ingredienser før varer legges til i handlelisten.
@@ -41,6 +42,7 @@ C:\Users\espen\Documents\GitHub\middagsplanlegger
 - `src/sync/access.js`: innloggingstilgang, prosjektmerket cache og versjonsvakt.
 - `src/sync/restore.js`: validering og eksplisitt gjenoppretting ved oppsett.
 - `firestore.rules`: tilgangsreglene som skal publiseres til det nye Firebase-prosjektet.
+- `functions/`: serverfunksjon for oppskriftsimport med medlemskontroll og felles bruksgrense.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner.
 - `styles.css`: all styling og responsiv layout.
 - `service-worker.js`: PWA-cache og oppdateringsstrategi.
@@ -82,3 +84,5 @@ Appen har manuelt versjonsnummer. Når kode, CSS, HTML eller service worker endr
 - `CACHE_NAME` i `service-worker.js`
 
 Se `docs/RELEASE.md` for full sjekkliste.
+
+Fra v96 må importRecipe-funksjonen og API-secret publiseres før appen. Se `docs/FIREBASE_OPPSETT.md`. Agenten kjører bare lokale tester med stubber; installasjon og publisering utføres av eier.

@@ -1,4 +1,4 @@
-import { mealNeedsRecipe } from "../domain/meals.js";
+import { mealNeedsRecipe, mealCanImportFromLink } from "../domain/meals.js";
 
 export function renderCategoryChipsView(meal, labels = {}, escapeHtml = String) {
   return (meal.categories || []).map((cat) => `<span class="chip ${escapeHtml(cat)}">${escapeHtml(labels[cat] || cat)}</span>`).join("");
@@ -161,6 +161,7 @@ export function renderMealDetailView(options = {}) {
     targetServings = null,
     shoppingIconHtml = "",
     scaleAmount = (amount) => amount,
+    importAvailable = false,
     escapeHtml = String,
   } = options;
 
@@ -177,6 +178,7 @@ export function renderMealDetailView(options = {}) {
           <button class="button secondary wake-button ${keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${escapeHtml(wakeText)}</button>
           ${meal.recipeUrl ? `<a class="button secondary" href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
           <button class="button secondary" data-add-to-shopping="${escapeHtml(meal.id)}">${shoppingIconHtml} Legg i handleliste</button>
+          ${mealCanImportFromLink(meal) ? `<button class="button" data-import-from-link="${escapeHtml(meal.id)}" ${importAvailable ? "" : "disabled"}>Hent fra lenke</button>` : ""}
           <button class="button ${mealNeedsRecipe(meal) ? "" : "secondary"}" data-edit-meal="${escapeHtml(meal.id)}">${mealNeedsRecipe(meal) ? "Legg inn oppskrift" : "Rediger"}</button>
         </div>
       </div>
@@ -264,6 +266,11 @@ export function renderMealEditorView(options = {}) {
     suitabilityEntries = [],
     prepTimeEntries = [],
     unitOptions = [],
+    recipeImport = {},
+    aiKeyStatus = null,
+    aiKeyMessage = "",
+    isAdmin = false,
+    importAvailable = false,
     escapeHtml = String,
   } = options;
 
@@ -275,6 +282,25 @@ export function renderMealEditorView(options = {}) {
         <h2>${isNew ? "Ny oppskrift" : `Rediger ${escapeHtml(meal.title)}`}</h2>
         <button class="button ghost" data-cancel-edit>Avbryt</button>
       </div>
+      <section class="recipe-import-panel" aria-label="Importer oppskrift">
+        <h3>Importer oppskrift</h3>
+        ${!aiKeyStatus || !aiKeyStatus.configured || aiKeyStatus.status === "invalid" ? `
+          <p role="status">${!importAvailable ? "Oppskriftsimport krever innlogging og nett." : !aiKeyStatus ? escapeHtml(aiKeyMessage || "Kontrollerer OpenAI-tilkoblingen …") : aiKeyStatus.status === "invalid" ? "OpenAI-nøkkelen virker ikke." : "Oppskriftsimport er ikke satt opp."}</p>
+          ${isAdmin ? '<button class="button secondary" type="button" data-open-ai-settings>Åpne AI-innstillinger</button>' : '<p>Be en administrator legge inn OpenAI-nøkkel.</p>'}
+          ${recipeImport.message ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
+        ` : `
+        <label for="recipeImportUrl">Lenke til oppskrift</label>
+        <div class="recipe-import-url-row"><input id="recipeImportUrl" class="input" type="url" inputmode="url" data-import-url value="${escapeHtml(recipeImport.url || "")}" maxlength="2000" placeholder="https://…" ${recipeImport.busy ? "disabled" : ""}>
+          <button class="button secondary" type="button" data-import-fetch ${recipeImport.busy || !importAvailable ? "disabled" : ""}>Hent</button></div>
+        <button class="button ghost" type="button" data-import-show-text ${recipeImport.busy ? "disabled" : ""}>Lim inn tekst i stedet</button>
+        ${recipeImport.showText ? `<label for="recipeImportText">Oppskriftstekst</label><textarea id="recipeImportText" class="textarea" data-import-text maxlength="20000" ${recipeImport.busy ? "disabled" : ""}>${escapeHtml(recipeImport.text || "")}</textarea>
+          <button class="button secondary" type="button" data-import-interpret ${recipeImport.busy || !importAvailable ? "disabled" : ""}>Tolk tekst</button>` : ""}
+        ${!importAvailable ? '<p class="field-hint">Oppskriftsimport krever innlogging og nett.</p>' : ""}
+        ${recipeImport.busy ? '<p role="status">Henter oppskrift … Det kan ta opptil et halvt minutt.</p>' : ""}
+        ${recipeImport.message ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
+        ${recipeImport.warnings?.length ? `<ul>${recipeImport.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul>` : ""}
+        `}
+      </section>
       <form class="form" data-meal-form>
         <div class="form-row">
           <div class="setting">

@@ -69,7 +69,7 @@ for (const [config, kind, text] of [
   [{ role: null }, "denied", /Du har ikke tilgang ennå/],
   [{ meta: null }, "setup", /data-restore-file/],
   [{ meta: null, role: "member" }, "setup", /En administrator må gjøre det først/],
-  [{ meta: { initializedAt: 1, minAppVersion: 96 } }, "update", /Appen må oppdateres/],
+  [{ meta: { initializedAt: 1, minAppVersion: 97 } }, "update", /Appen må oppdateres/],
 ]) {
   const f = fixture(config); await f.run("initFirebaseSync()"); await f.auth(user);
   assert.equal(f.run("accessState.kind"), kind);
@@ -85,6 +85,9 @@ for (const [config, kind, text] of [
 }
 
 const ready = fixture(); await ready.run("initFirebaseSync()"); await ready.auth(user);
+const minimum96 = fixture({ meta: { initializedAt: 1, minAppVersion: 96 } });
+await minimum96.run("initFirebaseSync()"); await minimum96.auth(user);
+assert.equal(minimum96.run("accessState.kind"), "ready");
 assert.equal(ready.run("accessState.kind"), "ready");
 assert.equal(ready.watchers.length, 7); // meta, shoppingItems, and five domain scopes
 assert.equal(ready.writes.length, 0, "Normal startup never uploads cached data or writes meta");
@@ -109,7 +112,7 @@ assert.equal(ready.writes.length, 0, "Cancelled timers remain inert even when th
 await ready.auth(user);
 assert.equal(ready.watchers.filter(w => !w.stopped).length, 7);
 ready.watchers.filter(w => !w.stopped).find(w => w.ref === "meta").callback({
-  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 96 }), metadata: { fromCache: false },
+  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 97 }), metadata: { fromCache: false },
 });
 assert.ok(ready.watchers.every(w => w.stopped));
 assert.match(ready.app.innerHTML, /Appen må oppdateres/);
