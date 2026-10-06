@@ -206,8 +206,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v96";
-const APP_VERSION_NUMBER = 96;
+const APP_VERSION = "v97";
+const APP_VERSION_NUMBER = 97;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -1819,14 +1819,25 @@ async function startRecipeImport(mode = "url") {
     const base = isNew ? emptyMeal() : getMeal(editorId);
     if (!base) return;
     const draft = { ...getDraftMeal(base), ingredients: getDraftIngredients(base), steps: getDraftSteps(base) };
-    const hasContent = draft.ingredients.some(item => item.name.trim()) || draft.steps.some(step => step.trim());
-    const replaceContent = !isNew && hasContent ? window.confirm("Erstatte ingredienser og fremgangsmåte med det importerte?") : true;
-    const next = applyImportedRecipe(draft, result.recipe, { isNew, replaceContent });
+    const hasIngredients = draft.ingredients.some(item => item.name.trim());
+    const hasSteps = draft.steps.some(step => step.trim());
+    const importedIngredients = result.recipe.ingredients?.length || 0;
+    const importedSteps = result.recipe.steps?.length || 0;
+    const askIngredients = importedIngredients > 0 && hasIngredients;
+    const askSteps = importedSteps > 0 && hasSteps;
+    const question = askIngredients && askSteps ? "Erstatte ingredienser og fremgangsmåte med det importerte?"
+      : askIngredients ? "Erstatte ingrediensene med de importerte?" : "Erstatte fremgangsmåten med den importerte?";
+    const replace = (askIngredients || askSteps) ? window.confirm(question) : false;
+    const replaceIngredients = askIngredients && replace, replaceSteps = askSteps && replace;
+    const next = applyImportedRecipe(draft, result.recipe, { isNew, replaceIngredients, replaceSteps });
     state.draftMeal = next; state.draftIngredients = next.ingredients; state.draftSteps = next.steps;
     let host = "innlimt tekst";
     try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
-    recipeImportState.message = `Importert fra ${host}. Se over før du lagrer.`;
-    recipeImportState.warnings = result.warnings || [];
+    const filledIngredients = !hasIngredients || replaceIngredients ? importedIngredients : 0;
+    const filledSteps = !hasSteps || replaceSteps ? importedSteps : 0;
+    recipeImportState.message = `Importert fra ${host}: ${filledIngredients} ingredienser og ${filledSteps} steg. Se over før du lagrer.`;
+    recipeImportState.warnings = [...(result.warnings || [])];
+    if (!importedIngredients || !importedSteps) recipeImportState.warnings.push("Lim inn teksten for det som mangler, og trykk Tolk tekst.");
   } catch {
     if (valid()) recipeImportState.message = "Kunne ikke importere oppskriften. Prøv igjen.";
   } finally {

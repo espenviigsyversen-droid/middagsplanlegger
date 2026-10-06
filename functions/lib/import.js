@@ -6,14 +6,15 @@ const { abortable } = require("./transport.js");
 async function runImport(request, deps) {
   const started = Date.now();
   const signal = AbortSignal.timeout(58000);
-  let code = "OK", providerStatus, loaded, internalError = {};
+  let code = "OK", providerStatus, loaded, source, reason, internalError = {};
   try {
     await abortable(requireMember(request.auth, deps.memberExists), signal);
     const input = validateInput(request.data);
     loaded = await abortable(deps.loadKey(), signal);
     if (!loaded?.key) fail("AI_NOT_CONFIGURED");
     const usage = await abortable(deps.consumeUsage(), signal);
-    let source = "pasted-text", text = input.text, recipeUrl = input.sourceUrl || "";
+    if (input.mode === "text") source = "pasted-text";
+    let text = input.text, recipeUrl = input.sourceUrl || "";
     if (recipeUrl) recipeUrl = parsePublicUrl(recipeUrl, { allowSocial: true, allowHttp: true }).href;
     if (input.mode === "url") {
       const target = parsePublicUrl(input.url);
@@ -30,6 +31,7 @@ async function runImport(request, deps) {
   } catch (error) {
     const responseCode = error instanceof ImportError ? error.code : "AI_UNAVAILABLE";
     code = error instanceof ImportError ? error.code : "INTERNAL";
+    if (code === "AI_INVALID_RESPONSE" && ["incomplete", "no_text", "no_json", "shape"].includes(error.reason)) reason = error.reason;
     if (code === "INTERNAL") internalError = safeErrorFields(error);
     if (loaded && [401, 403].includes(providerStatus)) {
       try { await abortable(deps.markKeyInvalid(loaded.record), signal); } catch {}
@@ -39,6 +41,7 @@ async function runImport(request, deps) {
   } finally {
     try {
       await deps.log?.({ functionName: "importRecipe", code, durationMs: Date.now() - started,
+        ...(source ? { source } : {}), ...(reason ? { reason } : {}),
         ...(Number.isInteger(providerStatus) ? { providerStatus } : {}), ...internalError });
     } catch {
       // Logging is best effort and must never override the import result.

@@ -89,7 +89,7 @@ KEY_ENCRYPTION_SECRET er en serverhemmelighet og bindes bare til krypterende/dek
 
 Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
 
-En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig synk skriver aldri til meta. Hvis minAppVersion overstiger appens versjonsnummer (96 fra v96), avsluttes synken og appen krever oppdatering. Minimumet som skrives ved oppsett er fortsatt 95.
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig synk skriver aldri til meta. Hvis minAppVersion overstiger appens versjonsnummer (97 fra v97), avsluttes synken og appen krever oppdatering. Minimumet som skrives ved oppsett er fortsatt 95.
 
 Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
@@ -142,13 +142,13 @@ Fra v91 kan en hurtigmiddag opprettes med kun navn og eksisterende standardfelte
 
 ## Oppskriftsutkast ved import fra v96
 
-Import bruker dagens meal-felter og dagens Lagre-flyt. applyImportedRecipe lager en kopi av utkastet; ingen lagret oppskrift endres før bekreftet Lagre. baseServings byttes sammen med ingredienser og steg; ellers beholdes den. Eksisterende utfylte metadata beholdes, mens nye oppskrifter får importfeltene. Identitet, favoritt/merking, forslagpreferanser og ukeplan påvirkes ikke.
+Import bruker dagens meal-felter og dagens Lagre-flyt. applyImportedRecipe lager en kopi av utkastet; ingen lagret oppskrift endres før bekreftet Lagre. Fra v97 fylles/erstattes ingredienser og steg hver for seg, og manglende importert del bevarer utkastets innhold. baseServings byttes bare sammen med ingredienser når importens servingsKnown ikke er false; ellers beholdes den. servingsKnown er kun et importfelt og kopieres aldri til meal. Serverens baseServings er fortsatt numerisk (4 ved ukjent antall) for v96-klienter. Eksisterende utfylte metadata beholdes, mens nye oppskrifter får ikke-tomme importfelter. Identitet, favoritt/merking, forslagpreferanser og ukeplan påvirkes ikke.
 
 recipeImportState (URL, tekst, busy, meldinger og warnings) er runtime-state og inngår ikke i localStorage/syncPayload/sikkerhetskopi. draftMeal/draftIngredients/draftSteps er eksisterende UI-utkast og nullstilles ved oppstart/Avbryt. Importresponsen kaller ikke saveState eller setState med domenedata. Ingen nytt felt legges til meal eller Firestore.
 
 Serverens eneste nye lagring er `families/familien/private/importUsage` med UTC day, dailyCount og en kort liste av kalltidspunkter for rullerende vindu. Det er en privat teller, ikke oppskriftsdata. Klientens regler gir ikke tilgang; Admin SDK bruker én transaksjon på dette dokumentet. Members og øvrige domenesamlinger røres ikke av importfunksjonen.
 
-Fra v96 sammenlignes minAppVersion med 96; ved oppsett skrives fortsatt minimum 95. En ny versjon krever ingen datamigrering.
+Fra v97 sammenlignes minAppVersion med 97; ved oppsett skrives fortsatt minimum 95. En ny versjon krever ingen datamigrering.
 
 ## Metadata og butikkategorier
 

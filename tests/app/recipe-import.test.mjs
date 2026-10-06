@@ -13,18 +13,18 @@ for (const match of source.matchAll(imports)) {
 }
 source = source.replace(imports, "").replace(/render\(\);\s*initFirebaseSync\(\);\s*$/, "");
 const recipe = { title: "Imported title", description: "Importert beskrivelse", baseServings: 4, prepTime: "medium", categories: ["fisk"], recipeUrl: "https://example.com/recipe", ingredients: [{ name: "Fisk", amount: "500", unit: "g" }], steps: ["Stek fisken"] };
-function fixture({ existing = false, content = false, replace = true } = {}) {
+function fixture({ existing = false, content = false, ingredients = content, steps = content, replace = true } = {}) {
   const storage = new Map(), selectors = new Map(), calls = [], prompts = [];
   const values = { title: existing ? "Eget navn" : "", description: "", recipeUrl: "", baseServings: content ? "2" : "4", prepTime: "", minDaysBetween: "14", leftovers: "none" };
   const form = { addEventListener() {}, values: { get: key => values[key] || "", getAll: () => [], has: () => false } };
   selectors.set("[data-meal-form]", [form]);
   selectors.set("[data-import-url]", [{ value: "https://example.com/recipe" }]);
   selectors.set("[data-import-text]", [{ value: "Oppskriftstekst som er lang nok." }]);
-  if (content) {
+  if (ingredients) {
     const fields = { amount: "2", unit: "g", name: "Egen vare" };
     selectors.set("[data-ingredient-row]", [{ querySelector: selector => ({ value: fields[/"(\w+)"/.exec(selector)[1]] }) }]);
-    selectors.set("[data-step-row]", [{ querySelector: () => ({ value: "Eget steg" }) }]);
   }
+  if (steps) selectors.set("[data-step-row]", [{ querySelector: () => ({ value: "Eget steg" }) }]);
   const app = { innerHTML: "", querySelector: selector => selectors.get(selector)?.[0] || null, querySelectorAll: selector => selectors.get(selector) || [] };
   const context = vm.createContext({ ...bindings, structuredClone, Date, Blob, File, URL, console, navigator: { onLine: true },
     window: { addEventListener() {}, confirm: message => { prompts.push(message); return replace; } },
@@ -93,4 +93,34 @@ cancelled.run('state.editingMealId = null; state.draftMeal = null; state.draftIn
 finish({ ok: true, recipe }); await late;
 assert.equal(cancelled.run("state.draftMeal"), null);
 assert.equal(cancelled.storage.get("middagsapp-state"), cancelled.original);
+const onlySteps = fixture({ existing: true, ingredients: true });
+onlySteps.context.importCall = async () => ({ ok: true, recipe: { ...recipe, title: "", ingredients: [], servingsKnown: false }, warnings: ["Ingen ingredienser funnet."] });
+await onlySteps.run('startRecipeImport("text")');
+assert.equal(onlySteps.prompts.length, 0);
+assert.equal(onlySteps.run("state.draftIngredients[0].name"), "Egen vare");
+assert.equal(onlySteps.run("state.draftSteps[0]"), "Stek fisken");
+assert.match(onlySteps.run("recipeImportState.message"), /0 ingredienser og 1 steg/);
+assert.equal(onlySteps.run("recipeImportState.warnings[0]"), "Ingen ingredienser funnet.");
+assert.equal(onlySteps.run("recipeImportState.warnings[1]"), "Lim inn teksten for det som mangler, og trykk Tolk tekst.");
+assert.equal(onlySteps.storage.get("middagsapp-state"), onlySteps.original);
+for (const [part, prompt] of [["ingredients", "Erstatte ingrediensene med de importerte?"], ["steps", "Erstatte fremgangsmåten med den importerte?"]]) {
+  for (const existing of [false, true]) for (const replace of [false, true]) {
+    const f = fixture({ existing, content: true, replace });
+    f.context.importCall = async () => ({ ok: true, recipe: { ...recipe, ingredients: part === "ingredients" ? recipe.ingredients : [], steps: part === "steps" ? recipe.steps : [], baseServings: 7, servingsKnown: true } });
+    await f.run('startRecipeImport("text")');
+    assert.deepEqual(f.prompts, [prompt]);
+    assert.equal(f.run("state.draftIngredients[0].name"), part === "ingredients" && replace ? "Fisk" : "Egen vare");
+    assert.equal(f.run("state.draftSteps[0]"), part === "steps" && replace ? "Stek fisken" : "Eget steg");
+    assert.equal(f.run("state.draftMeal.baseServings"), part === "ingredients" && replace ? 7 : 2);
+    if (part === "ingredients" && replace) assert.match(f.run("renderMealEditor()"), /name="baseServings"[^>]*value="7"/);
+    assert.match(f.run("recipeImportState.message"), replace ? (part === "ingredients" ? /1 ingredienser og 0 steg/ : /0 ingredienser og 1 steg/) : /0 ingredienser og 0 steg/);
+    assert.equal(f.storage.get("middagsapp-state"), f.original);
+  }
+}
+const fillDespiteNo = fixture({ existing: true, ingredients: true, replace: false });
+await fillDespiteNo.run('startRecipeImport("url")');
+assert.deepEqual(fillDespiteNo.prompts, ["Erstatte ingrediensene med de importerte?"]);
+assert.equal(fillDespiteNo.run("state.draftIngredients[0].name"), "Egen vare");
+assert.equal(fillDespiteNo.run("state.draftSteps[0]"), "Stek fisken");
+assert.match(fillDespiteNo.run("recipeImportState.message"), /0 ingredienser og 1 steg/);
 console.log("app recipe import tests ok (drafts only, no network)");

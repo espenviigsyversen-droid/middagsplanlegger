@@ -42,7 +42,22 @@ node functions/tests/index.test.cjs
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
 
-## Utrulling av v96
+## Utrulling av v97
+
+v96 er publisert og i bruk. v97 endrer bare uttrekk, AI-tolking og utfylling av oppskriftsutkast; datamodell, synk, kvoter, nøkkelhåndtering, SSRF-vern og Firestore-regler beholdes.
+
+1. Publiser serveren først med `firebase deploy --only functions --project middagsplanlegger-6db4e`, med den lokale sikkerhetshjelperen fra forrige leveranse. Behold KEY_ENCRYPTION_SECRET; ingen secrets:set/access eller installasjon er nødvendig. Det nye servingsKnown-feltet er et tillegg; baseServings er alltid et tall slik v96 forventer. v96 har fortsatt sin gamle samlede erstatning av ingredienser/steg til klienten oppdateres.
+2. Kontroller de fem funksjonene med functions:list og uinnlogget POST til aiKeyStatus (HTTP 401 / UNAUTHENTICATED). Ikke kall aiKeySave/importRecipe i skyen som del av publiseringskontrollen.
+3. Eier publiserer v97-appfilene gjennom GitHub Desktop etter serverpublisering. Versjon, alle HTML-parametre, cache-navn og versjonsvakt er 97; nytt oppsett skriver fortsatt minimum 95. Ingen nye klientmoduler eller endring i service worker-strategi.
+4. Lukk/åpne appen på PC og iPhone og kontroller v97. Importer en side med mangelfull JSON-LD, innlimt tekst med bare steg og tekst med bare ingredienser. Kontroller at hver import fyller bare delene den har, beholder resten og viser antall faktisk utfylte deler.
+5. Test ja/nei på erstatning for ingredienser, steg og begge deler, også i en ny oppskrift med eget innhold. Kjente porsjoner vises når ingrediensene byttes; ukjente porsjoner beholder feltet og viser veiledningen. Før Lagre må andre enheter være uendret, og Avbryt må forkaste importen.
+6. Kontroller vanlig oppskriftslagring, ukeplan og handleliste. Eventuell versjonsvakttest bruker minimum 98; sett tilbake etter kontroll. Ingen datamigrering er nødvendig.
+
+Alle 36 lokale testskript og syntakskontroll av alle 33 kildefiler bestod før serverpublisering. Syntetiske sider dekker store select-blokker, main/form, støy før oppskriften, fullstendig/mangelfull JSON-LD, grenser og ytelse. Engangskontrollen S6 brukte bare lokal fetchPage/extractPage uten AI: source jsonld+page-text, inndatalengde 9184, alle tre ønskede søkebekreftelser sanne og akasiehonning fraværende. Intet sideinnhold er lagret.
+
+Status 2026-10-06: Firebase CLI 15.18.0 publiserte alle fem funksjoner med --only functions på første forsøk. functions:list bekrefter callable v2 / europe-west1 / nodejs22, og uinnlogget aiKeyStatus ga HTTP 401 / UNAUTHENTICATED. Hemmeligheten er urørt, regler er ikke publisert, ingen Git-/slettingskommandoer eller sky-kall til aiKeySave/importRecipe er utført. Serveren er klar; eier publiserer appfilene gjennom GitHub Desktop og gjennomfører funksjonell AI-/PC-/iPhone-akseptanse. Se LEVERANSE_V97.md for filoversikt og kontrollresultater.
+
+## Utrulling av v96 (historisk leveransestatus)
 
 1. Ved første publisering: sett en tilfeldig KEY_ENCRYPTION_SECRET og publiser importRecipe og de fire aiKey-funksjonene etter FIREBASE_OPPSETT.md før appfilene publiseres. Behold krypteringshemmeligheten ved senere publiseringer. Ingen endring i Firestore-reglene.
 2. Publiser appfiler og alle nye src-moduler sammen, inkludert src/sync/ai-key.js og src/render/ai-key.js. Functions-kode publiseres via Firebase, ikke GitHub Pages eller service worker.

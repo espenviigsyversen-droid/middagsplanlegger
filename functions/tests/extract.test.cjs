@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const { extractPage, durationMinutes } = require("../lib/extract.js");
 const script = data => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
-const recipe = { "@type": ["Thing", "Recipe"], name: "Fish &amp; Chips", recipeYield: "4 servings", recipeIngredient: ["2 cups milk"],
+const recipe = { "@type": ["Thing", "Recipe"], name: "Fish &amp; Chips", recipeYield: "4 servings", recipeIngredient: ["2 cups milk", "300 g fish"],
   recipeInstructions: [{ "@type": "HowToSection", name: "Steking", itemListElement: [{ "@type": "HowToStep", text: "Stek fisken" }, "Server"] }], totalTime: "PT1H5M" };
 const page = extractPage('<script type="application/ld+json">invalid</script>' + script({ "@graph": [{ "@type": "Person" }, recipe] }));
 assert.equal(page.source, "jsonld");
@@ -15,6 +15,39 @@ assert.equal(JSON.parse(extractPage(script({ "@type": "Person" }) + script(recip
 const fallback = extractPage('<title>Tittel</title><meta content="Bedre tittel" property="og:title"><nav>skjul nav</nav><script>skjul script</script><style>skjul css</style><header>skjul header</header><footer>skjul footer</footer><p>1 &frac12; dl melk &#176;C</p>');
 assert.equal(fallback.source, "page-text"); assert.match(fallback.input, /Bedre tittel/);
 assert.match(fallback.input, /1 ½ dl melk °C/); assert.doesNotMatch(fallback.input, /skjul/);
-assert.equal(extractPage(`<p>${"a".repeat(20000)}</p>`).input.length, 12000);
+assert.equal(extractPage(`<p>${"a".repeat(20000)}</p>`).input.length, 16000);
+const optionNoise = `<select>${'<option>OPTION_NOISE'.repeat(3000)}</select>`;
+const main = `<main><h1>Syntetisk middag</h1><h2>Ingredienser</h2><p>300 g syntetisk rotgrønnsak</p><p>2 ss olje</p><h2>Fremgangsmåte</h2><p>Fres alle testvarene. Skrell testpotetene.</p><p>${"Rolig introduksjon. ".repeat(40)}</p></main>`;
+const sparse = { "@type": "Recipe", name: "Syntetisk middag", recipeIngredient: "rotgrønnsak, olje, testpoteter, " + "syntetisk navn, ".repeat(200) };
+const partial = extractPage(script(sparse) + optionNoise + optionNoise + main);
+assert.equal(partial.source, "jsonld+page-text");
+assert.equal(JSON.parse(partial.input).structured.recipeIngredient[0].length, 2000);
+assert.match(partial.input, /300 g/); assert.match(partial.input, /Fres alle testvarene/);
+assert.doesNotMatch(partial.input, /OPTION_NOISE/); assert.ok(partial.input.length <= 20000);
+const lateRecipe = extractPage(`<title>Testtittel</title><p>${"støy ".repeat(16000)}</p>${main.replace(/<\/?main>/g, "")}<p>${"slutt ".repeat(5000)}</p>`);
+assert.equal(lateRecipe.source, "page-text"); assert.ok(lateRecipe.input.startsWith("Testtittel\n"));
+assert.match(lateRecipe.input, /300 g/); assert.match(lateRecipe.input, /Fres alle testvarene/);
+assert.equal(lateRecipe.input.length, 16000);
+assert.match(extractPage(`<form>${main}</form>`).input, /300 g/);
+for (const tag of ["datalist", "noscript", "svg", "template", "iframe"]) {
+  assert.doesNotMatch(extractPage(`<${tag}>REMOVED_TEXT</${tag}>${main}`).input, /REMOVED_TEXT/);
+}
+assert.match(extractPage(`<main>kort</main><p>2 dl melk, fremgangsmåte: hell i glass</p>`).input, /2 dl melk/);
+const multipleMain = extractPage(`<main>${"første ".repeat(90)}</main><p>2 dl mellom</p><main>3 ss siste</main>`);
+assert.match(multipleMain.input, /2 dl mellom/); assert.match(multipleMain.input, /3 ss siste/);
+const longComplete = extractPage(script({ ...recipe, recipeIngredient: Array(60).fill("2 g " + "x".repeat(230)), recipeInstructions: Array(40).fill("s".repeat(800)) }));
+assert.equal(longComplete.source, "jsonld"); assert.ok(longComplete.input.length <= 20000);
+assert.ok(JSON.parse(longComplete.input).recipeInstructions.length >= 1);
+const escaped = extractPage(script(sparse) + `<main>${'"'.repeat(800)} ${"2 dl melk. ".repeat(3000)}</main>`);
+assert.ok(escaped.input.length <= 20000); assert.doesNotThrow(() => JSON.parse(escaped.input));
+const malformed = "<select " + "x".repeat(60);
+const largeBroken = malformed.repeat(20000).padEnd(1500000, "x");
+assert.equal(largeBroken.length, 1500000);
+const start = performance.now(); extractPage(largeBroken); const elapsed = performance.now() - start;
+assert.ok(elapsed < 2000, `Malformed HTML took ${elapsed.toFixed(1)} ms`);
+console.log(`extract performance: ${elapsed.toFixed(1)} ms for 1.5 MB / 20000 unclosed tags`);
+const digitsStart = performance.now();
+assert.equal(extractPage(`<p>${"9".repeat(1500000)}</p>`).input.length, 16000);
+assert.ok(performance.now() - digitsStart < 2000, "Long digit runs must not trigger repeated signal matching");
 assert.equal(durationMinutes("P1DT30M"), 1470); assert.equal(durationMinutes("bad"), null);
 console.log("functions extract tests ok");

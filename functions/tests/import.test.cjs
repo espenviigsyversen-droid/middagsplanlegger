@@ -19,7 +19,8 @@ const answer = JSON.stringify({ found: true, title: "Melk", baseServings: 1, ing
   const urlInput = { mode: "url", url: "https://example.com/recipe", categories: [], units: ["", "dl"] };
   const imported = await runImport({ auth, data: urlInput }, deps);
   assert.deepEqual(events, ["member", "key", "usage", "fetch", "ai"]);
-  assert.equal(imported.source, "jsonld"); assert.equal(imported.remainingToday, 39);
+  assert.equal(imported.source, "jsonld+page-text"); assert.equal(imported.remainingToday, 39);
+  assert.equal(logs.at(-1).source, "jsonld+page-text");
   events.length = 0;
   const social = await runImport({ auth, data: { ...urlInput, url: "https://instagram.com/post" } }, deps);
   assert.equal(social.code, "NEEDS_TEXT"); assert.deepEqual(events, ["member", "key", "usage"]);
@@ -30,11 +31,12 @@ const answer = JSON.stringify({ found: true, title: "Melk", baseServings: 1, ing
   await assert.rejects(runImport({ auth: null, data }, deps), e => e.code === "unauthenticated");
   assert.equal(JSON.stringify(logs).includes(auth.token.email), false);
   assert.equal(JSON.stringify(logs).includes(data.text), false);
-  assert.ok(logs.every(log => Object.keys(log).every(key => ["functionName", "code", "durationMs", "providerStatus"].includes(key))));
+  assert.ok(logs.every(log => Object.keys(log).every(key => ["functionName", "code", "durationMs", "providerStatus", "source"].includes(key))));
   let calls = 0, firstSignal;
   const output = await interpretRecipe(data.text, data, { key: "test-secret", fetchImpl: async (_url, options) => {
     calls++; if (!firstSignal) firstSignal = options.signal; else assert.equal(options.signal, firstSignal, "One shared 45-second budget across both attempts");
-    const body = JSON.parse(options.body); assert.equal(body.store, false); assert.equal(body.model, "gpt-5.6-luna"); assert.equal(body.max_output_tokens, 3000);
+    const body = JSON.parse(options.body); assert.equal(body.store, false); assert.equal(body.model, "gpt-5.6-luna"); assert.equal(body.max_output_tokens, 8000);
+    assert.match(body.instructions, /structured og pageText/); assert.match(body.instructions, /ellers tom streng/);
     if (calls === 1) return { status: 429, body: { cancel: async () => {} } };
     return { ok: true, status: 200, json: async () => ({ output: [{ type: "message", content: [{ type: "output_text", text: answer }] }], usage: { input_tokens: 10, output_tokens: 20 } }) };
   } });

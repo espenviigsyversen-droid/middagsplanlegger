@@ -33,11 +33,21 @@ for (const bad of [{ ...input, extra: true }, { ...input, text: "kort" }, { ...i
   assert.equal(result.recipe.description.length, 500);
   assert.equal(result.recipe.steps.length, 2); assert.equal(result.recipe.steps[1].length, 800);
   assert.equal(result.recipe.baseServings, 4); assert.equal(result.recipe.prepTime, "medium");
+  assert.equal(result.recipe.servingsKnown, false);
+  assert.ok(result.warnings.includes("Fant ikke antall porsjoner. Kontroller feltet Porsjoner."));
   assert.deepEqual(result.recipe.categories, ["fisk"]);
   assert.equal(result.warnings.length, 2);
   assert.equal(extractJson('nonsense {nope} then {"found":true,"title":"a } { \\\" b"}').found, true);
   assert.throws(() => normalizeRecipe('{"found":false}', setup), e => e.code === "NOT_A_RECIPE");
   assert.throws(() => normalizeRecipe('{"found":true}', setup), e => e.code === "AI_INVALID_RESPONSE");
+  const stepOnly = normalizeRecipe(JSON.stringify({ found: true, title: "", ingredients: [], steps: ["Stek i ovn"], baseServings: null }), setup);
+  assert.equal(stepOnly.recipe.title, ""); assert.deepEqual(stepOnly.recipe.steps, ["Stek i ovn"]);
+  assert.equal(stepOnly.recipe.baseServings, 4); assert.equal(stepOnly.recipe.servingsKnown, false);
+  const ingredientOnly = normalizeRecipe(JSON.stringify({ found: true, ingredients: [{ name: "melk" }], steps: [], baseServings: 3 }), setup);
+  assert.equal(ingredientOnly.recipe.servingsKnown, true); assert.equal(ingredientOnly.recipe.baseServings, 3);
+  for (const contents of [{ ingredients: [], steps: [] }, { ingredients: [{ name: " " }], steps: [" "] }]) {
+    assert.throws(() => normalizeRecipe(JSON.stringify({ found: true, ...contents }), setup), e => e.code === "NOT_A_RECIPE");
+  }
   const large = { ...recipe, title: "x".repeat(200), baseServings: 30,
     ingredients: Array(70).fill({ name: "x".repeat(100), unit: "g", amount: "123456789012bad" }), steps: Array(50).fill("Stek"), totalMinutes: 61 };
   const limited = normalizeRecipe(JSON.stringify(large), setup).recipe;

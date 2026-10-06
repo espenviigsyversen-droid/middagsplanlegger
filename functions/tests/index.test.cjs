@@ -28,7 +28,7 @@ const modules = {
       config.onDiagnostic({ providerStatus: 401, providerCode: "invalid_api_key" });
       require("../lib/core.js").fail("AI_NOT_CONFIGURED");
     }
-    return JSON.stringify({ found: true, title: "Melk", ingredients: [], steps: [], baseServings: 4 });
+    return JSON.stringify({ found: true, title: "Melk", ingredients: [], steps: ["Hell melk i glass."], baseServings: 4 });
   } },
 };
 const source = fs.readFileSync(path.join(__dirname, "../index.js"), "utf8");

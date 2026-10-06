@@ -12,9 +12,9 @@ const messages = {
   AI_INVALID_RESPONSE: "Kunne ikke tolke oppskriften. Prøv å lime inn tydeligere tekst.",
 };
 class ImportError extends Error {
-  constructor(code) { super(messages[code] || "Ugyldig forespørsel."); this.code = code; }
+  constructor(code, reason) { super(messages[code] || "Ugyldig forespørsel."); this.code = code; this.reason = reason; }
 }
-const fail = code => { throw new ImportError(code); };
+const fail = (code, reason) => { throw new ImportError(code, reason); };
 function safeErrorFields(error) {
   const fields = {};
   try {
@@ -56,7 +56,8 @@ function nextUsage(previous = {}, now = Date.now()) {
   return { day, dailyCount: dailyCount + 1, calls: [...calls, now] };
 }
 function extractJson(text) {
-  if (typeof text !== "string") fail("AI_INVALID_RESPONSE");
+  if (typeof text !== "string" || !text.trim()) fail("AI_INVALID_RESPONSE", "no_text");
+  let wrongShape = false;
   // Balanced JSON objects, respecting escaped quotes and braces inside strings.
   for (let start = text.indexOf("{"); start !== -1; start = text.indexOf("{", start + 1)) {
     let depth = 0, quoted = false, escaped = false;
@@ -66,22 +67,26 @@ function extractJson(text) {
       else if (char === '"') quoted = true;
       else if (char === "{") depth++;
       else if (char === "}" && --depth === 0) {
-        try { const parsed = JSON.parse(text.slice(start, i + 1)); if (object(parsed) && typeof parsed.found === "boolean") return parsed; } catch {}
+        try {
+          const parsed = JSON.parse(text.slice(start, i + 1));
+          if (object(parsed) && typeof parsed.found === "boolean") return parsed;
+          wrongShape = true;
+        } catch {}
         break;
       }
     }
   }
-  fail("AI_INVALID_RESPONSE");
+  fail("AI_INVALID_RESPONSE", wrongShape ? "shape" : "no_json");
 }
 const trimmed = (value, max) => typeof value === "string" ? value.trim().slice(0, max) : "";
 function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
   const data = extractJson(text);
   if (data.found === false) fail("NOT_A_RECIPE");
   const title = trimmed(data.title, 120);
-  if (!title || !Array.isArray(data.ingredients) || !Array.isArray(data.steps)) fail("AI_INVALID_RESPONSE");
+  if (data.found !== true || !Array.isArray(data.ingredients) || !Array.isArray(data.steps)) fail("AI_INVALID_RESPONSE", "shape");
   const warnings = [];
   const servingsKnown = Number.isInteger(data.baseServings) && data.baseServings >= 1 && data.baseServings <= 30;
-  if (!servingsKnown) warnings.push("Fant ikke antall porsjoner. Bruker 4 porsjoner.");
+  if (!servingsKnown) warnings.push("Fant ikke antall porsjoner. Kontroller feltet Porsjoner.");
   const ingredients = data.ingredients.slice(0, 60).map(item => {
     if (!object(item)) return null;
     let name = trimmed(item.name, 80), unit = trimmed(item.unit, 40);
@@ -91,12 +96,13 @@ function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
     return { name, unit, amount: /^[\d,./ ]*$/.test(amount) ? amount.slice(0, 12) : "" };
   }).filter(Boolean);
   const steps = data.steps.slice(0, 40).map(step => trimmed(step, 800)).filter(Boolean);
+  if (!ingredients.length && !steps.length) fail("NOT_A_RECIPE");
   if (!ingredients.length) warnings.push("Ingen ingredienser funnet.");
   if (!steps.length) warnings.push("Ingen fremgangsmåte funnet.");
   if (data.translated === true) warnings.push("Oversatt til norsk.");
   const minutes = typeof data.totalMinutes === "number" && Number.isFinite(data.totalMinutes) && data.totalMinutes > 0 ? data.totalMinutes : null;
   const keys = new Set(categories.map(category => category.key));
-  return { recipe: { title, description: trimmed(data.description, 500), baseServings: servingsKnown ? data.baseServings : 4,
+  return { recipe: { title, description: trimmed(data.description, 500), baseServings: servingsKnown ? data.baseServings : 4, servingsKnown,
     ingredients, steps, prepTime: minutes === null ? "" : minutes < 30 ? "quick" : minutes <= 60 ? "medium" : "long",
     categories: [...new Set(Array.isArray(data.categories) ? data.categories.filter(key => keys.has(key)) : [])].slice(0, 3), recipeUrl }, warnings };
 }

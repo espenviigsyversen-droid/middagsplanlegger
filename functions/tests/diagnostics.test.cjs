@@ -93,5 +93,23 @@ function dependencies(extra = {}) {
   assert.equal(unexpectedAI[0].code, "INTERNAL");
   assert.equal(unexpectedAI[0].errorName, "TypeError"); assert.equal(unexpectedAI[0].errorCode, "ENETDOWN");
   assert.equal(JSON.stringify(unexpectedAI).includes("PRIVATE_FETCH_MESSAGE"), false);
+  for (const [response, reason] of [
+    [{ status: "incomplete", output: [] }, "incomplete"],
+    [{ output: [] }, "no_text"],
+    [{ output: [{ type: "message", content: [{ type: "output_text", text: "not JSON" }] }] }, "no_json"],
+    [{ output: [{ type: "message", content: [{ type: "output_text", text: '{"found":true,"ingredients":null,"steps":[]}' }] }] }, "shape"],
+  ]) {
+    const logs = [];
+    const result = await runImport(request, dependencies({
+      interpretRecipe: (input, setup, options) => interpretRecipe(input, setup, { ...options,
+        fetchImpl: async () => ({ ok: true, json: async () => response }) }), log: record => logs.push(record),
+    }));
+    assert.equal(result.code, "AI_INVALID_RESPONSE"); assert.equal(logs[0].reason, reason);
+    assert.equal(logs[0].source, "pasted-text"); assert.equal("reason" in result, false);
+    assert.equal(JSON.stringify(logs).includes(request.data.text), false);
+  }
+  const unsafeReasonLogs = [];
+  await runImport(request, dependencies({ interpretRecipe: () => fail("AI_INVALID_RESPONSE", "PRIVATE_REASON"), log: record => unsafeReasonLogs.push(record) }));
+  assert.equal("reason" in unsafeReasonLogs[0], false);
   console.log("functions diagnostics tests ok (HTTP errors, timeout, internal errors and logger failures)");
 })().catch(error => { console.error(error); process.exitCode = 1; });

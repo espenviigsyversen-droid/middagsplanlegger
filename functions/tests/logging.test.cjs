@@ -30,7 +30,7 @@ const variants = [
     });
     assert.equal(result.ok, false); assert.equal(logs[0].code, "INTERNAL");
     assert.deepEqual(Object.fromEntries(Object.entries(logs[0]).filter(([key]) => key.startsWith("error"))), expected);
-    assert.ok(Object.keys(logs[0]).every(key => ["functionName", "code", "durationMs", "providerStatus", "errorName", "errorCode"].includes(key)));
+    assert.ok(Object.keys(logs[0]).every(key => ["functionName", "code", "durationMs", "providerStatus", "errorName", "errorCode", "source", "reason"].includes(key)));
     assert.equal(JSON.stringify(logs).includes("PRIVATE_MESSAGE"), false); assert.equal(JSON.stringify(logs).includes("PRIVATE_EXTRA"), false);
     assert.equal(JSON.stringify(logs).includes("sk-PRIVATE_KEY"), false);
   }
