@@ -52,7 +52,7 @@ AbortSignal.timeout = ms => { budgets.push(ms); return new AbortController().sig
     budgets.length = 0;
     const imported = await runImport({ auth, data: input }, deps);
     assert.deepEqual(budgets, [115000]); assert.deepEqual(order, ["member", "key", "quota", "ai"]);
-    assert.equal(imported.ok, true); assert.equal(imported.source, "image"); assert.equal(imported.remainingToday, 37);
+    assert.equal(imported.ok, true); assert.equal(imported.source, "image"); assert.equal(imported.remainingToday, 147);
     assert.equal(imported.recipe.recipeUrl, input.sourceUrl);
     assert.ok(imported.warnings.includes("Tolket fra bilde. Kontroller mengder og ingredienser ekstra nøye."));
     assert.equal(logs.at(-1).source, "image"); assert.equal(logs.at(-1).imageCount, 2);
@@ -78,7 +78,7 @@ AbortSignal.timeout = ms => { budgets.push(ms); return new AbortController().sig
     assert.equal(rejected.code, "AI_NOT_CONFIGURED"); assert.equal(invalidated, true); assert.equal(logs.at(-1).providerCode, "authentication_error");
     const serialized = JSON.stringify([logs, imported, rejected]);
     for (const secret of [...input.images.map(image => image.data), auth.token.email, "sk-private-key", "PRIVATE_ERROR_TEXT", "private.jpg"]) assert.equal(serialized.includes(secret), false);
-    assert.ok(logs.every(log => Object.keys(log).every(key => ["functionName", "code", "durationMs", "source", "imageCount", "providerStatus", "providerCode"].includes(key))));
+    assert.ok(logs.every(log => Object.keys(log).every(key => ["functionName", "code", "durationMs", "source", "imageCount", "providerStatus", "providerCode", "model"].includes(key))));
   } finally {
     AbortSignal.timeout = originalTimeout;
     if (originalModel === undefined) delete process.env.OPENAI_RECIPE_IMAGE_MODEL; else process.env.OPENAI_RECIPE_IMAGE_MODEL = originalModel;

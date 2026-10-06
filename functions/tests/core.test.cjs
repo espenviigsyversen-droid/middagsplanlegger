@@ -16,12 +16,12 @@ for (const bad of [{ ...input, extra: true }, { ...input, text: "kort" }, { ...i
   await requireMember(auth, async email => { assert.equal(email, "admin@example.com"); return true; });
   const now = Date.parse("2026-10-06T12:00:00Z");
   let usage = {};
-  for (let i = 0; i < 10; i++) usage = nextUsage(usage, now + i);
-  assert.throws(() => nextUsage(usage, now + 11), e => e.code === "RATE_LIMITED");
-  assert.equal(nextUsage(usage, now + 600010).dailyCount, 11);
+  for (let i = 0; i < 20; i++) usage = nextUsage(usage, now + i);
+  assert.throws(() => nextUsage(usage, now + 21), e => e.code === "RATE_LIMITED");
+  assert.equal(nextUsage(usage, now + 600010).dailyCount, 21);
   usage = {};
-  for (let i = 0; i < 40; i++) usage = nextUsage(usage, now + i * 600001);
-  assert.throws(() => nextUsage(usage, now + 40 * 600001), e => e.code === "DAILY_LIMIT");
+  for (let i = 0; i < 150; i++) usage = nextUsage(usage, now + i * 31000);
+  assert.throws(() => nextUsage(usage, now + 150 * 31000), e => e.code === "DAILY_LIMIT");
   assert.equal(nextUsage(usage, Date.parse("2026-10-07T00:00:00Z")).dailyCount, 1);
   const recipe = { found: true, title: "  Original title ", description: "x".repeat(600), baseServings: 99,
     ingredients: [{ name: "mel", amount: "2 cups", unit: "cups" }, { name: "sukker", amount: "1 1/2", unit: "dl" }],

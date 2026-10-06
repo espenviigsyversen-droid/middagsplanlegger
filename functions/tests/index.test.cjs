@@ -17,11 +17,11 @@ const modules = {
   "firebase-functions/params": { defineSecret: name => { secrets.push(name); return { name, value: () => { secretReads++; return "test-secret"; } }; } },
   "firebase-functions/logger": { info: (_label, record) => logs.push(record) },
   "firebase-admin/app": { initializeApp() {} }, "firebase-admin/firestore": { getFirestore: () => db, FieldValue: { serverTimestamp: () => new Date(0) } },
-  "./lib/import.js": require("../lib/import.js"), "./lib/core.js": require("../lib/core.js"),
+  "./lib/models.js": require("../lib/models.js"), "./lib/import.js": require("../lib/import.js"), "./lib/core.js": require("../lib/core.js"),
   "./lib/keys.js": keys, "./lib/key-service.js": require("../lib/key-service.js"),
   "./lib/transport.js": { fetchPage: () => assert.fail("Text mode must not fetch") },
   "./lib/ai.js": { interpretRecipe: async (_input, _setup, config) => {
-    aiCalls++; assert.equal(config.key, rawKey);
+    aiCalls++; assert.equal(config.key, rawKey); assert.equal(config.model, "gpt-6-luna");
     if (aiFailure) {
       if (aiFailure === "replace") records.set(keys.KEY_PATH, { ...keys.encryptKey(rawKey, "test-secret"), status: "connected" });
       if (aiFailure === "delete") records.delete(keys.KEY_PATH);
@@ -38,6 +38,11 @@ assert.equal(options.region, "europe-west1"); assert.equal(options.timeoutSecond
 assert.equal(options.memory, "512MiB"); assert.equal(options.maxInstances, 3); assert.equal(options.enforceAppCheck, false);
 assert.equal(options.secrets[0].name, "KEY_ENCRYPTION_SECRET");
 assert.deepEqual(secrets, ["KEY_ENCRYPTION_SECRET"]);
+assert.equal(Object.keys(exported).length, 6);
+assert.equal(exported.aiModelSave.options.timeoutSeconds, 90);
+assert.equal(exported.aiModelSave.options.region, "europe-west1");
+assert.equal(exported.aiModelSave.options.maxInstances, 3);
+assert.equal(exported.aiModelSave.options.secrets[0].name, "KEY_ENCRYPTION_SECRET");
 for (const action of ["Status", "Save", "Test", "Delete"]) {
   const config = exported[`aiKey${action}`].options;
   assert.equal(config.region, "europe-west1"); assert.equal(config.timeoutSeconds, 30); assert.equal(config.maxInstances, 3);
@@ -53,17 +58,21 @@ assert.equal(pkg.engines.node, "22"); assert.deepEqual(Object.keys(pkg.dependenc
   await assert.rejects(handler({ auth: { token: { email: "unknown@example.com", email_verified: true } }, data }), error => error.code === "permission-denied");
   await assert.rejects(handler({ auth: { token: { email: "member@example.com", email_verified: true } }, data: {} }), error => error.code === "invalid-argument" && error.message === "Ugyldig forespørsel.");
   const request = { auth: { token: { email: "Member@Example.com", email_verified: true } }, data };
+  await assert.rejects(exported.aiModelSave({ data: {} }), error => error.code === "unauthenticated");
+  await assert.rejects(exported.aiModelSave({ auth: request.auth, data: { model: "gpt-6-luna" } }), error => error.code === "permission-denied");
+  records.set("families/familien/private/aiConfig", { model: "gpt-6-luna" });
   for (const action of ["Save", "Test", "Delete"]) await assert.rejects(exported[`aiKey${action}`]({ auth: request.auth, data: {} }), error => error.code === "permission-denied");
   const status = await exported.aiKeyStatus({ auth: request.auth });
+  assert.equal(status.model, "gpt-6-luna");
   assert.equal(secretReads, 0, "Status and rejected non-admin requests do not access the encryption secret");
   assert.equal(status.configured, true); assert.equal(status.canManage, false); assert.equal("data" in status, false);
-  for (let i = 0; i < 10; i++) assert.equal((await handler(request)).ok, true);
-  assert.equal(aiCalls, 10);
-  assert.equal((await handler(request)).code, "RATE_LIMITED"); assert.equal(aiCalls, 10);
+  for (let i = 0; i < 20; i++) assert.equal((await handler(request)).ok, true);
+  assert.equal(aiCalls, 20);
+  assert.equal((await handler(request)).code, "RATE_LIMITED"); assert.equal(aiCalls, 20);
   const usageId = "families/familien/private/importUsage";
-  assert.equal(records.get(usageId).dailyCount, 10);
-  records.set(usageId, { day: new Date().toISOString().slice(0, 10), dailyCount: 40, calls: [] });
-  assert.equal((await handler(request)).code, "DAILY_LIMIT"); assert.equal(aiCalls, 10);
+  assert.equal(records.get(usageId).dailyCount, 20);
+  records.set(usageId, { day: new Date().toISOString().slice(0, 10), dailyCount: 150, calls: [] });
+  assert.equal((await handler(request)).code, "DAILY_LIMIT"); assert.equal(aiCalls, 20);
   for (const failure of ["invalid", "replace", "delete"]) {
     records.set(keys.KEY_PATH, { ...keys.encryptKey(rawKey, "test-secret"), status: "connected" });
     records.delete(usageId); aiFailure = failure;

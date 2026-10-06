@@ -1,10 +1,11 @@
 "use strict";
 const { requireMember, fail, ImportError, messages, safeErrorFields } = require("./core.js");
-const { validateKeyInput, maskKey, encryptKey, decryptKey, publicKeyStatus, DEFAULT_MODEL } = require("./keys.js");
+const { validateKeyInput, maskKey, encryptKey, decryptKey, publicKeyStatus } = require("./keys.js");
 const { abortable } = require("./transport.js");
+const { selectModel } = require("./models.js");
 async function runKeyAction(action, request, deps) {
   const started = Date.now(), signal = AbortSignal.timeout(28000);
-  const model = deps.model || DEFAULT_MODEL;
+  let model;
   let code = "OK", providerStatus, internalError = {};
   try {
     let member;
@@ -14,6 +15,7 @@ async function runKeyAction(action, request, deps) {
     const key = action === "save" ? validateKeyInput(request.data) : null;
     if (action !== "save" && request.data !== undefined && request.data !== null
       && (typeof request.data !== "object" || Array.isArray(request.data) || Object.keys(request.data).length)) fail("invalid-argument");
+    model = deps.getModel ? await abortable(deps.getModel(), signal) : deps.model || selectModel(null);
     if (action === "status") return publicKeyStatus(await abortable(deps.getKey(), signal), role, model);
     if (action === "delete") {
       await abortable(deps.deleteKey(), signal);

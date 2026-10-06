@@ -17,19 +17,21 @@ const key = "sk-proj-app-PRIVATE-KEY-1234";
 function fixture({ role = "admin", online = true, confirm = true } = {}) {
   const storage = new Map(), requests = [], logs = [], buttons = new Map();
   const input = { value: "", addEventListener() {} };
+  const modelInput = { value: "", events: {}, addEventListener(event, callback) { this.events[event] = callback; } };
   let html = "", result = { ok: true, configured: false, status: "unavailable", canManage: role === "admin", masked: "" }, finish;
   const app = {
-    get innerHTML() { return html; }, set innerHTML(value) { html = value; input.value = ""; },
-    querySelector: selector => selector === "[data-ai-key-input]" && html.includes("data-ai-key-input") ? input : buttons.get(selector) || null,
+    get innerHTML() { return html; }, set innerHTML(value) { html = value; input.value = ""; modelInput.value = /data-ai-model-input[^>]*value="([^"]*)"/.exec(html)?.[1] || ""; },
+    querySelector: selector => selector === "[data-ai-model-input]" && html.includes("data-ai-model-input") ? modelInput
+      : selector === "[data-ai-key-input]" && html.includes("data-ai-key-input") ? input : buttons.get(selector) || null,
     querySelectorAll: () => [],
   };
-  for (const selector of ["[data-ai-key-save]", "[data-ai-key-test]", "[data-ai-key-delete]", "[data-open-ai-settings]", "[data-ai-key-return-editor]"]) {
+  for (const selector of ["[data-ai-key-save]", "[data-ai-key-test]", "[data-ai-key-delete]", "[data-ai-model-save]", "[data-open-ai-settings]", "[data-ai-key-return-editor]"]) {
     buttons.set(selector, { events: {}, addEventListener(event, callback) { this.events[event] = callback; } });
   }
   const client = createAiKeyClient({ firebaseApp: {}, sdkVersion: "stub", online: () => online, loadSdk: async () => ({
     getFunctions: () => "stub", httpsCallable: (_functions, name) => async data => {
       requests.push({ name, data });
-      if (name === "aiKeySave") return new Promise(resolve => { finish = value => resolve({ data: value }); });
+      if (["aiKeySave", "aiModelSave"].includes(name)) return new Promise(resolve => { finish = value => resolve({ data: value }); });
       return { data: result };
     },
   }) });
@@ -45,7 +47,7 @@ function fixture({ role = "admin", online = true, confirm = true } = {}) {
   const run = code => vm.runInContext(code, context);
   context.role = role;
   run('accessState = { kind: "ready", user: { uid: "user", email: "member@example.com" }, role, offline: false }; firebaseConnection = { firebaseApp: {} }; state.activeView = "ai-settings"; render();');
-  return { run, app, context, input, requests, storage, logs, buttons, setResult: value => { result = value; }, finish: value => finish(value) };
+  return { run, app, context, input, modelInput, requests, storage, logs, buttons, setResult: value => { result = value; }, finish: value => finish(value) };
 }
 const f = fixture(); await f.run("loadAiKeyStatus()");
 assert.match(f.app.innerHTML, /Ikke satt opp/);
@@ -77,9 +79,9 @@ late.finish({ ok: true, configured: true, status: "connected", masked: "sk-p…1
 assert.match(late.app.innerHTML, /Logg inn med Google/); assert.equal(late.run("aiKeyUi.status"), null); assert.equal(late.input.value, "");
 const member = fixture({ role: "member" }); await member.run("loadAiKeyStatus()");
 const before = member.requests.length;
-for (const action of ["save", "test", "delete"]) await member.run(`runAiKeyAction("${action}")`);
+for (const action of ["save", "test", "delete", "model"]) await member.run(`runAiKeyAction("${action}")`);
 assert.equal(member.requests.length, before); assert.match(member.app.innerHTML, /Bare administratorer/);
-const offline = fixture({ online: false }); for (const action of ["save", "test", "delete"]) await offline.run(`runAiKeyAction("${action}")`);
+const offline = fixture({ online: false }); for (const action of ["save", "test", "delete", "model"]) await offline.run(`runAiKeyAction("${action}")`);
 assert.equal(offline.requests.length, 0); assert.match(offline.app.innerHTML, /data-ai-key-save disabled/);
 const noDelete = fixture({ confirm: false }); await noDelete.run("loadAiKeyStatus()"); const count = noDelete.requests.length;
 await noDelete.run('runAiKeyAction("delete")'); assert.equal(noDelete.requests.length, count);
@@ -97,3 +99,37 @@ f.buttons.get("[data-open-ai-settings]").events.click(); await f.run("loadAiKeyS
 f.buttons.get("[data-ai-key-return-editor]").events.click();
 assert.equal(JSON.stringify(f.run("state.draftIngredients")), groupDraftBeforeSettings);
 assert.match(f.app.innerHTML, /data-ingredient-heading="true"/);
+// v104: only a successful server trial changes the displayed model. Candidate drafts stay in memory.
+const model = fixture();
+model.setResult({ ok: true, configured: true, status: "connected", masked: "sk-p…1234", model: "gpt-5.6-luna", canManage: true });
+await model.run("loadAiKeyStatus()");
+assert.equal(model.modelInput.value, "gpt-5.6-luna");
+model.modelInput.value = " gpt-6-luna ";
+model.modelInput.events.input({ currentTarget: model.modelInput });
+model.run("render()"); assert.equal(model.modelInput.value, " gpt-6-luna ");
+const modelSave = model.run('runAiKeyAction("model")');
+assert.match(model.app.innerHTML, /Tester modellen med en prøveoppskrift … Det kan ta opptil et minutt\./);
+assert.match(model.app.innerHTML, /data-ai-model-save disabled/);
+await new Promise(resolve => setImmediate(resolve));
+assert.deepEqual(model.requests.at(-1), { name: "aiModelSave", data: { model: "gpt-6-luna" } });
+model.finish({ ok: true, configured: true, status: "connected", model: "gpt-6-luna", canManage: true }); await modelSave;
+assert.match(model.app.innerHTML, /Modellen er byttet til gpt-6-luna\./);
+assert.equal(model.modelInput.value, "gpt-6-luna"); assert.equal(model.run("aiKeyUi.busy"), false);
+model.modelInput.value = "invalid model";
+let requestCount = model.requests.length;
+await model.run('runAiKeyAction("model")'); assert.equal(model.requests.length, requestCount);
+assert.match(model.app.innerHTML, /Modellnavnet ser ikke riktig ut\. Eksempel: gpt-6-luna\./);
+model.modelInput.value = "candidate-model";
+const rejected = model.run('runAiKeyAction("model")'); await new Promise(resolve => setImmediate(resolve));
+model.finish({ ok: false, code: "MODEL_TEST_FAILED", message: "Modellen besto ikke prøveimporten. Modellen er ikke byttet." }); await rejected;
+assert.equal(model.run("aiKeyUi.status.model"), "gpt-6-luna"); assert.equal(model.modelInput.value, "candidate-model");
+assert.match(model.app.innerHTML, /Modellen besto ikke prøveimporten/);
+model.run("saveState()");
+for (const serialized of [model.run("JSON.stringify(state)"), JSON.stringify([...model.storage]),
+  model.run("JSON.stringify(buildBackup({data:syncPayload(),appVersion:APP_VERSION,familyId:FAMILY_ID}))")]) assert.doesNotMatch(serialized, /candidate-model|gpt-6-luna/);
+const lateModel = model.run('runAiKeyAction("model")'); await new Promise(resolve => setImmediate(resolve));
+model.run('accessState = { kind: "login" }; render();');
+model.finish({ ok: true, configured: true, model: "candidate-model" }); await lateModel;
+assert.equal(model.run("aiKeyUi.status"), null); assert.equal(model.run("aiKeyUi.modelDraft"), null);
+const notConfigured = fixture(); await notConfigured.run("loadAiKeyStatus()"); requestCount = notConfigured.requests.length;
+await notConfigured.run('runAiKeyAction("model")'); assert.equal(notConfigured.requests.length, requestCount);

@@ -331,6 +331,7 @@ export function renderMealEditorView(options = {}) {
           <button class="button secondary" type="button" data-import-keep>Behold mine</button></div>
         </div>` : ""}
         ${recipeImport.warnings?.length ? `<ul>${recipeImport.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul>` : ""}
+        ${Number.isInteger(recipeImport.remainingToday) && recipeImport.remainingToday >= 0 && recipeImport.remainingToday <= 30 ? `<p role="status">${recipeImport.remainingToday} importer igjen i dag.</p>` : ""}
         `}
       </section>
       <form class="form" data-meal-form>

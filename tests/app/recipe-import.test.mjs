@@ -423,3 +423,18 @@ const noConflictScroll = fixture();
 noConflictScroll.selectors.set("[data-import-choice]", [{ scrollIntoView: () => assert.fail("No choice without conflicts") }]);
 await noConflictScroll.run('startRecipeImport("text")');
 console.log("app recipe import tests ok (drafts only, no network)");
+for (const remainingToday of [0, 1, 30, 31, 150]) {
+  const f = fixture(); f.context.importCall = async () => ({ ok: true, recipe, remainingToday });
+  await f.run('startRecipeImport("text")');
+  assert.equal(f.run("recipeImportState.remainingToday"), remainingToday);
+  const html = f.run("renderMealEditor()");
+  assert.equal(html.includes(`${remainingToday} importer igjen i dag.`), remainingToday <= 30);
+  f.run("saveState()");
+  for (const data of [f.run("JSON.stringify(state)"), JSON.stringify([...f.storage]),
+    f.run("JSON.stringify(buildBackup({ data:syncPayload(),appVersion:APP_VERSION,familyId:FAMILY_ID }))")]) assert.doesNotMatch(data, /remainingToday/);
+  f.run('state.editingMealId = null; renderWithDom();'); assert.equal(f.run("recipeImportState.remainingToday"), null);
+}
+const remainingReset = fixture(); remainingReset.context.importCall = async () => ({ ok: true, recipe, remainingToday: 20 });
+await remainingReset.run('startRecipeImport("text")');
+remainingReset.context.importCall = async () => ({ ok: false, code: "AI_UNAVAILABLE", message: "Prøv igjen" });
+await remainingReset.run('startRecipeImport("text")'); assert.equal(remainingReset.run("recipeImportState.remainingToday"), null);

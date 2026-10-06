@@ -19,7 +19,7 @@ const answer = JSON.stringify({ found: true, title: "Melk", baseServings: 1, ing
   const urlInput = { mode: "url", url: "https://example.com/recipe", categories: [], units: ["", "dl"] };
   const imported = await runImport({ auth, data: urlInput }, deps);
   assert.deepEqual(events, ["member", "key", "usage", "fetch", "ai"]);
-  assert.equal(imported.source, "jsonld+page-text"); assert.equal(imported.remainingToday, 39);
+  assert.equal(imported.source, "jsonld+page-text"); assert.equal(imported.remainingToday, 149);
   assert.equal(logs.at(-1).source, "jsonld+page-text");
   events.length = 0;
   const social = await runImport({ auth, data: { ...urlInput, url: "https://instagram.com/post" } }, deps);
@@ -31,7 +31,7 @@ const answer = JSON.stringify({ found: true, title: "Melk", baseServings: 1, ing
   await assert.rejects(runImport({ auth: null, data }, deps), e => e.code === "unauthenticated");
   assert.equal(JSON.stringify(logs).includes(auth.token.email), false);
   assert.equal(JSON.stringify(logs).includes(data.text), false);
-  assert.ok(logs.every(log => Object.keys(log).every(key => ["functionName", "code", "durationMs", "providerStatus", "source"].includes(key))));
+  assert.ok(logs.every(log => Object.keys(log).every(key => ["functionName", "code", "durationMs", "providerStatus", "source", "model"].includes(key))));
   let calls = 0, firstSignal;
   const output = await interpretRecipe(data.text, data, { key: "test-secret", fetchImpl: async (_url, options) => {
     calls++; if (!firstSignal) firstSignal = options.signal; else assert.equal(options.signal, firstSignal, "One shared 45-second budget across both attempts");

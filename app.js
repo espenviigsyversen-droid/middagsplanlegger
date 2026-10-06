@@ -210,8 +210,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v103";
-const APP_VERSION_NUMBER = 103;
+const APP_VERSION = "v104";
+const APP_VERSION_NUMBER = 104;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -239,11 +239,11 @@ let accountMessage = "";
 let recipeImporter = null;
 let recipeImportSerial = 0;
 let recipeImportState = { editorId: null, busy: false, preparing: false, mode: "", images: [], showImages: false,
-  url: "", text: "", showText: false, message: "", warnings: [], pending: null };
+  url: "", text: "", showText: false, message: "", warnings: [], pending: null, remainingToday: null };
 let aiKeyClient = null;
 let aiKeySession = "", aiKeyTarget = "", aiKeySerial = 0;
 let aiKeyEditorReturn = null;
-let aiKeyUi = { status: null, loading: false, busy: false, message: "" };
+let aiKeyUi = { status: null, loading: false, busy: false, busyAction: "", modelDraft: null, message: "" };
 let shoppingSync = makeShoppingSync();
 let mealsSync = makeMealsSync();
 let weeksSync = makeWeeksSync();
@@ -1798,7 +1798,7 @@ function resetRecipeImport() {
   recipeImportSerial += 1;
   recipeImportState = { editorId: state.editingMealId, busy: false,
     preparing: false, mode: "", images: [], showImages: false,
-    url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [], pending: null };
+    url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [], pending: null, remainingToday: null };
 }
 
 function syncRecipeImportFields() {
@@ -1920,7 +1920,7 @@ async function startRecipeImport(mode = "url") {
   const serial = ++recipeImportSerial;
   const valid = () => serial === recipeImportSerial && generation === syncGeneration && accessState.kind === "ready"
     && accessState.user?.uid === uid && state.editingMealId === editorId && state.activeView === "meals";
-  recipeImportState.busy = true; recipeImportState.mode = mode; recipeImportState.message = ""; recipeImportState.warnings = [];
+  recipeImportState.busy = true; recipeImportState.mode = mode; recipeImportState.message = ""; recipeImportState.warnings = []; recipeImportState.remainingToday = null;
   render();
   const input = { mode, categories: categoryEntries().map(([key, label]) => ({ key, label })), units: getUnitOptions(),
     ...(mode === "url" ? { url } : { ...(mode === "image" ? { images: recipeImportState.images } : { text: recipeImportState.text }),
@@ -1946,6 +1946,7 @@ async function startRecipeImport(mode = "url") {
       return;
     }
     const importedIngredients = result.recipe.ingredients?.length || 0;
+    recipeImportState.remainingToday = Number.isInteger(result.remainingToday) && result.remainingToday >= 0 ? result.remainingToday : null;
     recipeImportState.images = [];
     const importedSteps = result.recipe.steps?.length || 0;
     const applied = applyRecipeImportToEditor(result.recipe);
@@ -2039,7 +2040,7 @@ function syncAiKeyContext() {
   if (session !== aiKeySession) {
     resetRecipeImport();
     aiKeySession = session; aiKeySerial += 1; aiKeyClient = null; aiKeyTarget = ""; aiKeyEditorReturn = null;
-    aiKeyUi = { status: null, loading: false, busy: false, message: "" };
+    aiKeyUi = { status: null, loading: false, busy: false, busyAction: "", modelDraft: null, message: "" };
   }
   const target = accessState.kind !== "ready" ? "" : state.activeView === "meals" && state.editingMealId
     ? `editor:${state.editingMealId}` : ["setup", "ai-settings"].includes(state.activeView) ? state.activeView : "";
@@ -2051,26 +2052,33 @@ function syncAiKeyContext() {
 
 async function runAiKeyAction(action) {
   if (!aiKeyAvailable() || accessState.role !== "admin" || aiKeyUi.busy || aiKeyUi.loading) return;
+  if (action === "model" && !aiKeyUi.status?.configured) return;
   if (action === "delete" && !window.confirm("Slette familiens OpenAI-nøkkel? Oppskriftsimport blir utilgjengelig til en ny nøkkel legges inn.")) return;
   const client = getAiKeyClient(), session = aiKeySession, serial = ++aiKeySerial;
   // Read and clear the password field before rendering or awaiting anything.
-  const pending = action === "save" ? client.saveFromInput(app.querySelector("[data-ai-key-input]")) : client[action]();
-  aiKeyUi.busy = true; aiKeyUi.message = ""; render();
+  if (action === "model") aiKeyUi.modelDraft = app.querySelector("[data-ai-model-input]")?.value || "";
+  const pending = action === "model" ? client.saveModel(aiKeyUi.modelDraft)
+    : action === "save" ? client.saveFromInput(app.querySelector("[data-ai-key-input]")) : client[action]();
+  aiKeyUi.busy = true; aiKeyUi.busyAction = action; aiKeyUi.message = ""; render();
   try {
     const result = await pending;
     if (session !== aiKeySession || serial !== aiKeySerial || !aiKeyAvailable()) return;
     if (result.ok) {
       aiKeyUi.status = sanitizeAiKeyStatus(result);
-      aiKeyUi.message = result.message || (action === "delete" ? "Nøkkelen er slettet." : "OpenAI er tilkoblet.");
+      if (action === "model") aiKeyUi.modelDraft = null;
+      aiKeyUi.message = result.message || (action === "model" ? `Modellen er byttet til ${aiKeyUi.status.model}.`
+        : action === "delete" ? "Nøkkelen er slettet." : "OpenAI er tilkoblet.");
     } else aiKeyUi.message = result.message || "Kunne ikke kontrollere OpenAI-tilkoblingen.";
   } catch {
     if (session === aiKeySession && serial === aiKeySerial) aiKeyUi.message = "Kunne ikke kontakte serveren. Prøv igjen.";
   } finally {
-    if (session === aiKeySession && serial === aiKeySerial) { aiKeyUi.busy = false; render(); }
+    if (session === aiKeySession && serial === aiKeySerial) { aiKeyUi.busy = false; aiKeyUi.busyAction = ""; render(); }
   }
 }
 
 function bindAiKeyEvents() {
+  app.querySelector("[data-ai-model-input]")?.addEventListener("input", event => { aiKeyUi.modelDraft = event.currentTarget.value; });
+  app.querySelector("[data-ai-model-save]")?.addEventListener("click", () => runAiKeyAction("model"));
   for (const action of ["save", "test", "delete"]) app.querySelector(`[data-ai-key-${action}]`)?.addEventListener("click", () => runAiKeyAction(action));
   app.querySelector("[data-open-ai-settings]")?.addEventListener("click", () => {
     if (app.querySelector("[data-meal-form]")) syncMealEditorDraftFromDom();
@@ -3549,7 +3557,7 @@ function render(preserveShoppingInput = true) {
     setup: renderSetup,
     "account-settings": () => renderAccountView({ email: accessState.user?.email || "", role: accessState.role, members: accountMembers, message: accountMessage, offline: accessState.offline, busy: accountBusy, escapeHtml }),
     "ai-settings": () => renderAiKeyView({ status: aiKeyUi.status, isAdmin: accessState.role === "admin", available: aiKeyAvailable() && !aiKeyUi.loading,
-      busy: aiKeyUi.busy, returnToEditor: !!aiKeyEditorReturn, message: aiKeyUi.message, escapeHtml }),
+      busy: aiKeyUi.busy, busyAction: aiKeyUi.busyAction, modelValue: aiKeyUi.modelDraft, returnToEditor: !!aiKeyEditorReturn, message: aiKeyUi.message, escapeHtml }),
     "family-settings": renderFamilySettings,
     "app-settings": renderAppSettings,
     "meal-preferences": renderMealPreferencesSetup,

@@ -36,6 +36,7 @@ node tests/sync/recipe-import.test.mjs
 node tests/app/recipe-import.test.mjs
 node tests/domain/image-prepare.test.mjs
 node functions/tests/image.test.cjs
+node functions/tests/models.test.cjs
 node functions/tests/core.test.cjs
 node functions/tests/extract.test.cjs
 node functions/tests/addresses.test.cjs
@@ -44,6 +45,19 @@ node functions/tests/index.test.cjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v104
+
+v103 er bekreftet publisert og fungerende. v104 legger til modellvalg med prøveimport og hever importkvoten til 20 per ti minutter/150 per UTC-døgn. Serveren virker med v103; regler, domenedata, nøkkel og minimumsversjon 101 beholdes.
+
+1. Kjør alle testskript og node --check for kildefilene. Publiser functions først med --only functions --project middagsplanlegger-6db4e. Ingen installasjon, secret-/regelendring eller sletting.
+2. Kontroller seks callable v2-funksjoner i europe-west1/nodejs22, inkludert aiModelSave (90 sekunder), og uinnlogget aiKeyStatus/aiModelSave med HTTP 401/UNAUTHENTICATED. Se LEVERANSE_V104.md for faktisk resultat.
+3. Eier publiserer v104-appfilene samlet via GitHub Desktop. Lukk og åpne appen på PC/iPhone og kontroller v104. Ingen ny klientmodul eller service worker-strategi.
+4. Administrator: AI og oppskriftsimport viser modellnavnet og forhåndsutfylt felt. Kontroller ugyldig format uten serverkall, ventetekst og at en modell som feiler beholder den gamle. Bytt bare til en kandidat som består testen. Vanlig medlem ser modellnavnet, uten redigeringsfelt.
+5. Test selv lenke-, tekst- og bildeimport etter bytte, med porsjoner, grupper, erstatningsvalg og vanlig Lagre/Avbryt. En egen OPENAI_RECIPE_IMAGE_MODEL overstyrer fortsatt bildemodellen. Modelltesten bekrefter tekstimport, ikke bildeimport.
+6. Ved 30 eller færre gjenstående importer viser importpanelet tallet etter vellykket import. Ingen slik visning over 30. Tallet er bare i minnet. Nøkkel- og modellkontroll deler fortsatt 10 kontroller per ti minutter; prøven teller ikke i importkvoten.
+
+Alle 42 testskript og syntakskontroll av 37 kildefiler bestod uten nettverk. Functions er publisert 2026-10-06 med Firebase CLI 15.18.0 på første forsøk. Alle seks funksjoner er bekreftet som callable v2/europe-west1/nodejs22. Uinnlogget aiKeyStatus og aiModelSave ga begge HTTP 401/UNAUTHENTICATED. Ingen regelpublisering eller hemmelighetsendring. Se LEVERANSE_V104.md for filoversikt og fullt resultat. Innlogget modelltest og ekte PC/iPhone-akseptanse utføres av eier etter apppublisering; agenten kaller ikke aiKeySave, innlogget aiModelSave eller importRecipe i skyen.
 
 ## Utrulling av v103
 

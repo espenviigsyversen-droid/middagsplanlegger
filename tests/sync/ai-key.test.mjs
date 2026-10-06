@@ -6,7 +6,7 @@ const client = createAiKeyClient({ firebaseApp: "app", sdkVersion: "sdk", online
   loads++; assert.equal(version, "sdk"); return {
     getFunctions: (app, region) => { assert.equal(app, "app"); assert.equal(region, "europe-west1"); return "functions"; },
     httpsCallable: (functions, name, config) => {
-      assert.equal(functions, "functions"); assert.equal(config.timeout, 35000);
+      assert.equal(functions, "functions"); assert.equal(config.timeout, name === "aiModelSave" ? 100000 : 35000);
       return async data => { requests.push({ name, data }); if (response instanceof Error) throw response; return { data: response }; };
     },
   };
@@ -45,4 +45,20 @@ for (const code of ["functions/invalid-argument", "functions/unauthenticated", "
 const offline = createAiKeyClient({ online: () => false, loadSdk: () => assert.fail("No SDK offline") });
 input.value = key; const off = offline.saveFromInput(input); assert.equal(input.value, ""); assert.equal((await off).code, "OFFLINE");
 assert.equal(sanitizeAiKeyStatus({ configured: true, masked: key, key }).masked, "");
+response = { ok: true, configured: true, model: "gpt-6-luna" };
+assert.equal((await client.saveModel("  gpt-6-luna\n")).model, "gpt-6-luna");
+assert.deepEqual(requests.at(-1), { name: "aiModelSave", data: { model: "gpt-6-luna" } });
+for (const value of ["", "ab", "GPT-6-luna", "two models", "a".repeat(62), "a/b"]) {
+  const count = requests.length;
+  const result = await client.saveModel(value);
+  assert.equal(result.code, "MODEL_FORMAT");
+  assert.equal(result.message, "Modellnavnet ser ikke riktig ut. Eksempel: gpt-6-luna.");
+  assert.equal(requests.length, count);
+}
+response = Object.assign(new Error(key), { code: "functions/invalid-argument" });
+assert.equal((await client.saveModel("gpt-6-luna")).message, "Modellnavnet ser ikke riktig ut. Eksempel: gpt-6-luna.");
+response = { ok: false, code: "MODEL_TEST_FAILED", message: "Modellen besto ikke prøveimporten. Modellen er ikke byttet." };
+assert.equal((await client.saveModel("gpt-6-luna")).message, response.message);
+assert.equal((await offline.saveModel("gpt-6-luna")).code, "OFFLINE");
+assert.equal(loads, 1);
 console.log("AI key client tests ok (SDK stubs and synchronous input clearing)");

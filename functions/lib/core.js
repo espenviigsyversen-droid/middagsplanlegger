@@ -1,12 +1,15 @@
 "use strict";
+const IMPORT_WINDOW_LIMIT = 20;
+const IMPORT_DAILY_LIMIT = 150;
 const messages = {
   NEEDS_TEXT: "Instagram og Facebook kan ikke hentes automatisk. Lim inn bildeteksten, eller ta et skjermbilde og bruk Importer fra bilde.",
   IMAGE_REJECTED: "OpenAI kunne ikke lese bildene. Prøv færre eller tydeligere bilder, eller lim inn teksten.",
   NOT_A_RECIPE: "Fant ingen oppskrift i teksten.", INVALID_URL: "Lenken må være en offentlig https-adresse.",
   FETCH_FAILED: "Kunne ikke hente siden. Prøv å lime inn oppskriftsteksten i stedet.",
   PAGE_TOO_LARGE: "Siden er for stor. Lim inn oppskriftsteksten i stedet.",
-  RATE_LIMITED: "Familien har brukt 10 importer på 10 minutter. Vent litt og prøv igjen.",
-  DAILY_LIMIT: "Familien har brukt dagens 40 importer. Prøv igjen i morgen.",
+  RATE_LIMITED: `Familien har brukt ${IMPORT_WINDOW_LIMIT} importer på 10 minutter. Vent litt og prøv igjen.`,
+  DAILY_LIMIT: `Familien har brukt dagens ${IMPORT_DAILY_LIMIT} importer. Prøv igjen i morgen.`,
+  MODEL_TEST_FAILED: "Modellen besto ikke prøveimporten. Modellen er ikke byttet.",
   AI_NOT_CONFIGURED: "Oppskriftsimport er ikke satt opp. En administrator må legge inn OpenAI-nøkkel under Innstillinger.",
   KEY_RATE_LIMITED: "Familien har kontrollert nøkkelen 10 ganger på 10 minutter. Vent litt og prøv igjen.",
   AI_UNAVAILABLE: "Oppskriftsimport er midlertidig utilgjengelig. Prøv igjen senere.",
@@ -66,9 +69,9 @@ async function requireMember(auth, exists) {
 function nextUsage(previous = {}, now = Date.now()) {
   const day = new Date(now).toISOString().slice(0, 10);
   const dailyCount = previous.day === day ? Math.max(0, Number(previous.dailyCount) || 0) : 0;
-  if (dailyCount >= 40) fail("DAILY_LIMIT");
+  if (dailyCount >= IMPORT_DAILY_LIMIT) fail("DAILY_LIMIT");
   const calls = (Array.isArray(previous.calls) ? previous.calls : []).filter(stamp => Number.isFinite(stamp) && stamp > now - 600000);
-  if (calls.length >= 10) fail("RATE_LIMITED");
+  if (calls.length >= IMPORT_WINDOW_LIMIT) fail("RATE_LIMITED");
   return { day, dailyCount: dailyCount + 1, calls: [...calls, now] };
 }
 function extractJson(text) {
@@ -171,4 +174,4 @@ function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
     ingredients, steps, prepTime: minutes === null ? "" : minutes < 30 ? "quick" : minutes <= 60 ? "medium" : "long",
     categories: [...new Set(Array.isArray(data.categories) ? data.categories.filter(key => keys.has(key)) : [])].slice(0, 3), recipeUrl }, warnings };
 }
-module.exports = { ImportError, fail, messages, validateInput, requireMember, nextUsage, extractJson, normalizeAmount, normalizeRecipe, safeErrorFields };
+module.exports = { IMPORT_WINDOW_LIMIT, IMPORT_DAILY_LIMIT, ImportError, fail, messages, validateInput, requireMember, nextUsage, extractJson, normalizeAmount, normalizeRecipe, safeErrorFields };

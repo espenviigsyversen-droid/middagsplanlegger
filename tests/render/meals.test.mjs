@@ -211,3 +211,9 @@ for (const [busy, preparing, available] of [[false, false, true], [true, false, 
   if (preparing) assert.match(html, /Klargjør bilder/);
 }
 console.log("meals render tests ok");
+for (const remainingToday of [0, 1, 30, 31, 150, null, -1, 2.5]) {
+  const html = renderMealEditorView({ meal: { title: "Test" }, importAvailable: true,
+    aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { remainingToday }, escapeHtml });
+  if (Number.isInteger(remainingToday) && remainingToday >= 0 && remainingToday <= 30) assert.ok(html.includes(`${remainingToday} importer igjen i dag.`));
+  else assert.doesNotMatch(html, /importer igjen i dag/);
+}

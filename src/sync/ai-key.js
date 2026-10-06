@@ -10,24 +10,30 @@ export function createAiKeyClient({ firebaseApp, sdkVersion,
   let sdkPromise;
   const callables = new Map();
   const formatMessage = "Nøkkelen ser ikke riktig ut. Den skal starte med sk- og ikke inneholde mellomrom.";
+  const modelFormatMessage = "Modellnavnet ser ikke riktig ut. Eksempel: gpt-6-luna.";
   async function call(action, input = {}) {
     if (!online()) return { ok: false, code: "OFFLINE", message: "OpenAI-innstillinger krever innlogging og nett." };
     try {
       if (!sdkPromise) sdkPromise = loadSdk(sdkVersion).catch(error => { sdkPromise = null; throw error; });
       const { getFunctions, httpsCallable } = await sdkPromise;
-      if (!callables.has(action)) callables.set(action, httpsCallable(getFunctions(firebaseApp, "europe-west1"), action, { timeout: 35000 }));
+      if (!callables.has(action)) callables.set(action, httpsCallable(getFunctions(firebaseApp, "europe-west1"), action, { timeout: action === "aiModelSave" ? 100000 : 35000 }));
       const { data } = await callables.get(action)(input);
       if (!data || typeof data.ok !== "boolean") throw new Error("Invalid response");
       return data.ok ? { ok: true, ...sanitizeAiKeyStatus(data), ...(typeof data.message === "string" ? { message: data.message } : {}) }
         : { ok: false, code: data.code, message: data.message || "Kunne ikke kontrollere OpenAI-tilkoblingen." };
     } catch (error) {
-      if (error?.code === "functions/invalid-argument") return { ok: false, code: "KEY_FORMAT", message: formatMessage };
+      if (error?.code === "functions/invalid-argument") return { ok: false, code: action === "aiModelSave" ? "MODEL_FORMAT" : "KEY_FORMAT", message: action === "aiModelSave" ? modelFormatMessage : formatMessage };
       if (["functions/unauthenticated", "functions/permission-denied"].includes(error?.code)) return { ok: false, code: "KEY_ACCESS", message: "Innlogging eller tilgang mangler. Logg inn på nytt og prøv igjen." };
       return { ok: false, code: "KEY_REQUEST_FAILED", message: "Kunne ikke kontakte serveren. Sjekk innlogging og nettforbindelse og prøv igjen." };
     }
   }
   return {
     status: () => call("aiKeyStatus"), test: () => call("aiKeyTest"), delete: () => call("aiKeyDelete"),
+    saveModel(value) {
+      const model = typeof value === "string" ? value.trim() : "";
+      if (!/^[a-z0-9][a-z0-9._-]{2,60}$/.test(model)) return Promise.resolve({ ok: false, code: "MODEL_FORMAT", message: modelFormatMessage });
+      return call("aiModelSave", { model });
+    },
     saveFromInput(input) {
       // The raw value exists only in the outgoing request, never in app state.
       const value = input?.value || "";
