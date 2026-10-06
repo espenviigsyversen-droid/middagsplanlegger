@@ -54,5 +54,18 @@ for (const bad of [{ ...input, extra: true }, { ...input, text: "kort" }, { ...i
   assert.equal(limited.title.length, 120); assert.equal(limited.ingredients.length, 60);
   assert.equal(limited.ingredients[0].name.length, 80); assert.equal(limited.ingredients[0].amount, "");
   assert.equal(limited.steps.length, 40); assert.equal(limited.prepTime, "long");
+  const normalize = ingredients => normalizeRecipe(JSON.stringify({ found: true, title: "Test", ingredients, steps: [] }), setup).recipe.ingredients;
+  for (const [amount, expected] of [["3-4", "3-4"], ["0,5–1", "0,5-1"], ["½-1", "1/2-1"], ["3--4", ""], ["4-3", ""], ["", ""], ["litt", ""], ["1/0", ""]]) {
+    const result = normalize([{ name: "melk", amount, unit: "dl" }])[0];
+    assert.equal(result.amount, expected); assert.equal(result.unit, expected ? "dl" : "");
+  }
+  assert.deepEqual(normalize([{ name: "melk", group: " Saus ", amount: "2", unit: "dl" }, { name: "ris", group: " Tilbehør ", amount: "1", unit: "g" }]).map(i => i.group), ["Saus", "Tilbehør"]);
+  assert.equal(normalize([{ name: "melk", group: "Saus" }, { name: "smør", group: "Saus" }]).every(i => !("group" in i)), true);
+  assert.equal(normalize([{ name: "melk", group: "Saus" }, { name: "ris" }])[0].group, "Saus");
+  assert.equal(normalize([{ name: "melk", group: "g".repeat(80) }, { name: "ris" }])[0].group.length, 60);
+  for (const description of ["TEST!!! 🍽️ #middag", "test.", "TEST"]) {
+    assert.equal(normalizeRecipe(JSON.stringify({ found: true, title: "Test", description, ingredients: [{ name: "ris" }], steps: [] }), setup).recipe.description, "");
+  }
+  assert.equal(normalizeRecipe(JSON.stringify({ found: true, title: "Test", description: "Rask middag 🍲 #enkel", ingredients: [{ name: "ris" }], steps: [] }), setup).recipe.description, "Rask middag");
   console.log("functions core tests ok");
 })().catch(error => { console.error(error); process.exitCode = 1; });

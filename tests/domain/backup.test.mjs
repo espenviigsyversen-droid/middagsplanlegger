@@ -4,7 +4,7 @@ import { backupFileName, buildBackup } from "../../src/domain/backup.js";
 const now = new Date(2026, 0, 2, 12, 0, 0);
 const data = {
   family: { name: "Familien" },
-  meals: [{ id: "taco", title: "Taco" }],
+  meals: [{ id: "taco", title: "Taco", ingredients: [{ name: "Melk", amount: "2", unit: "dl", group: "Saus" }] }],
   plansByWeek: { "2026-01-05": { 0: "taco" } },
   metadata: { storeCategoryOrder: ["other"] },
   shoppingList: { items: [{ name: "Melk" }] },
@@ -15,6 +15,7 @@ assert.deepEqual(backup, {
   exportedAt: now.toISOString(), data,
 });
 assert.deepEqual(JSON.parse(JSON.stringify(backup)), backup);
+assert.equal(backup.data.meals[0].ingredients[0].group, "Saus");
 assert.equal(backupFileName(now), "middagsapp-backup-2026-01-02.json");
 assert.equal(backupFileName(new Date(2026, 9, 5)), "middagsapp-backup-2026-10-05.json");
 assert.equal(backupFileName(new Date(2026, 11, 31)), "middagsapp-backup-2026-12-31.json");

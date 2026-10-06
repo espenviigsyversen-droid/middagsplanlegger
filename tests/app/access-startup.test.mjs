@@ -69,7 +69,7 @@ for (const [config, kind, text] of [
   [{ role: null }, "denied", /Du har ikke tilgang ennå/],
   [{ meta: null }, "setup", /data-restore-file/],
   [{ meta: null, role: "member" }, "setup", /En administrator må gjøre det først/],
-  [{ meta: { initializedAt: 1, minAppVersion: 98 } }, "update", /Appen må oppdateres/],
+  [{ meta: { initializedAt: 1, minAppVersion: 99 } }, "update", /Appen må oppdateres/],
 ]) {
   const f = fixture(config); await f.run("initFirebaseSync()"); await f.auth(user);
   assert.equal(f.run("accessState.kind"), kind);
@@ -90,7 +90,8 @@ await minimum96.run("initFirebaseSync()"); await minimum96.auth(user);
 assert.equal(minimum96.run("accessState.kind"), "ready");
 assert.equal(ready.run("accessState.kind"), "ready");
 assert.equal(ready.watchers.length, 7); // meta, shoppingItems, and five domain scopes
-assert.equal(ready.writes.length, 0, "Normal startup never uploads cached data or writes meta");
+assert.equal(ready.writes.length, 1, "Admin startup raises the minimum once, without uploading domain data");
+assert.equal(ready.writes[0][0], "meta"); assert.equal(ready.writes[0][1].minAppVersion, 98);
 assert.match(ready.app.innerHTML, /data-shopping-input/);
 const regular = fixture({ role: "member" }); await regular.run("initFirebaseSync()"); await regular.auth(user);
 regular.run('state.pendingLocalSync = true; state.clientUpdatedAt = 100;');
@@ -108,11 +109,11 @@ assert.equal(ready.storage.has("middagsapp-membership"), false);
 assert.ok(ready.watchers.every(w => w.stopped));
 assert.ok(ready.cleared.includes(queued));
 await queuedCallback();
-assert.equal(ready.writes.length, 0, "Cancelled timers remain inert even when their callback was already queued");
+assert.equal(ready.writes.length, 1, "Cancelled timers remain inert; only the initial meta update was sent");
 await ready.auth(user);
 assert.equal(ready.watchers.filter(w => !w.stopped).length, 7);
 ready.watchers.filter(w => !w.stopped).find(w => w.ref === "meta").callback({
-  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 98 }), metadata: { fromCache: false },
+  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 99 }), metadata: { fromCache: false },
 });
 assert.ok(ready.watchers.every(w => w.stopped));
 assert.match(ready.app.innerHTML, /Appen må oppdateres/);
@@ -127,7 +128,7 @@ const pendingWrite = race.run('saveRemoteScopes(["profile"])');
 await race.run("signOutAccount()");
 resolveRead({ exists: () => true, data: () => ({ clientUpdatedAt: 0 }) });
 await pendingWrite;
-assert.equal(race.writes.length, 0);
+assert.equal(race.writes.length, 1); assert.equal(race.writes[0][0], "meta");
 
 const flag = { projectId, familyId: "familien", uid: user.uid, email: user.email, role: "admin", initialized: true, minAppVersion: 95 };
 const offline = fixture({ online: false, stored: { "middagsapp-membership": flag } });

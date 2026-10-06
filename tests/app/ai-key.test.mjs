@@ -91,3 +91,9 @@ assert.equal(f.run("state.draftMeal.title"), "Ulagret"); assert.equal(f.run("sta
 f.buttons.get("[data-ai-key-return-editor]").events.click();
 assert.equal(f.run("state.activeView"), "meals"); assert.equal(f.run("state.editingMealId"), "new"); assert.equal(f.run("state.draftMeal.title"), "Ulagret");
 console.log("app AI key tests ok (DOM/SDK stubs, no key persistence or late replies)");
+f.run('state.draftIngredients = [{type:"heading",title:"Saus"},{name:"Fisk",amount:"1",unit:"g"},{type:"heading",title:""}]; render();');
+const groupDraftBeforeSettings = JSON.stringify(f.run("state.draftIngredients"));
+f.buttons.get("[data-open-ai-settings]").events.click(); await f.run("loadAiKeyStatus()");
+f.buttons.get("[data-ai-key-return-editor]").events.click();
+assert.equal(JSON.stringify(f.run("state.draftIngredients")), groupDraftBeforeSettings);
+assert.match(f.app.innerHTML, /data-ingredient-heading="true"/);

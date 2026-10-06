@@ -89,7 +89,7 @@ KEY_ENCRYPTION_SECRET er en serverhemmelighet og bindes bare til krypterende/dek
 
 Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
 
-En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig synk skriver aldri til meta. Hvis minAppVersion overstiger appens versjonsnummer (97 fra v97), avsluttes synken og appen krever oppdatering. Minimumet som skrives ved oppsett er fortsatt 95.
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Fra v98 gjør tilgangsflyten én egen best-effort updateDoc til minAppVersion 98 ved online administratoroppstart når minimumet er lavere. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens versjonsnummer (98 fra v98), avsluttes synken og appen krever oppdatering. Nytt oppsett og gjenoppretting skriver minimum 98.
 
 Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
@@ -136,6 +136,10 @@ Ingredienser normaliseres til:
 - `amount`
 - `unit`
 
+Fra v98 finnes også valgfri `group`: trimmet tekst med maks 60 tegn, utelatt når tom. Ingrediensrekkefølgen beholdes. Sammenhengende ingredienser med samme gruppe vises med én overskrift, og ugrupperte ingredienser har ingen overskrift. Feltet bevares av normalisering, eksportformat 1, gjenoppretting og eksisterende meals-writes; ingen ny Firestore-sti eller regel er nødvendig. Eldre klienter kan fjerne group ved lagring og blokkeres derfor av minimum 98 når de kontrollerer serveren. Lokal offline-tilgang bruker fortsatt sist kjente minimum, men starter ingen synk.
+
+I editorens draftIngredients representeres overskrifter som `{ type: "heading", title }`. Dette er UI-state. Ved lagring avledes group fra nærmeste overskrift over ingrediensen, og tomme overskrifter blir ikke dokumenter eller ingredienser. En tom overskrift starter en ugruppert del; fjernes den, overtar gruppen fra overskriften over. Rekkefølge, blanke overskrifter og rader bevares gjennom render, stegimport og AI-innstillinger. Ingrediensimport som fyller/erstatter en del bruker importens gruppeoverskrifter.
+
 Fra v91 kan en hurtigmiddag opprettes med kun navn og eksisterende standardfelter. `categories`, `ingredients`, `steps`, `keyIngredients` og `suitability` er tomme lister, mens `prepTime` og `recipeUrl` er tomme strenger. Verken kategorien Kjøtt eller tilberedningstiden Rask tildeles automatisk ved lagring av en slik middag.
 
 «Mangler oppskrift» er avledet via `mealNeedsRecipe`: ingen ingredienser, ingen steg og tom/blank `recipeUrl`. Beskrivelse alene regnes ikke som oppskrift. Det lagres eller synkes ikke noe nytt statusfelt på middagen. Hurtigmiddager kan foreslås av eksisterende forslagmotor (`excludeFromSuggestions: false`).
@@ -148,7 +152,7 @@ recipeImportState (URL, tekst, busy, meldinger og warnings) er runtime-state og 
 
 Serverens eneste nye lagring er `families/familien/private/importUsage` med UTC day, dailyCount og en kort liste av kalltidspunkter for rullerende vindu. Det er en privat teller, ikke oppskriftsdata. Klientens regler gir ikke tilgang; Admin SDK bruker én transaksjon på dette dokumentet. Members og øvrige domenesamlinger røres ikke av importfunksjonen.
 
-Fra v97 sammenlignes minAppVersion med 97; ved oppsett skrives fortsatt minimum 95. En ny versjon krever ingen datamigrering.
+Fra v98 sammenlignes minAppVersion med 98; ved oppsett skrives minimum 98. Ingen datamigrering eller automatisk omskriving av eksisterende oppskrifter utføres.
 
 ## Metadata og butikkategorier
 
@@ -177,6 +181,8 @@ En lokal vare har:
 - `createdAt` (tall, lokal opprettingstid i ms; bevares ved normalisering)
 
 Varer slås sammen basert på navn og enhet. Mengder slås sammen når begge kan tolkes som tall.
+
+Fra v98 brukes teksten før første komma som grunnnavn når oppskrifter lager varer. Det samme grunnnavnet brukes i keyIngredients, vareoppslag og ingrediensforslag. Lagret ingrediensnavn og manuelt innskrevet varenavn beholdes. Intervaller (bindestrek/tankestrek, desimaler og brøker) skaleres i begge ender i oppskriftsvisningen og bruker høyeste verdi i handlelisten/summeringen. Uten skalering beholdes oppskriftens mengdetekst.
 
 ### Firestore og migrering fra v93
 

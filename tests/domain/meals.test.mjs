@@ -1,4 +1,18 @@
 import assert from "node:assert/strict";
+import { ingredientBaseName, ingredientsToEditorRows, editorRowsToIngredients, moveIngredientEditorRow } from "../../src/domain/meals.js";
+
+assert.equal(ingredientBaseName(" hvitløk, finhakket "), "hvitløk");
+assert.equal(ingredientBaseName(", pynt"), ", pynt");
+const grouped = [{ name: "hvitløk", amount: "2", unit: "stk", group: "Saus" }, { name: "melk", amount: "3", unit: "dl", group: "Saus" }, { name: "ris", amount: "1", unit: "g", group: "Tilbehør" }, { name: "salt", amount: "", unit: "" }];
+const rows = ingredientsToEditorRows(grouped);
+assert.deepEqual(rows.filter(row => row.type === "heading").map(row => row.title), ["Saus", "Tilbehør", ""]);
+assert.deepEqual(editorRowsToIngredients(rows), grouped);
+assert.deepEqual(editorRowsToIngredients([...rows, { type: "heading", title: "" }]), grouped);
+assert.equal(editorRowsToIngredients(rows.filter((row, index) => index !== 3))[2].group, "Saus");
+assert.equal(editorRowsToIngredients(moveIngredientEditorRow(rows, 3, 1))[2].group, "Saus");
+assert.equal(normalizeIngredients([{ name: "melk", amount: "1", unit: "dl", group: " Saus " }])[0].group, "Saus");
+assert.equal(normalizeIngredients([{ name: "melk", group: "g".repeat(80) }])[0].group.length, 60);
+assert.equal("group" in normalizeIngredients([{ name: "melk", group: " " }])[0], false);
 import {
   createQuickMeal,
   makeSlug,

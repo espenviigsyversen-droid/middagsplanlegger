@@ -41,7 +41,7 @@ Oppstart:
 3. Firebase melder innloggingsstatus. Lasteskjermen beholdes mens status og tilgang kontrolleres. Uten innlogging vises bare Google-knappen; popup åpnes kun fra knappetrykk, med kontovalg.
 4. Innlogget bruker må ha verifisert e-post og gyldig rolle i eget medlemsdokument. Deretter leses `app/meta` fra serveren. Uten markør vises oppsettskjermen; for høy minimumsversjon viser oppdateringsskjermen.
 5. Først etter godkjent medlemskap, oppsett og versjon vises appen og domenesynken startes. En tidligere godkjent enhet kan åpne lokale data uten nett med «Lokal lagring».
-6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over appens versjonsnummer (97 fra v97).
+6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over appens versjonsnummer (98 fra v98). Fra v98 hever online administratoroppstart minimumet til 98 med én best-effort updateDoc når det er lavere; ved feil fortsetter appen og neste oppstart prøver igjen. Vanlige medlemmer og offline-oppstart skriver ikke meta.
 
 Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fanger feil før første render, inkludert lastingsfeil på appens script-element via en fangende `window.error`-lytter. Hvis appflaten fortsatt er tom etter 12 sekunder, vises samme feiltilstand: spinneren skjules, en forklaring vises og brukeren kan laste siden på nytt. En MutationObserver avslutter overvåkingen når appen har rendret. Eksisterende `hideLoadingScreen()` fjerner lasteskjermen også etter sen oppstart. Vernet er uavhengig av appens modulimporter og endrer ikke lagring, cacher eller navigasjon.
 
@@ -127,6 +127,18 @@ functions/lib/key-service.js eier tilgang, validering og nøkkelflyter uten Fire
 importRecipe henter og dekrypterer nøkkelen etter medlems- og inndatakontroll, før importUsage telles. Manglende eller uleselig nøkkel gir AI_NOT_CONFIGURED uten å bruke importkvote. Uleselig innhold markeres invalid slik at klienten viser behov for nytt oppsett; 401/403 under import markerer også den brukte nøkkelen invalid. Administrator må legge inn nøkkelen på nytt etter bytte av krypteringshemmeligheten.
 
 Klartekst finnes bare midlertidig i passordfeltet, den utgående HTTPS-forespørselen og serverminnet. Den inngår aldri i appens state, localStorage eller sikkerhetskopi. Feltet tømmes synkront når Lagre og valider trykkes, også før SDK-lasting er ferdig. Ufarlig status og en maske med maksimalt åtte nøkkeltegn holdes bare i minnet. Status hentes når editoren eller innstillingene åpnes; sene svar etter tilgangs-/brukerbytte ignoreres. Manglende/invalid oppsett erstatter importknappene med veiledning. Administrator kan gå til AI-innstillinger og tilbake med utkastet beholdt.
+
+## Ingrediensgrupper og import fra v98
+
+group er et valgfritt tekstfelt på ingrediensen, trimmet til maks 60 tegn og utelatt når tom. Det bevares av normalizeIngredients, eksisterende meals-writes, sikkerhetskopi og restore uten endring i dokumentstruktur eller regler. Tilgangsmodulen hever minimum til 98 bare for online administrator; restore skriver også 98. Den separate meta-oppdateringen beskytter mot eldre klienter som fjerner grupper ved lagring, og er ikke del av vanlig domenesynk.
+
+Rene hjelpere i src/domain/meals.js oversetter mellom lagrede ingredienser og editorrader. Overskriftsrader ligger i draftIngredients og har fullbreddefelt med flytt-/fjernknapper. Lagring avleder gruppen fra nærmeste overskrift. Fjerning flytter til gruppen over, mens en blank overskrift starter en ugruppert del og ikke lagres. Render og AI-innstillinger beholder utkastet; stegimport bevarer ingrediens-/overskriftsrader. Ved ingrediensimport følger overskriftene den importerte listen. Visningen viser én overskrift per sammenhengende gruppe og fremhever navnet før første komma, med kommentarer i vanlig skrift.
+
+ingredientBaseName brukes når oppskrifter lager handlevarer, når keyIngredients bygges og i vareoppslag/forslag/søk. Dermed kan for eksempel hvitløk med og uten tilberedningskommentar summeres på samme navn/enhet. Lagrede navn og manuelt innskrevne handlevarer omskrives ikke. parseAmount er uendret; egne intervallhjelpere skalerer begge ender og bruker maksimum ved varegenerering og sammenslåing.
+
+AI-instruksen ber om kildebaserte ingrediensgrupper, kommentar etter komma, numeriske intervaller, tydelig recipeYield/porsjonstekst og kort beskrivelse uten emojier/emneknagger/tittelgjentakelse. Servernormalisering tillater intervaller og fjerner enheten ved tom/ugyldig mengde, avgrenser grupper og fjerner gruppen hvis alle ingredienser har samme gruppe. Beskrivelse renses og tømmes hvis den bare gjentar tittelen. group er et tillegg i svaret og baseServings er fortsatt numerisk for v97-kompatibilitet.
+
+Uttrekk fra v98 behandler < som tekst når neste tegn ikke kan starte en tagg. header/footer inne i main/article beholdes. Under 500 tegn etter navigasjonsfjerning gir en ny lineær skanning med nav/header/footer beholdt, også ved uavsluttet nav. Det valgte lange tekstvinduet tar med inntil 500 tegn foran første signal, innenfor grensen og med alle valgte signaler bevart. Tidsbudsjett, inndatagrense, SSRF-vern, kvoter, nøkkelhåndtering og logger er uendret.
 
 ## Synk
 

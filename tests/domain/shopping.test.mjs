@@ -1,4 +1,15 @@
 import assert from "node:assert/strict";
+import { parseAmountRange, shoppingAmountValue } from "../../src/domain/shopping.js";
+for (const value of ["3-4", "3–4"]) assert.deepEqual(parseAmountRange(value), { min: 3, max: 4 });
+assert.deepEqual(parseAmountRange("0,5-1,5"), { min: 0.5, max: 1.5 });
+assert.deepEqual(parseAmountRange("½-1"), { min: 0.5, max: 1 });
+assert.deepEqual(parseAmountRange("1 1/2-2"), { min: 1.5, max: 2 });
+for (const value of ["4-3", "1-2-3", "3 stk", "3", "-4", "1/0-2"]) assert.equal(parseAmountRange(value), null);
+assert.equal(shoppingAmountValue("3-4"), 4);
+assert.equal(scaleAmount("3-4", 4, 5), "3,75–5");
+assert.equal(scaleAmount("3,2-4", 4, 5), "4–5");
+assert.equal(scaleAmount("3-4", 4, 4), "3-4");
+assert.equal(mergeShoppingAmount("3-4", "2–3"), "7");
 import {
   formatAmount,
   formatShoppingAmount,

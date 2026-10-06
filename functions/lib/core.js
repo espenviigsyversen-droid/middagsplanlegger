@@ -79,6 +79,26 @@ function extractJson(text) {
   fail("AI_INVALID_RESPONSE", wrongShape ? "shape" : "no_json");
 }
 const trimmed = (value, max) => typeof value === "string" ? value.trim().slice(0, max) : "";
+function normalizeAmount(value) {
+  if (typeof value !== "string") return "";
+  const text = value.trim().replace(/–/g, "-").replace(/[½¼¾]/g, char => ({ "½": "1/2", "¼": "1/4", "¾": "3/4" })[char]);
+  const number = "(?:\\d+ +\\d+ *\\/ *\\d+|\\d+(?:[.,]\\d+)?(?: *\\/ *\\d+(?:[.,]\\d+)?)?)";
+  if (text.length > 12 || !new RegExp(`^${number}(?: *- *${number})?$`).test(text)) return "";
+  const parts = text.split("-").map(part => {
+    const fraction = part.trim().replace(",", ".").split("/");
+    const mixed = fraction[0].trim().split(/\s+/);
+    return (mixed.length === 2 ? Number(mixed[0]) : 0) + Number(mixed.at(-1)) / (fraction.length === 2 ? Number(fraction[1]) : 1);
+  });
+  if (parts.some(part => !Number.isFinite(part)) || (parts.length === 2 && parts[0] > parts[1])) return "";
+  return text;
+}
+function normalizeDescription(value, title) {
+  const description = (typeof value === "string" ? value : "")
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier}\uFE0F\u200D\u20E3]/gu, "")
+    .replace(/#[\p{L}\p{N}_]+/gu, "").replace(/\s+/g, " ").trim().slice(0, 500);
+  const comparable = text => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  return comparable(description) === comparable(title) ? "" : description;
+}
 function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
   const data = extractJson(text);
   if (data.found === false) fail("NOT_A_RECIPE");
@@ -92,9 +112,11 @@ function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
     let name = trimmed(item.name, 80), unit = trimmed(item.unit, 40);
     if (!name) return null;
     if (!units.includes(unit)) { name = `${unit} ${name}`.trim().slice(0, 80); unit = ""; }
-    const amount = typeof item.amount === "string" ? item.amount.trim() : "";
-    return { name, unit, amount: /^[\d,./ ]*$/.test(amount) ? amount.slice(0, 12) : "" };
+    const amount = normalizeAmount(item.amount);
+    const group = trimmed(item.group, 60);
+    return { name, unit: amount ? unit : "", amount, ...(group ? { group } : {}) };
   }).filter(Boolean);
+  if (new Set(ingredients.map(item => item.group || "")).size === 1) for (const item of ingredients) delete item.group;
   const steps = data.steps.slice(0, 40).map(step => trimmed(step, 800)).filter(Boolean);
   if (!ingredients.length && !steps.length) fail("NOT_A_RECIPE");
   if (!ingredients.length) warnings.push("Ingen ingredienser funnet.");
@@ -102,7 +124,7 @@ function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
   if (data.translated === true) warnings.push("Oversatt til norsk.");
   const minutes = typeof data.totalMinutes === "number" && Number.isFinite(data.totalMinutes) && data.totalMinutes > 0 ? data.totalMinutes : null;
   const keys = new Set(categories.map(category => category.key));
-  return { recipe: { title, description: trimmed(data.description, 500), baseServings: servingsKnown ? data.baseServings : 4, servingsKnown,
+  return { recipe: { title, description: normalizeDescription(data.description, title), baseServings: servingsKnown ? data.baseServings : 4, servingsKnown,
     ingredients, steps, prepTime: minutes === null ? "" : minutes < 30 ? "quick" : minutes <= 60 ? "medium" : "long",
     categories: [...new Set(Array.isArray(data.categories) ? data.categories.filter(key => keys.has(key)) : [])].slice(0, 3), recipeUrl }, warnings };
 }

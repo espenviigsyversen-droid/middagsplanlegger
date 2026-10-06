@@ -23,7 +23,7 @@ assert.equal(offlineMemberMatches(offlineFlag, { projectId: "old", familyId: "fa
 assert.equal(offlineMemberMatches(offlineFlag, { projectId: "new", familyId: "other", user }), false);
 assert.equal(offlineMemberMatches(offlineFlag, { projectId: "new", familyId: "familien", user: { ...user, uid: "u2" } }), false);
 
-function makeSession({ role = "admin", meta = { initializedAt: "server", minAppVersion: 95 }, failure, flag = null } = {}) {
+function makeSession({ role = "admin", meta = { initializedAt: "server", minAppVersion: 95 }, failure, flag = null, appVersion = 95, updateFailure } = {}) {
   const screens = [], calls = [], unsubs = [];
   let offline = flag, watch;
   const api = {
@@ -34,8 +34,9 @@ function makeSession({ role = "admin", meta = { initializedAt: "server", minAppV
       return ref === "meta" ? { exists: () => !!meta, data: () => meta } : { exists: () => !!role, data: () => ({ role }) };
     },
     onSnapshot: (ref, options, callback) => { calls.push(["watch", ref]); watch = callback; return () => unsubs.push(ref); },
+    updateDoc: async (ref, data) => { calls.push(["update", ref, data]); if (updateFailure) throw updateFailure; },
   };
-  const session = createAccessSession({ api, refs: { meta: "meta", members: "members" }, projectId: "new", familyId: "familien", appVersion: 95,
+  const session = createAccessSession({ api, refs: { meta: "meta", members: "members" }, projectId: "new", familyId: "familien", appVersion,
     readOffline: () => offline, writeOffline: flag => { offline = flag; }, clearOffline: () => { offline = null; },
     onScreen: screen => screens.push(screen), onReady: async args => calls.push(["ready", args]), onStop: () => calls.push(["stop"]),
   });
@@ -89,3 +90,16 @@ for (const path of ["../../app.js", "../../src/sync/firebase.js"]) {
   for (const forbidden of ["signInAnonymously", "writeBatch", "migrateLegacyStateIfNeeded", "remoteSplitStateExists", "legacyState", "home-tasks-app-18de3"]) assert.equal(source.includes(forbidden), false, forbidden);
 }
 console.log("access tests ok");
+const v98Admin = makeSession({ appVersion: 98 }); await v98Admin.session.start(user);
+assert.deepEqual(v98Admin.calls.filter(call => call[0] === "update"), [["update", "meta", { minAppVersion: 98 }]]);
+assert.equal(v98Admin.flag().minAppVersion, 98); assert.equal(v98Admin.screens.at(-1).kind, "ready");
+const currentAdmin = makeSession({ appVersion: 98, meta: { initializedAt: 1, minAppVersion: 98 } }); await currentAdmin.session.start(user);
+assert.equal(currentAdmin.calls.some(call => call[0] === "update"), false);
+const v98Member = makeSession({ appVersion: 98, role: "member" }); await v98Member.session.start(user);
+assert.equal(v98Member.calls.some(call => call[0] === "update"), false);
+const oldClient = makeSession({ appVersion: 97, meta: { initializedAt: 1, minAppVersion: 98 } }); await oldClient.session.start(user);
+assert.equal(oldClient.screens.at(-1).kind, "update");
+const failedRaise = makeSession({ appVersion: 98, updateFailure: new Error("failed") });
+await failedRaise.session.start(user); assert.equal(failedRaise.screens.at(-1).kind, "ready");
+assert.equal(failedRaise.screens.at(-1).message, undefined);
+await failedRaise.session.start(user); assert.equal(failedRaise.calls.filter(call => call[0] === "update").length, 2);

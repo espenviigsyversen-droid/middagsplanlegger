@@ -109,6 +109,15 @@ export function createAccessSession(options) {
       if (!meta.initializedAt) {
         clearOffline(); onScreen({ kind: "setup", user, role }); return;
       }
+      // One best-effort update per startup; only admins can write app/meta.
+      if (role === "admin" && appVersion >= 98 && Number(meta.minAppVersion || 0) < 98) {
+        try {
+          await api.updateDoc(refs.meta, { minAppVersion: 98 });
+          if (!valid()) return;
+          meta.minAppVersion = 98;
+        } catch { /* Retry at the next startup; ordinary access remains available. */ }
+        if (!valid()) return;
+      }
       writeOffline({ projectId, familyId, uid: user.uid, email: normalizeMemberEmail(user.email), role,
         initialized: true, minAppVersion: Number(meta.minAppVersion || 0) });
       const guard = (next) => {

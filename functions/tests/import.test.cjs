@@ -37,6 +37,8 @@ const answer = JSON.stringify({ found: true, title: "Melk", baseServings: 1, ing
     calls++; if (!firstSignal) firstSignal = options.signal; else assert.equal(options.signal, firstSignal, "One shared 45-second budget across both attempts");
     const body = JSON.parse(options.body); assert.equal(body.store, false); assert.equal(body.model, "gpt-5.6-luna"); assert.equal(body.max_output_tokens, 8000);
     assert.match(body.instructions, /structured og pageText/); assert.match(body.instructions, /ellers tom streng/);
+    assert.match(body.instructions, /"group":""/); assert.match(body.instructions, /recipeYield/);
+    assert.match(body.instructions, /Ikke gjenta tittelen/); assert.match(body.instructions, /Mengdeord uten tall/);
     if (calls === 1) return { status: 429, body: { cancel: async () => {} } };
     return { ok: true, status: 200, json: async () => ({ output: [{ type: "message", content: [{ type: "output_text", text: answer }] }], usage: { input_tokens: 10, output_tokens: 20 } }) };
   } });

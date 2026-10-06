@@ -20,8 +20,28 @@ export function formatAmount(value) {
   });
 }
 
+export function parseAmountRange(value) {
+  const text = String(value || "").trim().replace(/[½¼¾]/g, char => ({ "½": "1/2", "¼": "1/4", "¾": "3/4" })[char]);
+  const parts = text.split(/[-–]/);
+  if (parts.length !== 2) return null;
+  const endpoint = part => {
+    const mixed = /^\s*(\d+)\s+(\d+\s*\/\s*\d+)\s*$/.exec(part);
+    if (!mixed) return parseAmount(part);
+    const fraction = parseAmount(mixed[2]);
+    return fraction === null ? null : Number(mixed[1]) + fraction;
+  };
+  const min = endpoint(parts[0]), max = endpoint(parts[1]);
+  return min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max) && min <= max ? { min, max } : null;
+}
+
+export function shoppingAmountValue(value) {
+  return parseAmountRange(value)?.max ?? parseAmount(value);
+}
+
 export function scaleAmount(amount, baseServings, targetServings) {
   if (!targetServings || targetServings === baseServings) return amount;
+  const range = parseAmountRange(amount);
+  if (range) return `${formatAmount(range.min * targetServings / baseServings)}–${formatAmount(range.max * targetServings / baseServings)}`;
   const parsed = parseAmount(amount);
   if (parsed === null) return amount;
   return formatAmount((parsed * targetServings) / baseServings);
@@ -55,8 +75,8 @@ export function shoppingMergeKey(item) {
 }
 
 export function mergeShoppingAmount(existingAmount, incomingAmount) {
-  const existing = parseAmount(existingAmount);
-  const incoming = parseAmount(incomingAmount);
+  const existing = shoppingAmountValue(existingAmount);
+  const incoming = shoppingAmountValue(incomingAmount);
   if (existing !== null && incoming !== null) {
     return formatShoppingAmount(existing + incoming);
   }

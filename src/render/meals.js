@@ -1,4 +1,17 @@
-import { mealNeedsRecipe, mealCanImportFromLink } from "../domain/meals.js";
+import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows } from "../domain/meals.js";
+
+function renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml }) {
+  let previous = "";
+  return ingredients.map(item => {
+    const group = String(item.group || "").trim();
+    const heading = group && group !== previous ? `<h4 class="ingredient-group-heading">${escapeHtml(group)}</h4>` : "";
+    previous = group;
+    const comma = item.name.indexOf(",");
+    const suffix = comma > 0 ? item.name.slice(comma) : "";
+    return `${heading}<div class="ingredient-row"><span>${escapeHtml([scaleAmount(item.amount, baseServings, targetServings), item.unit].filter(Boolean).join(" "))}</span>
+      <div><strong>${escapeHtml(ingredientBaseName(item.name))}</strong>${escapeHtml(suffix)}</div></div>`;
+  }).join("");
+}
 
 export function renderCategoryChipsView(meal, labels = {}, escapeHtml = String) {
   return (meal.categories || []).map((cat) => `<span class="chip ${escapeHtml(cat)}">${escapeHtml(labels[cat] || cat)}</span>`).join("");
@@ -189,12 +202,7 @@ export function renderMealDetailView(options = {}) {
           <h3>Ingredienser</h3>
           ${ingredients.length ? `
             <div class="ingredient-table">
-              ${ingredients.map((item) => `
-                <div class="ingredient-row">
-                  <span>${escapeHtml([scaleAmount(item.amount, baseServings, targetServings), item.unit].filter(Boolean).join(" "))}</span>
-                  <strong>${escapeHtml(item.name)}</strong>
-                </div>
-              `).join("")}
+              ${renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml })}
             </div>
           ` : '<p class="empty-recipe-text">Ingen ingredienser er lagt inn ennå.</p>'}
         </section>
@@ -226,6 +234,16 @@ export function renderIngredientEditorRowView(options = {}) {
     unitOptions = [],
     escapeHtml = String,
   } = options;
+
+  if (item.type === "heading") return `
+    <div class="ingredient-heading-editor-row" data-ingredient-row="${index}" data-ingredient-heading="true">
+      <input class="input" data-ingredient-field="group" maxlength="60" value="${escapeHtml(item.title || "")}" placeholder="Overskrift, for eksempel Saus" aria-label="Ingrediensoverskrift">
+      <div class="ingredient-heading-actions">
+        <button class="icon-button" type="button" data-move-ingredient-heading="${index}" data-direction="-1" aria-label="Flytt overskrift opp" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button class="icon-button" type="button" data-move-ingredient-heading="${index}" data-direction="1" aria-label="Flytt overskrift ned">↓</button>
+        <button class="icon-button" type="button" data-remove-ingredient="${index}" aria-label="Fjern overskrift">×</button>
+      </div>
+    </div>`;
 
   return `
     <div class="ingredient-editor-row" data-ingredient-row="${index}">
@@ -275,6 +293,7 @@ export function renderMealEditorView(options = {}) {
   } = options;
 
   if (!meal) return "";
+  const ingredientRows = ingredients.some(item => item.type === "heading") ? ingredients : ingredientsToEditorRows(ingredients);
 
   return `
     <section class="panel meal-editor">
@@ -384,9 +403,10 @@ export function renderMealEditorView(options = {}) {
               <span>Ingrediens</span>
               <span></span>
             </div>
-            ${ingredients.map((item, index) => renderIngredientEditorRowView({ item, index, unitOptions, escapeHtml })).join("")}
+            ${ingredientRows.map((item, index) => renderIngredientEditorRowView({ item, index, unitOptions, escapeHtml })).join("")}
           </div>
-          <button class="button secondary compact" type="button" data-add-ingredient>Legg til ingrediens</button>
+          <div class="ingredient-editor-add-actions"><button class="button secondary compact" type="button" data-add-ingredient>Legg til ingrediens</button>
+            <button class="button secondary compact" type="button" data-add-ingredient-heading>Legg til overskrift</button></div>
           <p class="field-hint">Mengde og enhet kan stå tomt. Ingrediensnavn bør alltid fylles ut.</p>
         </div>
         <div class="setting">

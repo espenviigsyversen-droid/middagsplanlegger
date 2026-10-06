@@ -17,7 +17,7 @@ for (const mutation of [b => b.app = "other", b => b.exportVersion = 2, b => b.d
   const input = backupFixture(); mutation(input); assert.throws(() => validateBackup(input), /Ugyldig/);
 }
 const docs = buildRestoreDocuments(backup, { email: "admin@example.com" });
-assert.deepEqual(docs.at(-1), { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: "admin@example.com", minAppVersion: 95 }, marker: "meta" });
+assert.deepEqual(docs.at(-1), { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: "admin@example.com", minAppVersion: 98 }, marker: "meta" });
 assert.deepEqual(docs.filter(d => d.path[0] === "weeks").map(d => d.path[1]), ["2026-10-05", "2026-10-12"]);
 assert.deepEqual(docs.filter(d => d.path[0] === "shoppingItems").map(d => [d.path[1], d.data.createdAt]), [["item-z", 0], ["item-a", 1]]);
 assert.equal(docs.find(d => d.path[0] === "shoppingItems").data.id, undefined);
@@ -65,8 +65,22 @@ for (const key of ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servin
 const emptyDocs = buildRestoreDocuments(empty, { email: "admin@example.com" });
 const v96 = execution({ meta: { minAppVersion: 96 } });
 await executeRestore({ ...v96.args, appVersion: 96 });
-assert.equal(v96.calls.at(-1).data.minAppVersion, 95, "New app guard version does not change the setup minimum");
+assert.equal(v96.calls.at(-1).data.minAppVersion, 98, "Restore protects ingredient groups by requiring v98");
 assert.equal(checkRestoreCollections(emptyDocs, {}), true);
 assert.throws(() => checkRestoreCollections(emptyDocs, { meals: ["meal-1"] }), /1 dokumenter/);
 assert.equal(emptyDocs.length, 5);
 console.log("restore tests ok");
+const groupsBackup = backupFixture(); groupsBackup.data.meals[0].ingredients[0].group = "Saus";
+assert.equal(validateBackup(groupsBackup).data.meals[0].ingredients[0].group, "Saus");
+assert.equal(buildRestoreDocuments(groupsBackup).find(doc => doc.path[0] === "meals").data.ingredients[0].group, "Saus");
+const groupedExecution = execution(); groupedExecution.args.backup = groupsBackup;
+const restoredGroups = await executeRestore(groupedExecution.args);
+assert.equal(restoredGroups.meals[0].ingredients[0].group, "Saus");
+assert.equal(groupedExecution.calls.find(doc => doc.ref === "meals/meal-1").data.ingredients[0].group, "Saus");
+groupsBackup.data.meals[0].ingredients[0].group = " Saus ";
+assert.equal(validateBackup(groupsBackup).data.meals[0].ingredients[0].group, "Saus");
+assert.equal(groupsBackup.data.meals[0].ingredients[0].group, " Saus ");
+groupsBackup.data.meals[0].ingredients[0].group = " ";
+assert.equal("group" in buildRestoreDocuments(groupsBackup).find(doc => doc.path[0] === "meals").data.ingredients[0], false);
+groupsBackup.data.meals[0].ingredients[0].group = 123; assert.throws(() => validateBackup(groupsBackup));
+groupsBackup.data.meals[0].ingredients[0].group = "x".repeat(61); assert.throws(() => validateBackup(groupsBackup));

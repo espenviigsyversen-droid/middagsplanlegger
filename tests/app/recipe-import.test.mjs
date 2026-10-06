@@ -13,13 +13,13 @@ for (const match of source.matchAll(imports)) {
 }
 source = source.replace(imports, "").replace(/render\(\);\s*initFirebaseSync\(\);\s*$/, "");
 const recipe = { title: "Imported title", description: "Importert beskrivelse", baseServings: 4, prepTime: "medium", categories: ["fisk"], recipeUrl: "https://example.com/recipe", ingredients: [{ name: "Fisk", amount: "500", unit: "g" }], steps: ["Stek fisken"] };
-function fixture({ existing = false, content = false, ingredients = content, steps = content, replace = true } = {}) {
+function fixture({ existing = false, content = false, ingredients = content, steps = content, replace = true, baseServings = content ? 2 : 4 } = {}) {
   const storage = new Map(), selectors = new Map(), calls = [], prompts = [];
-  const values = { title: existing ? "Eget navn" : "", description: "", recipeUrl: "", baseServings: content ? "2" : "4", prepTime: "", minDaysBetween: "14", leftovers: "none" };
+  const values = { title: existing ? "Eget navn" : "", description: "", recipeUrl: "", baseServings: String(baseServings), prepTime: "", minDaysBetween: "14", leftovers: "none" };
   const form = { addEventListener() {}, values: { get: key => values[key] || "", getAll: () => [], has: () => false } };
   selectors.set("[data-meal-form]", [form]);
-  selectors.set("[data-import-url]", [{ value: "https://example.com/recipe" }]);
-  selectors.set("[data-import-text]", [{ value: "Oppskriftstekst som er lang nok." }]);
+  selectors.set("[data-import-url]", [{ value: "https://example.com/recipe", addEventListener() {} }]);
+  selectors.set("[data-import-text]", [{ value: "Oppskriftstekst som er lang nok.", addEventListener() {} }]);
   if (ingredients) {
     const fields = { amount: "2", unit: "g", name: "Egen vare" };
     selectors.set("[data-ingredient-row]", [{ querySelector: selector => ({ value: fields[/"(\w+)"/.exec(selector)[1]] }) }]);
@@ -37,9 +37,23 @@ function fixture({ existing = false, content = false, ingredients = content, ste
   run('render = () => {}; accessState = { kind: "ready", user: { uid: "test", email: "test@example.com" }, role: "member", offline: false }; firebaseConnection = { firebaseApp: {} }; state.activeView = "meals"; aiKeyUi.status = { configured: true, status: "connected" };');
   context.existing = existing; context.content = content;
   run('state.editingMealId = existing ? "own" : "new"; state.meals = existing ? [{ ...emptyMeal(), id: "own", title: "Eget navn", ingredients: content ? [{name:"Egen vare",amount:"2",unit:"g"}] : [], steps: content ? ["Eget steg"] : [], baseServings: content ? 2 : 4 }] : []; resetRecipeImport(); saveState();');
+  context.baseServings = baseServings; run("if (existing) state.meals[0].baseServings = baseServings; saveState();");
   context.importCall = async input => { calls.push(input); return { ok: true, recipe, warnings: ["Oversatt til norsk"] }; };
   run("recipeImporter = input => importCall(input)");
-  return { run, context, values, calls, prompts, storage, original: storage.get("middagsapp-state"), selectors };
+  const materializeEditor = () => {
+    const html = run("renderMealEditor()");
+    values.baseServings = /id="mealBaseServings"[^>]*value="([^"]+)"/.exec(html)[1];
+    const draft = run('getDraftMeal(state.editingMealId === "new" ? emptyMeal() : getMeal(state.editingMealId))');
+    for (const field of ["title", "description", "recipeUrl", "prepTime"]) values[field] = draft[field] || "";
+    const rows = run('getDraftIngredients(state.editingMealId === "new" ? emptyMeal() : getMeal(state.editingMealId))');
+    selectors.set("[data-ingredient-row]", Array.from(rows, row => ({
+      dataset: row.type === "heading" ? { ingredientHeading: "true" } : {},
+      querySelector: selector => ({ value: row.type === "heading" ? row.title : row[/"(\w+)"/.exec(selector)[1]] || "" }),
+    })));
+    selectors.set("[data-step-row]", Array.from(run('getDraftSteps(state.editingMealId === "new" ? emptyMeal() : getMeal(state.editingMealId))'), step => ({ querySelector: () => ({ value: step }) })));
+    return html;
+  };
+  return { run, context, values, calls, prompts, storage, original: storage.get("middagsapp-state"), selectors, form, materializeEditor };
 }
 for (const config of [{}, { existing: true }, { existing: true, content: true }, { existing: true, content: true, replace: false }]) {
   const f = fixture(config); await f.run('startRecipeImport("url")');
@@ -123,4 +137,50 @@ assert.deepEqual(fillDespiteNo.prompts, ["Erstatte ingrediensene med de importer
 assert.equal(fillDespiteNo.run("state.draftIngredients[0].name"), "Egen vare");
 assert.equal(fillDespiteNo.run("state.draftSteps[0]"), "Stek fisken");
 assert.match(fillDespiteNo.run("recipeImportState.message"), /0 ingredienser og 1 steg/);
+
+// K6: follow actual editor output into FormData and today's save path.
+for (const entry of ["editor", "link", "replace"]) {
+  const f = fixture({ existing: true, content: entry === "replace", baseServings: 5 });
+  f.context.importCall = async input => { f.calls.push(input); return { ok: true, recipe: { ...recipe, baseServings: 4, servingsKnown: true } }; };
+  if (entry === "link") {
+    f.run('state.meals[0].recipeUrl = "https://example.com/recipe"; state.selectedMealId = "own"; state.activeView = "recipe"; state.editingMealId = null; loadAiKeyStatus = async () => {};');
+    let click;
+    f.selectors.set("[data-import-from-link]", [{ dataset: { importFromLink: "own" }, addEventListener: (_event, callback) => { click = callback; } }]);
+    f.run("bindRecipeImportEvents()"); await click();
+  } else await f.run('startRecipeImport("url")');
+  assert.equal(f.calls.length, 1); assert.equal(f.run("state.draftMeal.baseServings"), 4);
+  assert.match(f.materializeEditor(), /id="mealBaseServings"[^>]*value="4"/);
+  f.context.form = f.form; f.run("saveMealFromForm(form)");
+  assert.equal(f.run("state.meals[0].baseServings"), 4);
+  assert.equal(f.run("state.meals[0].ingredients[0].name"), "Fisk");
+}
+
+const groupDraft = fixture({ existing: true });
+groupDraft.run('state.draftIngredients = [{type:"heading",title:"Saus"},{name:"hvitløk, finhakket",amount:"2",unit:"stk"},{type:"heading",title:"Tilbehør"},{name:"ris",amount:"3",unit:"dl"}];');
+groupDraft.materializeEditor(); groupDraft.run("syncMealEditorDraftFromDom()");
+assert.equal(groupDraft.run("collectIngredientRows()[0].group"), "Saus");
+groupDraft.run('changeIngredientEditorRows("heading")');
+assert.equal(groupDraft.run("state.draftIngredients.at(-1).type"), "heading");
+groupDraft.materializeEditor(); groupDraft.run('changeIngredientEditorRows("move", 2, 1)');
+assert.equal(groupDraft.run("editorRowsToIngredients(state.draftIngredients)[1].group"), "Saus");
+groupDraft.materializeEditor(); groupDraft.run('changeIngredientEditorRows("remove", 3)');
+assert.equal(groupDraft.run("editorRowsToIngredients(state.draftIngredients)[1].group"), "Saus");
+groupDraft.materializeEditor();
+const savedDraft = JSON.stringify(groupDraft.run("state.draftIngredients"));
+groupDraft.context.importCall = async () => ({ ok: true, recipe: { ...recipe, ingredients: [], servingsKnown: false } });
+await groupDraft.run('startRecipeImport("text")');
+assert.equal(JSON.stringify(groupDraft.run("state.draftIngredients")), savedDraft);
+assert.equal(groupDraft.run("collectIngredientRows().some(item => item.group === '')"), false);
+groupDraft.context.form = groupDraft.form; groupDraft.run("saveMealFromForm(form)");
+assert.equal(groupDraft.run("state.meals[0].ingredients[0].group"), "Saus");
+assert.equal(groupDraft.run("state.meals[0].keyIngredients[0]"), "hvitløk");
+const importedGroupDraft = fixture({ existing: true });
+importedGroupDraft.context.importCall = async () => ({ ok: true, recipe: { ...recipe, servingsKnown: true,
+  ingredients: [{ name: "Fisk", amount: "500", unit: "g", group: "Saus" }, { name: "Ris", amount: "2", unit: "dl", group: "Tilbehør" }] } });
+await importedGroupDraft.run('startRecipeImport("url")');
+assert.equal(importedGroupDraft.run("state.draftIngredients[0].type"), "heading");
+assert.equal(importedGroupDraft.run("state.draftIngredients[0].title"), "Saus");
+assert.match(importedGroupDraft.materializeEditor(), /value="Tilbehør"/);
+importedGroupDraft.context.form = importedGroupDraft.form; importedGroupDraft.run("saveMealFromForm(form)");
+assert.equal(importedGroupDraft.run("state.meals[0].ingredients[1].group"), "Tilbehør");
 console.log("app recipe import tests ok (drafts only, no network)");

@@ -165,4 +165,16 @@ testMealSearchSuggestionsRender();
 testMealDetailRender();
 testMealEditorRender();
 
+const groupedIngredients = [{ name: "hvitløk, finhakket", amount: "2", unit: "stk", group: "Saus" }, { name: "melk", group: "Saus" }, { name: "ris", group: "Tilbehør" }, { name: "salt" }, { name: "olje", group: "Saus" }];
+const groupedDetail = renderMealDetailView({ meal: { id: "group", title: "Test" }, ingredients: groupedIngredients, escapeHtml });
+assert.equal((groupedDetail.match(/ingredient-group-heading/g) || []).length, 3);
+assert.match(groupedDetail, /<strong>hvitløk<\/strong>, finhakket/);
+assert.doesNotMatch(groupedDetail, /<strong>hvitløk, finhakket<\/strong>/);
+const groupedEditor = renderMealEditorView({ meal: { id: "group", title: "Test" }, ingredients: groupedIngredients, escapeHtml });
+assert.match(groupedEditor, /Overskrift, for eksempel Saus/); assert.match(groupedEditor, /data-add-ingredient-heading/);
+assert.match(groupedEditor, /data-move-ingredient-heading/); assert.match(groupedEditor, /value="Saus"/);
+assert.match(groupedEditor, /maxlength="60"/); assert.match(groupedEditor, /data-ingredient-heading="true"/);
+const xssGroup = renderMealDetailView({ meal: { id: "group", title: "Test" }, ingredients: [{ name: "a, <script>", group: "<img>" }], escapeHtml });
+assert.doesNotMatch(xssGroup, /<img>|<script>/); assert.match(xssGroup, /&lt;img&gt;/);
+
 console.log("meals render tests ok");

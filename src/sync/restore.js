@@ -48,6 +48,7 @@ export function validateBackup(backup) {
       || !Number.isFinite(meal.baseServings) || meal.baseServings < 1) reject();
     for (const ingredient of meal.ingredients) {
       if (!object(ingredient) || !["name", "amount", "unit"].every((key) => typeof ingredient[key] === "string")) reject();
+      if (ingredient.group !== undefined && (typeof ingredient.group !== "string" || ingredient.group.trim().length > 60)) reject();
     }
     for (const field of ["suitability", "keyIngredients"]) if (meal[field] !== undefined && !strings(meal[field])) reject();
     for (const field of ["description", "recipeUrl", "prepTime", "leftovers"]) if (meal[field] !== undefined && typeof meal[field] !== "string") reject();
@@ -69,7 +70,14 @@ export function validateBackup(backup) {
       }
     }
   }
-  return structuredClone(backup);
+  const normalized = structuredClone(backup);
+  for (const meal of normalized.data.meals) for (const ingredient of meal.ingredients) {
+    if (ingredient.group !== undefined) {
+      const group = ingredient.group.trim();
+      if (group) ingredient.group = group; else delete ingredient.group;
+    }
+  }
+  return normalized;
 }
 
 export function summarizeBackup(backup) {
@@ -105,7 +113,7 @@ export function buildRestoreDocuments(backup, { email } = {}) {
       checked: item.checked, custom: item.custom, createdAt: index,
     } })),
     { path: ["app", "shopping"], data: {}, marker: "shopping" },
-    { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: 95 }, marker: "meta" },
+    { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: 98 }, marker: "meta" },
   ];
   return documents;
 }
@@ -120,7 +128,7 @@ export function checkRestoreCollections(documents, existing = {}) {
   return true;
 }
 
-export async function executeRestore({ backup, email, role, api, refs, appVersion = 95, valid = () => true }) {
+export async function executeRestore({ backup, email, role, api, refs, appVersion = 98, valid = () => true }) {
   if (role !== "admin") throw new Error("Bare administratorer kan sette opp databasen.");
   const documents = buildRestoreDocuments(backup, { email });
   const assertCurrent = () => { if (!valid()) throw new Error("Oppsettet ble avbrutt fordi konto eller tilgang ble endret."); };

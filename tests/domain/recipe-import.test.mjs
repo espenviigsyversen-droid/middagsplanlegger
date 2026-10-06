@@ -5,6 +5,8 @@ const draft = { id: "existing", title: "Eget navn", description: "", categories:
   ingredients: [{ name: "Egen vare", amount: "2", unit: "g" }], steps: ["Eget steg"], favorite: true };
 const recipe = { title: "Imported title", description: "Ny beskrivelse", categories: ["fisk"], prepTime: "medium", recipeUrl: "https://example.com/",
   baseServings: 4, ingredients: [{ name: "Fisk", amount: "500", unit: "g" }], steps: ["Stek fisken."] };
+const importedGroups = applyImportedRecipe({ ...draft, ingredients: [] }, { ...recipe, ingredients: [{ ...recipe.ingredients[0], group: "Saus" }] });
+assert.equal(importedGroups.ingredients[0].group, "Saus");
 const added = applyImportedRecipe(draft, recipe, { isNew: true, replaceIngredients: true, replaceSteps: true });
 assert.equal(added.title, recipe.title); assert.deepEqual(added.ingredients, recipe.ingredients); assert.equal(added.baseServings, 4);
 assert.equal(added.favorite, true); assert.equal(added.id, "existing");

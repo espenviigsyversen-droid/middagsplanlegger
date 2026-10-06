@@ -15,6 +15,7 @@ function* tags(html) {
     const start = html.indexOf("<", cursor);
     if (start === -1) { yield { text: html.slice(cursor) }; break; }
     if (start > cursor) yield { text: html.slice(cursor, start) };
+    if (!/[a-z/!?]/i.test(html[start + 1] || "")) { yield { text: "<" }; cursor = start + 1; continue; }
     if (html.startsWith("<!--", start)) {
       const end = html.indexOf("-->", start + 4);
       cursor = end === -1 ? html.length : end + 3;
@@ -85,10 +86,11 @@ function attributes(tag) {
   }
   return attrs;
 }
-function scanPage(html) {
-  const removed = new Set(["script", "style", "nav", "header", "footer", "select", "datalist", "noscript", "svg", "template", "iframe"]);
+function scanPage(html, keepNavigation = false) {
+  const removed = new Set(["script", "style", "select", "datalist", "noscript", "svg", "template", "iframe"]);
   const parts = [], scripts = [];
   let blockedName = "", blockedDepth = 0;
+  let contentDepth = 0;
   let mainStart, mainEnd, title = "", metaTitle = "", inTitle = false, jsonScript = false, scriptText = [];
   for (const token of tags(html)) {
     if (token.text !== undefined) {
@@ -100,7 +102,8 @@ function scanPage(html) {
       if (token.closing) { if (jsonScript) scripts.push(scriptText.join("")); jsonScript = false; }
       else { jsonScript = attributes(token.raw).type?.toLowerCase() === "application/ld+json"; scriptText = []; }
     }
-    if (removed.has(token.name)) {
+    const removeNavigation = !keepNavigation && (token.name === "nav" || (["header", "footer"].includes(token.name) && !contentDepth));
+    if (removed.has(token.name) || removeNavigation) {
       if (token.closing && blockedDepth && token.name === blockedName) blockedDepth--;
       else if (!token.closing && !/\/\s*>$/.test(token.raw)) {
         if (!blockedDepth) blockedName = token.name;
@@ -110,6 +113,7 @@ function scanPage(html) {
       continue;
     }
     if (blockedDepth) continue;
+    if (["main", "article"].includes(token.name)) contentDepth = Math.max(0, contentDepth + (token.closing ? -1 : 1));
     if (token.name === "main") {
       if (!token.closing && mainStart === undefined) mainStart = parts.length;
       if (token.closing) mainEnd = parts.length;
@@ -134,7 +138,12 @@ function recipeWindow(text, limit) {
     const start = Math.min(text.length - limit, matches[left].index);
     while (right < matches.length && matches[right].index + matches[right][0].length <= start + limit) right++;
     const score = right - left;
-    if (score > best) { best = score; chosen = start; }
+    if (score > best) {
+      best = score;
+      const last = matches[right - 1];
+      const earliest = last.index + last[0].length - limit;
+      chosen = Math.min(text.length - limit, Math.max(0, earliest, matches[left].index - 500));
+    }
   }
   return text.slice(chosen, chosen + limit);
 }
@@ -150,7 +159,9 @@ function boundedStructured(structured, limit) {
   return result;
 }
 function extractPage(html) {
-  const page = scanPage(String(html || ""));
+  const raw = String(html || "");
+  let page = scanPage(raw);
+  if (page.text.length < 500) page = scanPage(raw, true);
   const pageText = `${page.title}\n${recipeWindow(page.text, 16000 - page.title.length - 1)}`;
   for (const script of page.scripts) {
     let objects;

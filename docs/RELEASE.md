@@ -42,7 +42,23 @@ node functions/tests/index.test.cjs
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
 
-## Utrulling av v97
+## Utrulling av v98
+
+v97 er publisert og i bruk. v98 legger til valgfri ingrediensgruppe i eksisterende meals-format og lar handlevarer fra oppskrifter bruke grunnnavn og høyeste intervallmengde. Regler, dokumentstier, bruksgrenser, nøkkelhåndtering og service worker-strategi er uendret.
+
+1. Publiser serveren først med `firebase deploy --only functions --project middagsplanlegger-6db4e`, med eksisterende sikkerhetshjelper. Behold KEY_ENCRYPTION_SECRET. Nye group-felter er tillegg og baseServings er fortsatt numerisk for v97-klienten.
+2. Kontroller alle fem funksjoner og uinnlogget aiKeyStatus (HTTP 401 / UNAUTHENTICATED). Ingen sky-kall til aiKeySave/importRecipe, hemmelighetskommandoer eller regelpublisering inngår.
+3. Eier publiserer v98-appfilene sammen gjennom GitHub Desktop. Åpne appen på nett som administrator først. Tilgangsflyten hever minAppVersion til 98 med én updateDoc når minimumet er lavere; eldre klienter må oppdateres for å hindre at de fjerner grupper ved lagring. Mislykket heving er stille og prøves igjen ved neste administratoroppstart. Vanlige medlemmer og offline-økter skriver ikke meta.
+4. Lukk/åpne appen på de øvrige enhetene på nett, kontroller v98 og oppdater hvis versjonsvakten ber om det. Nye databaseoppsett/gjenopprettinger skriver minimum 98. Dette minimumet skal beholdes for data med ingrediensgrupper.
+5. Kontroller import med Saus/Tilbehør, intervaller, korte mengdeord og tilberedningskommentar. Rediger overskrifter, flytt/fjern dem og kontroller gruppene etter Lagre og synk. Gå til AI-innstillinger og tilbake med ulagrede overskriftsrader.
+6. Kontroller at grunnnavn summeres på navn/enhet i enkeltoppskrift og ukeplan, mens manuelt skrevet varenavn beholdes. Kontroller mengder, vareoppslag, gruppevisning og skalering. Sikkerhetskopi og gjenoppretting skal bevare group.
+7. K6: prøv en oppskrift med 5 porsjoner og ingen ingredienser, import fra en kilde med kjent antall 4, og bekreftet erstatning. Feltet og lagret oppskrift skal ha 4. Ukjent antall skal fortsatt beholde utkastets verdi og vise advarselen. Før Lagre skal ingen importert oppskrift være synket.
+
+Alle 36 testskript og syntakskontroll av alle 33 kildefiler bestod før serverpublisering. Testene bruker syntetiske data og lokale stubber, uten nettverk. S3-fixturene fra v97 er beholdt; forventningen for navigasjon på én kort side er justert fordi den nye fallback-regelen uttrykkelig beholder nav/header/footer under 500 tegn. Ingen kontroll mot en virkelig oppskriftsside eller AI-modell gjøres i denne oppgaven. Se LEVERANSE_V98.md for K6-funn, filoversikt og publiseringsresultat.
+
+Serverpublisering fullført 2026-10-06 med Firebase CLI 15.18.0, --only functions og eksisterende sikkerhetshjelper. Første lokale CLI-prosess avsluttet uventet etter delvis oppdatering; samme kommando uten interaktiv terminal fullførte de tre gjenstående funksjonene med «Deploy complete» og exit-kode 0. functions:list og kildehashkontroll bekreftet alle fem funksjoner ACTIVE med lokal v98-kilde, 2. generasjon, europe-west1 og nodejs22. Uinnlogget aiKeyStatus ga HTTP 401 / UNAUTHENTICATED. Regler ble ikke publisert, KEY_ENCRYPTION_SECRET er urørt, og aiKeySave/importRecipe ble ikke kalt i skyen. Appfilene er klare for eiers publisering; åpne administratorens v98 på nett først som beskrevet over.
+
+## Utrulling av v97 (historisk leveransestatus)
 
 v96 er publisert og i bruk. v97 endrer bare uttrekk, AI-tolking og utfylling av oppskriftsutkast; datamodell, synk, kvoter, nøkkelhåndtering, SSRF-vern og Firestore-regler beholdes.
 

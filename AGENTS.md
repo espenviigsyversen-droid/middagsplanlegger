@@ -122,7 +122,7 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Etter importendringer: kjør `node tests/domain/recipe-import.test.mjs`, `node tests/sync/recipe-import.test.mjs`, `node tests/app/recipe-import.test.mjs`, `node tests/render/meals.test.mjs`.
 - Serverkontroller: `node functions/tests/core.test.cjs`, `node functions/tests/extract.test.cjs`, `node functions/tests/addresses.test.cjs`, `node functions/tests/import.test.cjs`, `node functions/tests/index.test.cjs`. Kjør også node --check for index.js og alle functions/lib-filer.
 - Etter nøkkelendringer: kjør `node functions/tests/keys.test.cjs`, `node functions/tests/key-service.test.cjs`, `node functions/tests/diagnostics.test.cjs`, `node tests/sync/ai-key.test.mjs`, `node tests/render/ai-key.test.mjs` og `node tests/app/ai-key.test.mjs`, i tillegg til importtestene.
-- Functions-filer skal ikke inn i service worker. Nye klientmoduler må inn i begge asset-listene. Appens versjonsvakt følger aktuell versjon; minAppVersion ved oppsett beholdes på 95.
+- Functions-filer skal ikke inn i service worker. Nye klientmoduler må inn i begge asset-listene. Appens versjonsvakt følger aktuell versjon; fra v98 er minAppVersion ved oppsett 98 for å beskytte ingrediensgrupper.
 
 ## Delvis oppskriftsimport fra v97
 
@@ -130,3 +130,12 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Ingredienser og steg fylles/erstattes uavhengig. Spør bare om deler som finnes både i utkastet og importen, også for nye oppskrifter. Tom import skal aldri tømme en utfylt del eller utfylt metadata. Porsjoner følger bare importerte ingredienser når servingsKnown ikke er false.
 - servingsKnown er et midlertidig importfelt, ikke et nytt felt i meals, synk eller sikkerhetskopi. Serveren beholder numerisk baseServings (4 når ukjent) for v96-kompatibilitet. Ny server publiseres før v97-klienten.
 - Kjør alle testskript under tests/ og functions/tests/, inkludert syntetiske støy-/ytelsessider i extract.test.cjs. Nettkontroll av en virkelig side krever egen godkjenning; sideinnhold skal ikke lagres i repo eller tester.
+
+## Ingrediensgrupper fra v98
+
+- Ingrediensformatet utvides additivt med valgfri group: trimmet tekst, maks 60 tegn, utelatt når tom. normalizeIngredients, synk, eksport og gjenoppretting må bevare feltet og rekkefølgen. Firestore-stier og regler er uendret.
+- Overskrifter er UI-rader av typen `{ type: "heading", title }` i draftIngredients, ikke egne lagrede ingredienser. ingredientsToEditorRows/editorRowsToIngredients oversetter mellom formatene. Nærmeste overskrift bestemmer gruppen; en tom overskrift starter en ugruppert del, og fjerning gir gruppen over. Overskriftsrader beholdes ved render, venting, import av bare steg og besøk i AI-innstillinger; ved erstatning av ingredienser følger gruppene det importerte innholdet.
+- ingredientBaseName brukes for oppskriftsgenererte varenavn, vareoppslag, keyIngredients og forslag/søk. Opprinnelige ingrediensnavn og manuelt innskrevne handlevarenavn beholdes. parseAmount er uendret; parseAmountRange/scaleAmount håndterer intervaller, og handlelisten bruker høyeste verdi.
+- Online administrator med v98 hever app/meta.minAppVersion til 98 ved én best-effort updateDoc per oppstart når minimumet er lavere. Feil er stille og prøves igjen ved neste oppstart. Vanlige medlemmer/offline-økter skal ikke skrive meta. Gjenoppretting oppretter minimum 98. Dette er den uttrykkelig godkjente unntaksflyten fra regelen om at vanlig domenesynk ikke skriver meta.
+- Serveren publiseres før klienten, med numerisk baseServings og additive group-felter for v97-kompatibilitet. Funksjonell kontroll krever at administrator først åpner v98 på nett, slik at eldre klienter stoppes før de kan fjerne grupper ved lagring.
+- Etter endringer: kjør alle eksisterende tester under tests/ og functions/tests/. Gruppene dekkes i meals/render/app/backup/restore-testene; versjonshevingen i access/access-startup; navn/intervaller i shopping/workflows; import og S3-uttrekk i functions-testene.

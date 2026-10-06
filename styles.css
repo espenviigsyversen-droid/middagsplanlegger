@@ -1089,6 +1089,20 @@ button {
   gap: 8px;
 }
 
+.ingredient-heading-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 10px 0 4px;
+}
+
+.ingredient-heading-editor-row .input { width: 100%; min-width: 0; font-weight: 750; }
+.ingredient-heading-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.ingredient-heading-actions .icon-button { width: 44px; height: 44px; }
+.ingredient-editor-add-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ingredient-group-heading { margin: 14px 0 2px; font-size: 1rem; }
+.ingredient-row > div { min-width: 0; overflow-wrap: anywhere; }
+
 .ingredient-editor-head,
 .ingredient-editor-row {
   display: grid;

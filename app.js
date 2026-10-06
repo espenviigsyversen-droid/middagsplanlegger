@@ -5,6 +5,10 @@ import {
   mealNeedsRecipe,
   mealCanImportFromLink,
   normalizeIngredients,
+  ingredientBaseName,
+  ingredientsToEditorRows,
+  editorRowsToIngredients,
+  moveIngredientEditorRow,
   normalizedRecipeUrl,
   quickMealTitleForQuery,
   splitLines,
@@ -17,6 +21,7 @@ import {
   normalizeShoppingList,
   orderStoreCategories,
   parseAmount,
+  shoppingAmountValue,
   scaleAmount,
   shoppingMergeKey,
 } from "./src/domain/shopping.js";
@@ -206,8 +211,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v97";
-const APP_VERSION_NUMBER = 97;
+const APP_VERSION = "v98";
+const APP_VERSION_NUMBER = 98;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -325,6 +330,7 @@ function normalizeState(nextState) {
     recipeUrl: String(meal.recipeUrl || "").trim(),
     baseServings: Math.max(1, Number(meal.baseServings) || 4),
     ingredients: normalizeIngredients(meal.ingredients, meal.keyIngredients),
+    keyIngredients: [...new Set(normalizeIngredients(meal.ingredients, meal.keyIngredients).map(item => ingredientBaseName(item.name).toLowerCase()))],
     suitability: Array.isArray(meal.suitability) ? meal.suitability : [],
   }));
   const currentWeekKey = getWeekKey(nextState.weekOffset || 0);
@@ -666,7 +672,7 @@ function mealsMatchingPickerQuery(query = "") {
     const titleMatch = meal.title.toLowerCase().includes(normalizedQuery);
     const descMatch = (meal.description || "").toLowerCase().includes(normalizedQuery);
     const catMatch = meal.categories.some((cat) => (labels[cat] || cat).toLowerCase().includes(normalizedQuery));
-    const ingrMatch = (meal.keyIngredients || []).some((ingr) => ingr.toLowerCase().includes(normalizedQuery));
+    const ingrMatch = (meal.keyIngredients || []).some((ingr) => ingredientBaseName(ingr).toLowerCase().includes(normalizedQuery));
     return titleMatch || descMatch || catMatch || ingrMatch;
   });
 }
@@ -914,7 +920,7 @@ const STORE_CATEGORIES = [
 const DISABLED_INGREDIENT_MAPPING = "__disabled";
 
 function categorizeIngredient(name) {
-  const lower = (name || "").toLowerCase();
+  const lower = ingredientBaseName(name).toLowerCase();
   const mappings = state?.metadata?.ingredientMappings || {};
   if (Object.prototype.hasOwnProperty.call(mappings, lower)) {
     return mappings[lower] === DISABLED_INGREDIENT_MAPPING ? "other" : mappings[lower];
@@ -959,9 +965,9 @@ function mergeGeneratedShoppingItems(generatedItems) {
 }
 
 function createShoppingItemFromIngredient(ingredient, ratio = 1, custom = false) {
-  const parsedAmount = parseAmount(ingredient.amount);
+  const parsedAmount = shoppingAmountValue(ingredient.amount);
   const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
-  const name = String(ingredient.name || "").trim();
+  const name = ingredientBaseName(ingredient.name);
   return {
     id: Math.random().toString(36).slice(2),
     name,
@@ -1078,8 +1084,8 @@ function shoppingSuggestionSources() {
   });
   STORE_CATEGORIES.forEach((cat) => cat.keywords.forEach((keyword) => add(keyword, cat.key)));
   (state.meals || []).forEach((meal) => {
-    (meal.ingredients || []).forEach((ingredient) => add(ingredient.name));
-    (meal.keyIngredients || []).forEach((ingredient) => add(ingredient));
+    (meal.ingredients || []).forEach((ingredient) => add(ingredientBaseName(ingredient.name)));
+    (meal.keyIngredients || []).forEach((ingredient) => add(ingredientBaseName(ingredient)));
   });
   (state.shoppingList?.items || []).forEach((item) => add(item.name, item.category));
 
@@ -1139,10 +1145,10 @@ function generateShoppingListItems(selectedDays) {
 
     meal.ingredients.forEach(({ name, amount, unit }) => {
       if (!name?.trim()) return;
-      const normName = name.trim();
+      const normName = ingredientBaseName(name);
       const normUnit = (unit || "").trim().toLowerCase();
       const key = `${normName.toLowerCase()}__${normUnit}`;
-      const parsedAmount = parseAmount(amount);
+      const parsedAmount = shoppingAmountValue(amount);
       const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
 
       if (aggregated[key]) {
@@ -1526,7 +1532,7 @@ function renderMealSearchSuggestionsOnly() {
 function filteredMeals() {
   const query = state.filters.query.trim().toLowerCase();
   return sortedMeals().filter((meal) => {
-    const matchesQuery = !query || [meal.title, meal.description, ...meal.keyIngredients].join(" ").toLowerCase().includes(query);
+    const matchesQuery = !query || [meal.title, meal.description, ...(meal.keyIngredients || []).map(ingredientBaseName)].join(" ").toLowerCase().includes(query);
     const matchesCategory = state.filters.category === "all" || meal.categories.includes(state.filters.category);
     const matchesFlag = state.filters.flag === "all"
       || (state.filters.flag === "favorite" && meal.favorite)
@@ -1645,7 +1651,7 @@ function getDraftMeal(meal) {
 function getDraftIngredients(meal) {
   if (Array.isArray(state.draftIngredients)) return state.draftIngredients;
   const ingredients = normalizeIngredients(meal.ingredients, meal.keyIngredients);
-  return ingredients.length ? ingredients : [{ amount: "", unit: "", name: "" }];
+  return ingredients.length ? ingredientsToEditorRows(ingredients) : [{ amount: "", unit: "", name: "" }];
 }
 
 function getDraftSteps(meal) {
@@ -1688,7 +1694,7 @@ function saveMealFromForm(form) {
     prepTime: String(formData.get("prepTime") || ""),
     minDaysBetween: Math.max(1, Number(formData.get("minDaysBetween")) || 14),
     ingredients,
-    keyIngredients: ingredients.map((item) => item.name.toLowerCase()),
+    keyIngredients: [...new Set(ingredients.map((item) => ingredientBaseName(item.name).toLowerCase()))],
     steps: collectStepRows(),
   };
 
@@ -1710,22 +1716,31 @@ function makeMealId(title) {
 }
 
 function collectIngredientRows() {
-  return [...app.querySelectorAll("[data-ingredient-row]")]
-    .map((row) => ({
-      amount: row.querySelector('[data-ingredient-field="amount"]')?.value.trim() || "",
-      unit: row.querySelector('[data-ingredient-field="unit"]')?.value.trim() || "",
-      name: row.querySelector('[data-ingredient-field="name"]')?.value.trim() || "",
-    }))
-    .filter((item) => item.name);
+  return editorRowsToIngredients(readIngredientEditorRows());
 }
 
-function syncDraftIngredientsFromDom() {
-  state.draftIngredients = [...app.querySelectorAll("[data-ingredient-row]")]
-    .map((row) => ({
+function readIngredientEditorRows() {
+  return [...app.querySelectorAll("[data-ingredient-row]")]
+    .map((row) => row.dataset?.ingredientHeading === "true"
+      ? { type: "heading", title: row.querySelector('[data-ingredient-field="group"]')?.value || "" }
+      : ({
       amount: row.querySelector('[data-ingredient-field="amount"]')?.value.trim() || "",
       unit: row.querySelector('[data-ingredient-field="unit"]')?.value.trim() || "",
       name: row.querySelector('[data-ingredient-field="name"]')?.value.trim() || "",
     }));
+}
+
+function syncDraftIngredientsFromDom() {
+  state.draftIngredients = readIngredientEditorRows();
+}
+
+function changeIngredientEditorRows(action, index = -1, delta = 0) {
+  syncMealEditorDraftFromDom();
+  let rows = state.draftIngredients || [];
+  if (action === "heading") rows = [...rows, { type: "heading", title: "" }];
+  else if (action === "move") rows = moveIngredientEditorRow(rows, index, delta);
+  else if (action === "remove") rows = rows.filter((_, rowIndex) => rowIndex !== index);
+  setState({ draftMeal: state.draftMeal, draftIngredients: rows, draftSteps: state.draftSteps });
 }
 
 function syncDraftMealFromDom() {
@@ -1818,7 +1833,8 @@ async function startRecipeImport(mode = "url") {
     const isNew = editorId === "new";
     const base = isNew ? emptyMeal() : getMeal(editorId);
     if (!base) return;
-    const draft = { ...getDraftMeal(base), ingredients: getDraftIngredients(base), steps: getDraftSteps(base) };
+    const editorRows = getDraftIngredients(base);
+    const draft = { ...getDraftMeal(base), ingredients: editorRowsToIngredients(editorRows), steps: getDraftSteps(base) };
     const hasIngredients = draft.ingredients.some(item => item.name.trim());
     const hasSteps = draft.steps.some(step => step.trim());
     const importedIngredients = result.recipe.ingredients?.length || 0;
@@ -1830,7 +1846,9 @@ async function startRecipeImport(mode = "url") {
     const replace = (askIngredients || askSteps) ? window.confirm(question) : false;
     const replaceIngredients = askIngredients && replace, replaceSteps = askSteps && replace;
     const next = applyImportedRecipe(draft, result.recipe, { isNew, replaceIngredients, replaceSteps });
-    state.draftMeal = next; state.draftIngredients = next.ingredients; state.draftSteps = next.steps;
+    state.draftMeal = next;
+    state.draftIngredients = importedIngredients && (!hasIngredients || replaceIngredients) ? ingredientsToEditorRows(next.ingredients) : editorRows;
+    state.draftSteps = next.steps;
     let host = "innlimt tekst";
     try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
     const filledIngredients = !hasIngredients || replaceIngredients ? importedIngredients : 0;
@@ -1861,7 +1879,7 @@ function bindRecipeImportEvents() {
     setState({ activeView: "meals", previousView: "meals", editingMealId: meal.id, draftMeal: null,
       draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
     await loadAiKeyStatus();
-    if (state.editingMealId === meal.id && state.activeView === "meals") startRecipeImport("url");
+    if (state.editingMealId === meal.id && state.activeView === "meals") await startRecipeImport("url");
   }));
 }
 
@@ -3041,6 +3059,11 @@ function bindEvents() {
     syncMealEditorDraftFromDom();
     const draftIngredients = [...(state.draftIngredients || []), { amount: "", unit: "", name: "" }];
     setState({ draftMeal: state.draftMeal, draftIngredients, draftSteps: state.draftSteps });
+  });
+
+  app.querySelector("[data-add-ingredient-heading]")?.addEventListener("click", () => changeIngredientEditorRows("heading"));
+  app.querySelectorAll("[data-move-ingredient-heading]").forEach(button => {
+    button.addEventListener("click", () => changeIngredientEditorRows("move", Number(button.dataset.moveIngredientHeading), Number(button.dataset.direction)));
   });
 
   app.querySelectorAll("[data-remove-ingredient]").forEach((button) => {

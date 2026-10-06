@@ -14,7 +14,8 @@ assert.deepEqual(JSON.parse(extractPage(script({ ...recipe, recipeInstructions: 
 assert.equal(JSON.parse(extractPage(script({ "@type": "Person" }) + script(recipe)).input).name, "Fish & Chips");
 const fallback = extractPage('<title>Tittel</title><meta content="Bedre tittel" property="og:title"><nav>skjul nav</nav><script>skjul script</script><style>skjul css</style><header>skjul header</header><footer>skjul footer</footer><p>1 &frac12; dl melk &#176;C</p>');
 assert.equal(fallback.source, "page-text"); assert.match(fallback.input, /Bedre tittel/);
-assert.match(fallback.input, /1 ½ dl melk °C/); assert.doesNotMatch(fallback.input, /skjul/);
+assert.match(fallback.input, /1 ½ dl melk °C/); assert.doesNotMatch(fallback.input, /skjul script|skjul css/);
+assert.match(fallback.input, /skjul nav/, "Short pages now retain navigation under the S3 fallback");
 assert.equal(extractPage(`<p>${"a".repeat(20000)}</p>`).input.length, 16000);
 const optionNoise = `<select>${'<option>OPTION_NOISE'.repeat(3000)}</select>`;
 const main = `<main><h1>Syntetisk middag</h1><h2>Ingredienser</h2><p>300 g syntetisk rotgrønnsak</p><p>2 ss olje</p><h2>Fremgangsmåte</h2><p>Fres alle testvarene. Skrell testpotetene.</p><p>${"Rolig introduksjon. ".repeat(40)}</p></main>`;
@@ -49,5 +50,15 @@ console.log(`extract performance: ${elapsed.toFixed(1)} ms for 1.5 MB / 20000 un
 const digitsStart = performance.now();
 assert.equal(extractPage(`<p>${"9".repeat(1500000)}</p>`).input.length, 16000);
 assert.ok(performance.now() - digitsStart < 2000, "Long digit runs must not trigger repeated signal matching");
+const literal = extractPage(`<main><p>${"Introduksjon ".repeat(50)} under < 150 grader. Trine's tips: 3 ss olje. Behold resten.</p></main>`);
+assert.match(literal.input, /under < 150 grader\. Trine's tips/); assert.match(literal.input, /Behold resten/);
+for (const wrapper of ["main", "article"]) {
+  const inner = extractPage(`<${wrapper}><header>Porsjoner: 4</header><p>${"Kildetekst ".repeat(60)} 300 g testvare</p><footer>Server med ris</footer></${wrapper}>`);
+  assert.match(inner.input, /Porsjoner: 4/); assert.match(inner.input, /Server med ris/);
+}
+const unclosedNav = extractPage(`<nav><p>${"Forklaring ".repeat(60)} Ingredienser: 300 g testvare. Fremgangsmåte: Kok.</p>`);
+assert.match(unclosedNav.input, /300 g testvare/); assert.match(unclosedNav.input, /Fremgangsmåte: Kok/);
+const nearbyServings = extractPage(`<p>${"støy ".repeat(16000)}</p><p>Porsjoner: 4</p><h2>Ingredienser</h2><p>300 g testvare. Instructions: Stek.</p><p>${"slutt ".repeat(5000)}</p>`);
+assert.match(nearbyServings.input, /Porsjoner: 4/); assert.match(nearbyServings.input, /300 g testvare/);
 assert.equal(durationMinutes("P1DT30M"), 1470); assert.equal(durationMinutes("bad"), null);
 console.log("functions extract tests ok");

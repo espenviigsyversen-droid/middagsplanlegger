@@ -4,9 +4,47 @@ export function normalizeIngredients(ingredients, fallbackNames = []) {
       name: String(item.name || "").trim(),
       amount: String(item.amount || "").trim(),
       unit: String(item.unit || "").trim(),
+      ...(String(item.group || "").trim() ? { group: String(item.group).trim().slice(0, 60) } : {}),
     })).filter((item) => item.name);
   }
   return (fallbackNames || []).map((name) => ({ name, amount: "", unit: "" }));
+}
+
+export function ingredientBaseName(name) {
+  const whole = String(name || "").trim();
+  return whole.split(",", 1)[0].trim() || whole;
+}
+
+// Headings exist only in the editor; persisted ingredients carry their group.
+export function ingredientsToEditorRows(ingredients = []) {
+  const rows = [];
+  let group = "";
+  for (const ingredient of ingredients) {
+    const nextGroup = String(ingredient.group || "").trim().slice(0, 60);
+    if (nextGroup !== group) { rows.push({ type: "heading", title: nextGroup }); group = nextGroup; }
+    const { group: ignored, ...row } = ingredient;
+    rows.push({ ...row });
+  }
+  return rows;
+}
+
+export function editorRowsToIngredients(rows = []) {
+  let group = "";
+  const ingredients = [];
+  for (const row of rows) {
+    if (row.type === "heading") { group = String(row.title || "").trim().slice(0, 60); continue; }
+    ingredients.push({ name: row.name, amount: row.amount, unit: row.unit, ...(group ? { group } : {}) });
+  }
+  return normalizeIngredients(ingredients);
+}
+
+export function moveIngredientEditorRow(rows, index, delta) {
+  const next = structuredClone(rows);
+  const target = index + delta;
+  if (index >= 0 && index < next.length && target >= 0 && target < next.length) {
+    [next[index], next[target]] = [next[target], next[index]];
+  }
+  return next;
 }
 
 export function normalizedRecipeUrl(value) {
