@@ -97,7 +97,9 @@ function extractJson(text) {
 const trimmed = (value, max) => typeof value === "string" ? value.trim().slice(0, max) : "";
 function normalizeAmount(value) {
   if (typeof value !== "string") return "";
-  const text = value.trim().replace(/–/g, "-").replace(/[½¼¾]/g, char => ({ "½": "1/2", "¼": "1/4", "¾": "3/4" })[char]);
+  const text = value.trim()
+    .replace(/^(?:(?:ca\.?|cirka|omtrent|omlag|about|approx\.|approximately)(?=\s|[0-9½¼¾])\s*|~\s*)/i, "")
+    .trim().replace(/–/g, "-").replace(/[½¼¾]/g, char => ({ "½": "1/2", "¼": "1/4", "¾": "3/4" })[char]);
   const number = "(?:\\d+ +\\d+ *\\/ *\\d+|\\d+(?:[.,]\\d+)?(?: *\\/ *\\d+(?:[.,]\\d+)?)?)";
   if (text.length > 12 || !new RegExp(`^${number}(?: *- *${number})?$`).test(text)) return "";
   const parts = text.split("-").map(part => {
@@ -115,6 +117,22 @@ function normalizeDescription(value, title) {
   const comparable = text => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
   return comparable(description) === comparable(title) ? "" : description;
 }
+const UNIT_FORMS = Object.freeze({
+  bokser: "boks", poser: "pose", pakker: "pakke", pk: "pakke", begre: "beger",
+  stykk: "stk", stykker: "stk", stilk: "stk", stilker: "stk",
+  spiseskje: "ss", spiseskjeer: "ss", teskje: "ts", teskjeer: "ts",
+  gram: "g", kilo: "kg", liter: "l", desiliter: "dl", milliliter: "ml",
+});
+const unitKey = value => value.trim().toLowerCase().replace(/\.$/, "");
+function configuredUnit(value, units, formsOnly = false) {
+  const key = unitKey(value);
+  if (!formsOnly) {
+    const direct = units.find(unit => unitKey(unit) === key);
+    if (direct) return direct;
+  }
+  const canonical = UNIT_FORMS[key];
+  return canonical ? units.find(unit => unitKey(unit) === canonical) || "" : "";
+}
 function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
   const data = extractJson(text);
   if (data.found === false) fail("NOT_A_RECIPE");
@@ -127,8 +145,17 @@ function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
     if (!object(item)) return null;
     let name = trimmed(item.name, 80), unit = trimmed(item.unit, 40);
     if (!name) return null;
-    if (!units.includes(unit)) { name = `${unit} ${name}`.trim().slice(0, 80); unit = ""; }
     const amount = normalizeAmount(item.amount);
+    if (!units.includes(unit)) {
+      const matched = configuredUnit(unit, units);
+      if (matched) unit = matched;
+      else { name = `${unit} ${name}`.trim().slice(0, 80); unit = ""; }
+    }
+    if (amount && !unit) {
+      const prefix = /^(\S+)\s+(\S[\s\S]*)$/.exec(name);
+      const matched = prefix && configuredUnit(prefix[1], units, true);
+      if (matched) { unit = matched; name = prefix[2].trim(); }
+    }
     const group = trimmed(item.group, 60);
     return { name, unit: amount ? unit : "", amount, ...(group ? { group } : {}) };
   }).filter(Boolean);
@@ -144,4 +171,4 @@ function normalizeRecipe(text, { categories, units, recipeUrl = "" }) {
     ingredients, steps, prepTime: minutes === null ? "" : minutes < 30 ? "quick" : minutes <= 60 ? "medium" : "long",
     categories: [...new Set(Array.isArray(data.categories) ? data.categories.filter(key => keys.has(key)) : [])].slice(0, 3), recipeUrl }, warnings };
 }
-module.exports = { ImportError, fail, messages, validateInput, requireMember, nextUsage, extractJson, normalizeRecipe, safeErrorFields };
+module.exports = { ImportError, fail, messages, validateInput, requireMember, nextUsage, extractJson, normalizeAmount, normalizeRecipe, safeErrorFields };

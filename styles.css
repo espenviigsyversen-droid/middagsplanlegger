@@ -3223,4 +3223,6 @@ button {
 .recipe-import-url-row .input { flex: 1; min-width: 0; }
 .recipe-import-panel .textarea { width: 100%; min-height: 160px; margin-bottom: 8px; }
 .recipe-import-panel p, .recipe-import-panel li { overflow-wrap: anywhere; }
+.recipe-import-choice { margin: 16px 0; padding: 16px; border: 2px solid var(--accent); border-radius: 12px; background: var(--accent-soft); scroll-margin-block: 16px; }
+.recipe-import-choice h4 { margin: 0 0 8px; font-size: 1.05rem; }
 .recipe-import-choice .button-row { display: flex; flex-wrap: wrap; gap: 8px; }

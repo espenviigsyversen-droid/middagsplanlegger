@@ -210,8 +210,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v102";
-const APP_VERSION_NUMBER = 102;
+const APP_VERSION = "v103";
+const APP_VERSION_NUMBER = 103;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -1872,6 +1872,10 @@ function applyRecipeImportToEditor(recipe, options = {}) {
     conflictIngredients: ingredients > 0 && hasIngredients, conflictSteps: steps > 0 && hasSteps };
 }
 
+function recipeImportParts(ingredients, steps) {
+  return [ingredients > 0 ? `${ingredients} ingredienser` : "", steps > 0 ? `${steps} steg` : ""].filter(Boolean).join(" og ");
+}
+
 function resolveRecipeImport(replace) {
   const pending = recipeImportState.pending;
   if (!pending) return;
@@ -1890,7 +1894,7 @@ function resolveRecipeImport(replace) {
     const ingredients = pending.conflictIngredients ? applied?.filledIngredients || 0 : 0;
     const steps = pending.conflictSteps ? applied?.filledSteps || 0 : 0;
     recipeImportState.message = ingredients || steps
-      ? `Erstattet: ${ingredients} ingredienser og ${steps} steg. Se over før du lagrer.` : "Ingenting ble endret.";
+      ? `Erstattet: ${recipeImportParts(ingredients, steps)}. Se over før du lagrer.` : "Ingenting ble endret.";
   } else recipeImportState.message = "Ingenting ble erstattet.";
   render();
 }
@@ -1953,14 +1957,17 @@ async function startRecipeImport(mode = "url") {
     let host = mode === "image" ? "bilde" : "innlimt tekst";
     try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
     recipeImportState.message = applied.filledIngredients || applied.filledSteps
-      ? `Importert fra ${host}: ${applied.filledIngredients} ingredienser og ${applied.filledSteps} steg. Se over før du lagrer.`
+      ? `Importert fra ${host}: ${recipeImportParts(applied.filledIngredients, applied.filledSteps)}. Se over før du lagrer.`
       : applied.changed ? `Importert fra ${host}. Se over før du lagrer.` : recipeImportState.pending ? "" : "Ingenting ble endret.";
     recipeImportState.warnings = [...(result.warnings || [])];
     if (!importedIngredients || !importedSteps) recipeImportState.warnings.push("Lim inn teksten for det som mangler, og trykk Tolk tekst.");
   } catch {
     if (valid()) recipeImportState.message = "Kunne ikke importere oppskriften. Prøv igjen.";
   } finally {
-    if (valid()) { recipeImportState.busy = false; render(); }
+    if (valid()) {
+      recipeImportState.busy = false; render();
+      if (recipeImportState.pending) app.querySelector("[data-import-choice]")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    }
   }
 }
 

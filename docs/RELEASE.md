@@ -45,6 +45,19 @@ node functions/tests/index.test.cjs
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
 
+## Utrulling av v103
+
+v102 er publisert og bildeimport fra kamerabilde/skjermbilde er testet av eier. v103 retter omtrentlige mengder og bøyde enheter, gjør importvalget tydeligere og bruker tidspunktet for flush som grunnlag for ukesynkens bildeløpenummer. Dataformat, regler, kvoter, nøkkelhåndtering og minimumsversjon 101 beholdes.
+
+1. Functions publiseres først etter lokale tester, bare --only functions til middagsplanlegger-6db4e. Kontroller alle fem callable v2-funksjoner i europe-west1/nodejs22 og uinnlogget aiKeyStatus med HTTP 401/UNAUTHENTICATED; se LEVERANSE_V103.md. Serveren virker med v102-klienten. Ingen aiKeySave/importRecipe-kall eller secret-/regelendring utføres av agenten.
+2. Eier publiserer v103-appfilene samlet via GitHub Desktop, inkludert CSS og src/sync/weeks.js. Lukk/åpne appen på PC/iPhone og kontroller v103. Minimumet skal fortsatt være 101. Ingen nye assets eller endring av service worker-strategi.
+3. Importer en kilde med ca. 300 g, ca 2-3, omtrent 1/2 og ~2; kontroller mengde/enhet. Prøv bokser hakkede tomater, poser og stilker med familiens tilsvarende enheter. Enhetens målform brukes bare om den finnes i enhetslisten.
+4. Importer inn i oppskrift med bare ingredienser, bare steg og begge deler. Meldingen skal bare nevne delene som ble fylt, og Ikke alt ble byttet-boksen skal bli synlig ved å rulles inn. Kontroller tekstene og Bytt til de importerte / Behold mine. Ingrediensgrupper følger bare når ingrediensene faktisk fylles/byttes.
+5. Lagre mens valget venter: innholdet som står i skjemaet lagres uten dialog. Behold/Avbryt, ny import, editor-/kontobytte og import fra lenke/tekst/bilde skal ellers virke som før.
+6. På to enheter: kontroller ukesynk etter raske endringer, også når et serverbilde kommer i 500 ms-køvinduet. Lokal verdi skal ikke fjernes på grunnlag av det bildet etter kvittering; et nyere serverbilde kreves. Vanlig synk og status skal fortsatt fungere.
+
+Alle 41 testskript og syntakskontroll av 36 kildefiler bestod lokalt uten nettverk. Functions ble publisert 2026-10-06 med CLI 15.18.0 på første forsøk. Alle fem funksjoner er bekreftet som callable v2/europe-west1/nodejs22, importRecipe med 512 MiB. Uinnlogget aiKeyStatus ga HTTP 401/UNAUTHENTICATED. Ingen regelpublisering eller hemmelighetsendring. Fullt publiseringsresultat og filoversikt står i LEVERANSE_V103.md. Ekte PC/iPhone-akseptanse for endringene gjenstår etter eiers apppublisering.
+
 ## Utrulling av v102
 
 Eier har bekreftet at v101 er publisert og testet. v102 utvider import til bilder og skjermbilder. Functions publiseres først, etter lokale tester og med eiers uttrykkelige godkjenning, bare --only functions til middagsplanlegger-6db4e. Lenke/tekst er bakoverkompatible med v101. Datamodell, regler, kvoter, nøkkelhåndtering og REQUIRED_MIN_APP_VERSION 101 beholdes.

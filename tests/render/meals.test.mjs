@@ -186,9 +186,13 @@ for (const [ingredients, steps, conflict] of [[true, true, "ingredienser og frem
     recipeImport: { showText: true, message: "Ingenting ble endret.", warnings: ["Kontroller porsjonene"], pending: {
       recipe: { ingredients: [{ name: "Vare" }], steps: ["Steg"] }, conflictIngredients: ingredients, conflictSteps: steps,
     } }, escapeHtml });
-  assert.match(choice, new RegExp(`Oppskriften har allerede ${conflict}\\.`));
-  assert.match(choice, /data-import-replace>Erstatt med det importerte/);
-  assert.match(choice, /data-import-keep>Behold det jeg har/);
+  assert.match(choice, /<h4 id="recipeImportChoiceTitle">Ikke alt ble byttet<\/h4>/);
+  assert.match(choice, new RegExp(`Oppskriften hadde ${conflict} fra før, og ${ingredients ? "de" : "den"} står urørt\\.`));
+  assert.match(choice, new RegExp(`Importen fant ${ingredients && steps ? "1 ingredienser og 1 steg" : ingredients ? "1 ingredienser" : "1 steg"}\\.`));
+  assert.match(choice, /recipe-import-choice" data-import-choice/);
+  assert.match(choice, /data-import-replace>Bytt til de importerte/);
+  assert.match(choice, /data-import-keep>Behold mine/);
+  assert.doesNotMatch(choice, /0 ingredienser|0 steg/);
   assert.match(choice, /data-import-fetch >Hent/);
   assert.match(choice, /data-import-interpret >Tolk tekst/);
   assert.match(choice, /Kontroller porsjonene/);

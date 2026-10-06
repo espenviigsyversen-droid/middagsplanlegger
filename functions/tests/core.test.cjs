@@ -1,6 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict");
-const { validateInput, requireMember, nextUsage, normalizeRecipe, extractJson } = require("../lib/core.js");
+const { validateInput, requireMember, nextUsage, normalizeAmount, normalizeRecipe, extractJson } = require("../lib/core.js");
 const setup = { categories: [{ key: "fisk", label: "Fisk" }], units: ["", "g", "dl"] };
 const input = { mode: "text", text: "Dette er en oppskriftstekst", ...setup };
 assert.equal(validateInput(input).mode, "text");
@@ -67,5 +67,30 @@ for (const bad of [{ ...input, extra: true }, { ...input, text: "kort" }, { ...i
     assert.equal(normalizeRecipe(JSON.stringify({ found: true, title: "Test", description, ingredients: [{ name: "ris" }], steps: [] }), setup).recipe.description, "");
   }
   assert.equal(normalizeRecipe(JSON.stringify({ found: true, title: "Test", description: "Rask middag 🍲 #enkel", ingredients: [{ name: "ris" }], steps: [] }), setup).recipe.description, "Rask middag");
+  for (const [value, expected] of [["ca. 300", "300"], ["ca 2-3", "2-3"], ["omtrent 1/2", "1/2"], ["~2", "2"],
+    ["CIRKA 2,5", "2,5"], ["omlag 3", "3"], ["about 4", "4"], ["approx. 5", "5"], ["approximately 1 1/2", "1 1/2"],
+    ["ca", ""], ["cab 2", ""], ["cirka", ""], ["aboutish 3", ""], ["~", ""], ["ca. 1/0", ""], ["ca. 4-3", ""]]) {
+    assert.equal(normalizeAmount(value), expected, value);
+  }
+  const withUnits = (item, units) => normalizeRecipe(JSON.stringify({ found: true, ingredients: [item], steps: [] }), { ...setup, units }).recipe.ingredients[0];
+  const aliases = { bokser: "boks", poser: "pose", pakker: "pakke", pk: "pakke", begre: "beger", stykk: "stk", stykker: "stk",
+    stilk: "stk", stilker: "stk", spiseskje: "ss", spiseskjeer: "ss", teskje: "ts", teskjeer: "ts", gram: "g", kilo: "kg", liter: "l", desiliter: "dl", milliliter: "ml" };
+  for (const [form, canonical] of Object.entries(aliases)) {
+    const item = { name: "vare", amount: "ca. 2", unit: form.toUpperCase() + "." };
+    assert.deepEqual(withUnits(item, [canonical]), { name: "vare", amount: "2", unit: canonical });
+    assert.deepEqual(withUnits(item, []), { name: item.unit + " vare", amount: "2", unit: "" });
+  }
+  for (const [form, canonical] of [["bokser", "boks"], ["poser", "pose"], ["STILKER.", "stk"]]) {
+    const name = form + " hakkede tomater";
+    assert.deepEqual(withUnits({ name, amount: "2", unit: "" }, [canonical]), { name: "hakkede tomater", amount: "2", unit: canonical });
+    assert.deepEqual(withUnits({ name, amount: "2", unit: "" }, []), { name, amount: "2", unit: "" });
+    for (const amount of ["", "ca", "cab 2"]) assert.deepEqual(withUnits({ name, amount, unit: "" }, [canonical]), { name, amount: "", unit: "" });
+  }
+  assert.deepEqual(withUnits({ name: "bokser", amount: "2", unit: "" }, ["boks"]), { name: "bokser", amount: "2", unit: "" });
+  assert.deepEqual(withUnits({ name: "bokser hakkede tomater", amount: "2", unit: "stk" }, ["stk", "boks"]), { name: "bokser hakkede tomater", amount: "2", unit: "stk" });
+  assert.equal(withUnits({ name: "vare", amount: "2", unit: "G." }, ["g"]).unit, "g");
+  assert.equal(withUnits({ name: "vare", amount: "2", unit: "PK" }, ["pk"]).unit, "pk");
+  const instructions = require("../lib/ai.js").instructionsFor(setup);
+  assert.match(instructions, /amount er bare tallet/); assert.match(instructions, /ca\./); assert.match(instructions, /bokser til boks, poser til pose, stilker til stk/);
   console.log("functions core tests ok");
 })().catch(error => { console.error(error); process.exitCode = 1; });

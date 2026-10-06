@@ -107,7 +107,26 @@ try {
   latest.snapshot({ [w]: { plan: { 1: "annen" }, dayNotes: { 4: "fjernnotat" } } });
   first.resolve(); await settle();
   assert.equal(latest.received.at(-1).plansByWeek[w][1], "sist"); assert.equal(latest.received.at(-1).dayNotesByWeek[w][4], "fjernnotat");
-  advance(500); second.resolve(); await settle(); assert.equal(latest.statuses.at(-1), "Synket"); latest.sync.stop();
+  advance(500); second.resolve(); await settle(); assert.equal(latest.statuses.at(-1), "Synker");
+  latest.snapshot({ [w]: { plan: { 1: "sist" }, dayNotes: { 4: "fjernnotat" } } });
+  assert.equal(latest.statuses.at(-1), "Synket"); latest.sync.stop();
+
+  // An authoritative snapshot received during the 500 ms queue cannot confirm the later write.
+  for (const snapshotFirst of [false, true]) {
+    const ack = deferred(), f = fixture(() => ack.promise); await f.start(); f.snapshot({ [w]: { plan: { 1: "før" } } });
+    f.sync.enqueue({ [w]: { plan: { 1: "lokal" } } }); advance(250);
+    f.snapshot({ [w]: { plan: { 1: "før", 4: "fjern" } } });
+    assert.equal(f.calls.length, 0); assert.equal(f.received.at(-1).plansByWeek[w][1], "lokal");
+    advance(250);
+    if (snapshotFirst) f.snapshot({ [w]: { plan: { 1: "nyere", 4: "fjern" } } });
+    ack.resolve(); await settle();
+    if (!snapshotFirst) {
+      assert.equal(f.statuses.at(-1), "Synker"); assert.equal(f.received.at(-1).plansByWeek[w][1], "lokal");
+      f.snapshot({ [w]: { plan: { 1: "nyere", 4: "fjern" } } });
+    }
+    assert.equal(f.statuses.at(-1), "Synket"); assert.equal(f.received.at(-1).plansByWeek[w][1], "nyere");
+    assert.equal(f.received.at(-1).plansByWeek[w][4], "fjern"); f.sync.stop();
+  }
 
   const rejected = deferred(), failed = fixture(() => rejected.promise); await failed.start(); failed.snapshot({ [w]: {} });
   failed.sync.enqueue({ [w]: { dayNotes: { 2: "lokalt" } } }); advance(500); rejected.reject(new Error("failed")); await settle();

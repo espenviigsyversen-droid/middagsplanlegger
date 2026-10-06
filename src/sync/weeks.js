@@ -79,7 +79,10 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
     clearTimer(entry.timer);
     staged.delete(weekKey);
     const token = generation, operations = [...entry.operations.values()], changes = {};
-    for (const operation of operations) (changes[operation.field] ??= {})[operation.day] = operation.value;
+    for (const operation of operations) {
+      operation.snapshotSequence = snapshotSequence;
+      (changes[operation.field] ??= {})[operation.day] = operation.value;
+    }
     pending += 1;
     let result;
     try {
@@ -106,7 +109,7 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
           if (!/^[0-6]$/.test(day)) continue;
           changed = true;
           const key = JSON.stringify([weekKey, field, day]);
-          const operation = { weekKey, field, day, value, acknowledged: false, snapshotSequence };
+          const operation = { weekKey, field, day, value, acknowledged: false, snapshotSequence: null };
           local.set(key, operation);
           let entry = staged.get(weekKey);
           if (!entry) {

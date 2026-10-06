@@ -323,10 +323,12 @@ export function renderMealEditorView(options = {}) {
         ${recipeImport.preparing ? '<p role="status">Klargjør bilder …</p>' : ""}
         ${recipeImport.busy ? `<p role="status">${recipeImport.mode === "image" ? "Leser bildene … Det kan ta opptil et minutt." : "Henter oppskrift … Det kan ta opptil et halvt minutt."}</p>` : ""}
         ${recipeImport.message && !(recipeImport.pending && recipeImport.message === "Ingenting ble endret.") ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
-        ${recipeImport.pending ? `<div class="recipe-import-choice" role="group" aria-label="Velg hva som skal erstattes">
-          <p role="status">Importen har ${recipeImport.pending.recipe.ingredients?.length || 0} ingredienser og ${recipeImport.pending.recipe.steps?.length || 0} steg. Oppskriften har allerede ${recipeImport.pending.conflictIngredients && recipeImport.pending.conflictSteps ? "ingredienser og fremgangsmåte" : recipeImport.pending.conflictIngredients ? "ingredienser" : "fremgangsmåte"}.</p>
-          <div class="button-row"><button class="button" type="button" data-import-replace>Erstatt med det importerte</button>
-          <button class="button secondary" type="button" data-import-keep>Behold det jeg har</button></div>
+        ${recipeImport.pending ? `<div class="recipe-import-choice" data-import-choice role="group" aria-labelledby="recipeImportChoiceTitle">
+          <h4 id="recipeImportChoiceTitle">Ikke alt ble byttet</h4>
+          <p role="status">Oppskriften hadde ${recipeImport.pending.conflictIngredients && recipeImport.pending.conflictSteps ? "ingredienser og fremgangsmåte fra før, og de står urørt" : recipeImport.pending.conflictIngredients ? "ingredienser fra før, og de står urørt" : "fremgangsmåte fra før, og den står urørt"}.
+          Importen fant ${[recipeImport.pending.conflictIngredients ? `${recipeImport.pending.recipe.ingredients?.length || 0} ingredienser` : "", recipeImport.pending.conflictSteps ? `${recipeImport.pending.recipe.steps?.length || 0} steg` : ""].filter(Boolean).join(" og ")}.</p>
+          <div class="button-row"><button class="button" type="button" data-import-replace>Bytt til de importerte</button>
+          <button class="button secondary" type="button" data-import-keep>Behold mine</button></div>
         </div>` : ""}
         ${recipeImport.warnings?.length ? `<ul>${recipeImport.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul>` : ""}
         `}

@@ -71,7 +71,7 @@ for (const config of [{}, { existing: true }, { existing: true, content: true },
     assert.equal(f.run("state.draftIngredients[0].name"), "Egen vare");
     assert.equal(f.run("state.draftSteps[0]"), "Eget steg");
     assert.equal(f.run("state.draftMeal.baseServings"), 2);
-    assert.match(f.run("renderMealEditor()"), /Oppskriften har allerede ingredienser og fremgangsmåte/);
+    assert.match(f.run("renderMealEditor()"), /Oppskriften hadde ingredienser og fremgangsmåte fra før/);
     assert.match(f.run("renderMealEditor()"), /data-import-replace/);
     assert.equal(f.run("recipeImportState.busy"), false);
     f.choose(config.replace !== false);
@@ -134,7 +134,7 @@ await onlySteps.run('startRecipeImport("text")');
 assert.equal(onlySteps.prompts.length, 0);
 assert.equal(onlySteps.run("state.draftIngredients[0].name"), "Egen vare");
 assert.equal(onlySteps.run("state.draftSteps[0]"), "Stek fisken");
-assert.match(onlySteps.run("recipeImportState.message"), /0 ingredienser og 1 steg/);
+assert.match(onlySteps.run("recipeImportState.message"), /1 steg/);
 assert.equal(onlySteps.run("recipeImportState.warnings[0]"), "Ingen ingredienser funnet.");
 assert.equal(onlySteps.run("recipeImportState.warnings[1]"), "Lim inn teksten for det som mangler, og trykk Tolk tekst.");
 assert.equal(onlySteps.storage.get("middagsapp-state"), onlySteps.original);
@@ -151,7 +151,7 @@ for (const part of ["ingredients", "steps"]) {
     assert.equal(f.run("state.draftSteps[0]"), part === "steps" && replace ? "Stek fisken" : "Eget steg");
     assert.equal(f.run("state.draftMeal.baseServings"), part === "ingredients" && replace ? 7 : 2);
     if (part === "ingredients" && replace) assert.match(f.run("renderMealEditor()"), /name="baseServings"[^>]*value="7"/);
-    assert.match(f.run("recipeImportState.message"), replace ? (part === "ingredients" ? /Erstattet: 1 ingredienser og 0 steg/ : /Erstattet: 0 ingredienser og 1 steg/) : /Ingenting ble erstattet/);
+    assert.match(f.run("recipeImportState.message"), replace ? (part === "ingredients" ? /Erstattet: 1 ingredienser/ : /Erstattet: 1 steg/) : /Ingenting ble erstattet/);
     assert.equal(f.storage.get("middagsapp-state"), f.original);
   }
 }
@@ -162,7 +162,7 @@ assert.equal(fillDespiteNo.run("recipeImportState.pending.conflictIngredients"),
 assert.equal(fillDespiteNo.run("recipeImportState.pending.conflictSteps"), false);
 assert.equal(fillDespiteNo.run("state.draftIngredients[0].name"), "Egen vare");
 assert.equal(fillDespiteNo.run("state.draftSteps[0]"), "Stek fisken");
-assert.match(fillDespiteNo.run("recipeImportState.message"), /0 ingredienser og 1 steg/);
+assert.match(fillDespiteNo.run("recipeImportState.message"), /1 steg/);
 fillDespiteNo.choose(false);
 assert.equal(fillDespiteNo.run("state.draftSteps[0]"), "Stek fisken");
 assert.equal(fillDespiteNo.run("recipeImportState.message"), "Ingenting ble erstattet.");
@@ -174,7 +174,7 @@ assert.equal(fillIngredients.run("state.draftSteps[0]"), "Eget steg");
 assert.equal(fillIngredients.run("recipeImportState.pending.conflictIngredients"), false);
 assert.equal(fillIngredients.run("recipeImportState.pending.conflictSteps"), true);
 fillIngredients.choose(true);
-assert.equal(fillIngredients.run("recipeImportState.message"), "Erstattet: 0 ingredienser og 1 steg. Se over før du lagrer.");
+assert.equal(fillIngredients.run("recipeImportState.message"), "Erstattet: 1 steg. Se over før du lagrer.");
 
 const editNonConflict = fixture({ existing: true, ingredients: true });
 await editNonConflict.run('startRecipeImport("text")');
@@ -392,4 +392,34 @@ assert.match(lateImport.run("renderMealEditor()"), /Leser bildene … Det kan ta
 lateImport.run("stopAllSync()"); finish({ ok: true, recipe }); await imageRequest;
 assert.equal(lateImport.run("state.draftIngredients.length"), 0);
 assert.equal(lateImport.run("recipeImportState.images.length"), 0);
+// v103: describe only filled parts; make conflicts visible and scroll them into view once.
+for (const [ingredients, steps, expected] of [[true, false, "1 ingredienser"], [false, true, "1 steg"], [true, true, "1 ingredienser og 1 steg"], [false, false, ""]]) {
+  const f = fixture();
+  f.context.importCall = async () => ({ ok: true, recipe: { ...recipe, title: "", description: "", categories: [], prepTime: "", recipeUrl: "",
+    servingsKnown: false, ingredients: ingredients ? recipe.ingredients : [], steps: steps ? recipe.steps : [] } });
+  await f.run('startRecipeImport("text")');
+  assert.equal(f.run("recipeImportState.message"), expected ? `Importert fra innlimt tekst: ${expected}. Se over før du lagrer.` : "Ingenting ble endret.");
+  assert.doesNotMatch(f.run("recipeImportState.message"), /0 ingredienser|0 steg/);
+}
+for (const [ingredients, steps] of [[true, false], [false, true], [true, true]]) {
+  const f = fixture({ existing: true, ingredients, steps }); const scrolls = [];
+  f.selectors.set("[data-import-choice]", [{ scrollIntoView: options => {
+    assert.notEqual(f.run("recipeImportState.pending"), null); assert.equal(f.run("recipeImportState.busy"), false);
+    scrolls.push(options);
+  } }]);
+  await f.run('startRecipeImport("text")');
+  assert.equal(scrolls.length, 1); assert.equal(scrolls[0].block, "nearest"); assert.equal(scrolls[0].behavior, "smooth");
+  assert.match(f.run("renderMealEditor()"), /Ikke alt ble byttet/);
+  f.run("renderWithDom()"); assert.equal(scrolls.length, 1, "Unrelated renders do not repeatedly scroll");
+  f.materializeEditor(); f.context.form = f.form;
+  f.run("saveMealFromForm(form)");
+  assert.equal(f.prompts.length, 0, "Save while choosing needs no confirmation");
+  assert.equal(f.run("state.meals[0].ingredients[0].name"), ingredients ? "Egen vare" : "Fisk");
+  assert.equal(f.run("state.meals[0].steps[0]"), steps ? "Eget steg" : "Stek fisken");
+  f.run("renderWithDom()");
+  assert.equal(f.run("recipeImportState.pending"), null);
+}
+const noConflictScroll = fixture();
+noConflictScroll.selectors.set("[data-import-choice]", [{ scrollIntoView: () => assert.fail("No choice without conflicts") }]);
+await noConflictScroll.run('startRecipeImport("text")');
 console.log("app recipe import tests ok (drafts only, no network)");
