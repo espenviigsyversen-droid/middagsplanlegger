@@ -195,4 +195,15 @@ for (const [ingredients, steps, conflict] of [[true, true, "ingredienser og frem
   assert.doesNotMatch(choice, /Ingenting ble endret\./);
 }
 
+for (const [busy, preparing, available] of [[false, false, true], [true, false, true], [false, true, true], [false, false, false]]) {
+  const html = renderMealEditorView({ meal: { title: "Test" }, importAvailable: available,
+    aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { busy, preparing, mode: "image", showImages: true,
+      images: [{ data: "PRIVATE_IMAGE_BYTES", name: "private.jpg" }, { data: "OTHER_BYTES" }] }, escapeHtml });
+  assert.match(html, /Importer fra bilde/); assert.match(html, /type="file" accept="image\/\*" multiple/);
+  assert.match(html, /Bilde 1/); assert.match(html, /Bilde 2/); assert.match(html, /aria-label="Fjern bilde 2"/);
+  assert.doesNotMatch(html, /PRIVATE_IMAGE_BYTES|OTHER_BYTES|private\.jpg|<img/);
+  assert.match(html, busy || preparing || !available ? /data-import-images disabled>Tolk bilder/ : /data-import-images >Tolk bilder/);
+  if (busy) assert.match(html, /Leser bildene … Det kan ta opptil et minutt/);
+  if (preparing) assert.match(html, /Klargjør bilder/);
+}
 console.log("meals render tests ok");

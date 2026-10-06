@@ -19,5 +19,5 @@ export function renderAiKeyView({ status = null, isAdmin = false, available = fa
     ${message ? `<p role="status">${escapeHtml(message)}</p>` : ""}
     ${!available ? '<p class="field-hint">Krever innlogging og nett.</p>' : ""}
     <p>Nøkkelen sendes til serveren, kontrolleres og lagres kryptert. Den lagres ikke i appen, nettleseren eller sikkerhetskopien.</p>
-    <p>Oppskriftstekst og nettsideinnhold sendes til OpenAI bare når du selv trykker Hent eller Tolk tekst.</p></section>`;
+    <p>Oppskriftstekst, nettsideinnhold og bilder sendes til OpenAI bare når du selv trykker Hent, Tolk tekst eller Tolk bilder.</p></section>`;
 }

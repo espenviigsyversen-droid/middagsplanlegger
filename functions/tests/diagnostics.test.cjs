@@ -29,7 +29,7 @@ function dependencies(extra = {}) {
     assert.equal(calls, 1, "Configuration errors must not retry");
     assert.equal(records[0].code, "AI_NOT_CONFIGURED");
     assert.equal(records[0].providerStatus, status);
-    assert.equal("providerCode" in records[0], false, "Only HTTP status is logged under the new policy");
+    assert.equal(records[0].providerCode, expectedCode);
     assert.equal(JSON.stringify(records).includes("PRIVATE_PROVIDER_MESSAGE"), false);
     assert.equal(JSON.stringify(records).includes("test-secret"), false);
     assert.equal(JSON.stringify(records).includes(request.auth.token.email), false);
@@ -53,7 +53,7 @@ function dependencies(extra = {}) {
     log: record => retries.push(record),
   }));
   assert.equal(retried.code, "AI_UNAVAILABLE"); assert.equal(calls, 2);
-  assert.equal(retries[0].providerStatus, 503); assert.equal("providerCode" in retries[0], false);
+  assert.equal(retries[0].providerStatus, 503); assert.equal(retries[0].providerCode, "server_error");
   assert.equal(JSON.stringify(retries).includes("PRIVATE_RETRY_MESSAGE"), false);
 
   const timeoutLogs = [], timeout = new AbortController();
@@ -62,7 +62,7 @@ function dependencies(extra = {}) {
       fetchImpl: async () => { timeout.abort(Object.assign(new Error("PRIVATE_TIMEOUT_MESSAGE"), { name: "TimeoutError" })); return new Promise(() => {}); } }),
     log: record => timeoutLogs.push(record),
   }));
-  assert.equal(timedOut.code, "AI_UNAVAILABLE"); assert.equal("providerCode" in timeoutLogs[0], false);
+  assert.equal(timedOut.code, "AI_UNAVAILABLE"); assert.equal(timeoutLogs[0].providerCode, "timeout");
   assert.equal(JSON.stringify(timeoutLogs).includes("PRIVATE_TIMEOUT_MESSAGE"), false);
 
   const successful = await runImport(request, dependencies({ log: () => { throw new Error("Log failed"); } }));

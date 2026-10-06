@@ -289,4 +289,107 @@ assert.equal(noChange.run("recipeImportState.message"), "Ingenting ble erstattet
 const stopped = fixture({ existing: true, content: true }); await stopped.run('startRecipeImport("text")');
 stopped.run("stopAllSync()");
 assert.equal(stopped.run("recipeImportState.pending"), null);
+
+// v102: image selection, clipboard, lifecycle and import stay outside domain storage.
+const imageData = index => Buffer.from([255, 216, 255, index, 42, 42]).toString("base64");
+function imageFixture(options) {
+  const f = fixture(options);
+  f.context.prepareImageStub = async file => ({ mediaType: "image/jpeg", data: imageData(file.index) });
+  f.run("prepareRecipeImage = file => prepareImageStub(file)");
+  f.selectors.set(".recipe-import-panel", [{}]);
+  return f;
+}
+const images = imageFixture();
+images.context.files = [{ index: 1 }, { index: 2 }];
+await images.run("addRecipeImages(files)");
+images.context.files = [{ index: 3 }]; await images.run("addRecipeImages(files)");
+assert.equal(images.run("recipeImportState.images.length"), 3);
+assert.deepEqual(Array.from(images.run("recipeImportState.images"), image => image.data), [1, 2, 3].map(imageData));
+images.run("removeRecipeImage(1)");
+assert.deepEqual(Array.from(images.run("recipeImportState.images"), image => image.data), [1, 3].map(imageData));
+images.context.files = [{ index: 4 }, { index: 5 }, { index: 6 }]; await images.run("addRecipeImages(files)");
+assert.equal(images.run("recipeImportState.images.length"), 2);
+assert.equal(images.run("recipeImportState.message"), "Du kan bruke inntil fire bilder per oppskrift.");
+images.context.prepareImageStub = async () => { throw new Error("Unreadable private filename"); };
+images.context.files = [{ index: 7 }]; await images.run("addRecipeImages(files)");
+assert.equal(images.run("recipeImportState.images.length"), 2);
+assert.equal(images.run("recipeImportState.message"), "Kunne ikke bruke bildet. Prøv et annet bilde eller et skjermbilde.");
+assert.equal(images.calls.length, 0);
+images.run("saveState()");
+for (const serialized of [images.run("JSON.stringify(state)"), images.run("JSON.stringify(syncPayload())"),
+  images.storage.get("middagsapp-state"), images.run("JSON.stringify(buildBackup({data:syncPayload(),appVersion:APP_VERSION,familyId:FAMILY_ID}))")]) {
+  for (const data of [1, 3].map(imageData)) assert.equal(serialized.includes(data), false);
+  assert.doesNotMatch(serialized, /"images"|"mediaType"/);
+}
+
+const clipboard = imageFixture(); let prevented = 0;
+clipboard.context.clipboardEvent = { preventDefault: () => { prevented++; }, clipboardData: { items: [
+  { kind: "string", type: "text/plain" },
+  { kind: "file", type: "image/png", getAsFile: () => ({ index: 1 }) },
+  { kind: "file", type: "image/jpeg", getAsFile: () => ({ index: 2 }) },
+] } };
+await clipboard.run("pasteRecipeImages(clipboardEvent)");
+assert.equal(prevented, 1); assert.equal(clipboard.run("recipeImportState.images.length"), 2);
+clipboard.context.clipboardEvent.clipboardData.items = [{ kind: "string", type: "text/plain" }];
+await clipboard.run("pasteRecipeImages(clipboardEvent)"); assert.equal(prevented, 1, "Text paste keeps browser behavior");
+clipboard.selectors.delete(".recipe-import-panel");
+clipboard.context.clipboardEvent.clipboardData.items = [{ kind: "file", type: "image/jpeg", getAsFile: () => ({ index: 3 }) }];
+await clipboard.run("pasteRecipeImages(clipboardEvent)"); assert.equal(prevented, 1);
+
+const fileInput = imageFixture(); let change;
+const inputElement = { value: "private-image.jpg", files: [{ index: 1 }], addEventListener: (_event, callback) => { change = callback; } };
+fileInput.selectors.set("[data-import-image-files]", [inputElement]); fileInput.run("bindRecipeImportEvents()");
+const selecting = change({ currentTarget: inputElement });
+assert.equal(inputElement.value, ""); await selecting;
+assert.equal(fileInput.run("recipeImportState.images.length"), 1);
+
+const noImages = imageFixture(); await noImages.run('startRecipeImport("image")');
+assert.equal(noImages.calls.length, 0); assert.equal(noImages.run("recipeImportState.busy"), false);
+assert.equal(noImages.run("recipeImportState.message"), "Velg minst ett bilde først.");
+for (const options of [{}, { existing: true, content: true }]) {
+  const f = imageFixture(options); f.context.files = [{ index: 1 }]; await f.run("addRecipeImages(files)");
+  f.selectors.get("[data-import-url]")[0].value = "";
+  f.context.importCall = async input => { f.calls.push(input); return { ok: true, recipe: { ...recipe, recipeUrl: "", servingsKnown: true },
+    warnings: ["Tolket fra bilde. Kontroller mengder og ingredienser ekstra nøye."] }; };
+  await f.run('startRecipeImport("image")');
+  assert.equal(f.calls[0].mode, "image"); assert.equal(f.calls[0].images[0].data, imageData(1));
+  assert.equal("sourceUrl" in f.calls[0], false); assert.equal("text" in f.calls[0], false);
+  assert.equal(f.run("recipeImportState.images.length"), 0);
+  assert.equal(f.prompts.length, 0); assert.match(f.run("recipeImportState.warnings[0]"), /Tolket fra bilde/);
+  if (options.content) { assert.ok(f.run("recipeImportState.pending")); f.choose(true); }
+  else assert.match(f.run("recipeImportState.message"), /Importert fra bilde:/);
+  assert.equal(f.run("state.draftIngredients[0].name"), "Fisk"); assert.equal(f.run("state.draftMeal.baseServings"), 4);
+  assert.equal(f.storage.get("middagsapp-state"), f.original);
+}
+const failedImage = imageFixture(); failedImage.context.files = [{ index: 1 }]; await failedImage.run("addRecipeImages(files)");
+failedImage.context.importCall = async input => { failedImage.calls.push(input); return { ok: false, code: "IMAGE_REJECTED", message: "Prøv tydeligere bilder" }; };
+await failedImage.run('startRecipeImport("image")');
+assert.equal(failedImage.calls[0].sourceUrl, "https://example.com/recipe");
+assert.equal(failedImage.run("recipeImportState.images.length"), 1); assert.equal(failedImage.run("recipeImportState.message"), "Prøv tydeligere bilder");
+
+// Preserve user edits during canvas work and ignore late work after editor/session changes.
+const preparing = imageFixture(); let finishImage;
+preparing.context.prepareImageStub = () => new Promise(resolve => { finishImage = resolve; });
+preparing.context.files = [{ index: 1 }]; const work = preparing.run("addRecipeImages(files)");
+preparing.values.title = "Skrevet mens bildet behandles";
+finishImage({ mediaType: "image/jpeg", data: imageData(1) }); await work;
+assert.equal(preparing.run("state.draftMeal.title"), preparing.values.title);
+for (const change of ['state.editingMealId = null', 'state.meals.push({...emptyMeal(),id:"other",title:"Annen"}); state.editingMealId = "other"',
+  'accessState.user = {uid:"other",email:"other@example.com"}', 'accessState.kind = "denied"', 'stopAllSync()']) {
+  const f = imageFixture(); f.context.files = [{ index: 1 }]; await f.run("addRecipeImages(files)");
+  f.run("renderWithDom()"); assert.equal(f.run("recipeImportState.images.length"), 1);
+  f.context.prepareImageStub = () => new Promise(resolve => { finishImage = resolve; });
+  const lateImage = f.run("addRecipeImages(files)");
+  f.run(change); f.run("renderWithDom()");
+  assert.equal(f.run("recipeImportState.images.length"), 0);
+  finishImage({ mediaType: "image/jpeg", data: imageData(2) }); await lateImage;
+  assert.equal(f.run("recipeImportState.images.length"), 0, "Late image preparation cannot cross editors/accounts");
+}
+const lateImport = imageFixture(); lateImport.context.files = [{ index: 1 }]; await lateImport.run("addRecipeImages(files)");
+lateImport.context.importCall = () => new Promise(resolve => { finish = resolve; });
+const imageRequest = lateImport.run('startRecipeImport("image")'); await Promise.resolve(); await Promise.resolve();
+assert.match(lateImport.run("renderMealEditor()"), /Leser bildene … Det kan ta opptil et minutt/);
+lateImport.run("stopAllSync()"); finish({ ok: true, recipe }); await imageRequest;
+assert.equal(lateImport.run("state.draftIngredients.length"), 0);
+assert.equal(lateImport.run("recipeImportState.images.length"), 0);
 console.log("app recipe import tests ok (drafts only, no network)");

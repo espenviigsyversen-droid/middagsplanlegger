@@ -44,7 +44,7 @@ exports.aiKeyStatus = callable({ timeoutSeconds: 30 }, request => runKeyAction("
 exports.aiKeySave = callable({ timeoutSeconds: 30, secrets: [KEY_ENCRYPTION_SECRET] }, request => runKeyAction("save", request, keyDeps));
 exports.aiKeyTest = callable({ timeoutSeconds: 30, secrets: [KEY_ENCRYPTION_SECRET] }, request => runKeyAction("test", request, keyDeps));
 exports.aiKeyDelete = callable({ timeoutSeconds: 30 }, request => runKeyAction("delete", request, keyDeps));
-exports.importRecipe = callable({ timeoutSeconds: 60, memory: "256MiB", secrets: [KEY_ENCRYPTION_SECRET] }, request => runImport(request, {
+exports.importRecipe = callable({ timeoutSeconds: 120, memory: "512MiB", secrets: [KEY_ENCRYPTION_SECRET] }, request => runImport(request, {
   memberExists: async email => !!await getRecord(`families/familien/members/${email}`),
   loadKey: async () => {
     const record = await getKey(), key = decryptKey(record, KEY_ENCRYPTION_SECRET.value());

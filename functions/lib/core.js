@@ -1,6 +1,7 @@
 "use strict";
 const messages = {
-  NEEDS_TEXT: "Instagram og Facebook kan ikke hentes automatisk. Kopier bildeteksten og lim den inn her.",
+  NEEDS_TEXT: "Instagram og Facebook kan ikke hentes automatisk. Lim inn bildeteksten, eller ta et skjermbilde og bruk Importer fra bilde.",
+  IMAGE_REJECTED: "OpenAI kunne ikke lese bildene. Prøv færre eller tydeligere bilder, eller lim inn teksten.",
   NOT_A_RECIPE: "Fant ingen oppskrift i teksten.", INVALID_URL: "Lenken må være en offentlig https-adresse.",
   FETCH_FAILED: "Kunne ikke hente siden. Prøv å lime inn oppskriftsteksten i stedet.",
   PAGE_TOO_LARGE: "Siden er for stor. Lim inn oppskriftsteksten i stedet.",
@@ -27,8 +28,9 @@ function safeErrorFields(error) {
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 function validateInput(data) {
   const bad = () => fail("invalid-argument");
-  if (!object(data) || !["url", "text"].includes(data.mode)) bad();
-  const fields = data.mode === "url" ? ["mode", "url", "categories", "units"] : ["mode", "text", "sourceUrl", "categories", "units"];
+  if (!object(data) || !["url", "text", "image"].includes(data.mode)) bad();
+  const fields = data.mode === "url" ? ["mode", "url", "categories", "units"]
+    : ["mode", data.mode === "image" ? "images" : "text", "sourceUrl", "categories", "units"];
   if (Object.keys(data).some(key => !fields.includes(key))) bad();
   if (!Array.isArray(data.categories) || data.categories.length > 30 || !Array.isArray(data.units) || data.units.length > 40) bad();
   for (const category of data.categories) {
@@ -39,6 +41,20 @@ function validateInput(data) {
   if (data.units.some(unit => typeof unit !== "string" || unit.length > 40)) bad();
   if (data.mode === "url" && (typeof data.url !== "string" || !data.url.trim() || data.url.length > 2000)) bad();
   if (data.mode === "text" && (typeof data.text !== "string" || data.text.trim().length < 20 || data.text.length > 20000)) bad();
+  if (data.mode === "image") {
+    if (!Array.isArray(data.images) || data.images.length < 1 || data.images.length > 4) bad();
+    let total = 0;
+    for (const image of data.images) {
+      if (!object(image) || Object.keys(image).some(key => !["mediaType", "data"].includes(key))
+        || image.mediaType !== "image/jpeg" || typeof image.data !== "string" || image.data.length > 2000000
+        || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)) bad();
+      total += image.data.length;
+      if (total > 7000000) bad();
+      const decoded = Buffer.from(image.data, "base64");
+      if (decoded.length < 3 || decoded[0] !== 0xff || decoded[1] !== 0xd8 || decoded[2] !== 0xff
+        || decoded.toString("base64") !== image.data) bad();
+    }
+  }
   if (data.sourceUrl !== undefined && (typeof data.sourceUrl !== "string" || data.sourceUrl.length > 2000)) bad();
   return { ...data, ...(data.url ? { url: data.url.trim() } : {}), ...(data.sourceUrl ? { sourceUrl: data.sourceUrl.trim() } : {}) };
 }

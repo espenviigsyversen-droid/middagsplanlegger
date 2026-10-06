@@ -28,6 +28,7 @@ import {
 } from "./src/domain/shopping.js";
 import { backupFileName, buildBackup } from "./src/domain/backup.js";
 import { applyImportedRecipe } from "./src/domain/recipe-import.js";
+import { prepareRecipeImage, recipeImagesForSend, IMAGE_ERROR_MESSAGE, IMAGE_LIMIT_MESSAGE } from "./src/domain/image-prepare.js";
 import { createRecipeImporter } from "./src/sync/recipe-import.js";
 import { createAiKeyClient, sanitizeAiKeyStatus } from "./src/sync/ai-key.js";
 import { renderAiKeyView, aiKeyStatusLabel } from "./src/render/ai-key.js";
@@ -209,8 +210,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v101";
-const APP_VERSION_NUMBER = 101;
+const APP_VERSION = "v102";
+const APP_VERSION_NUMBER = 102;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -237,7 +238,8 @@ let accountMembers = [];
 let accountMessage = "";
 let recipeImporter = null;
 let recipeImportSerial = 0;
-let recipeImportState = { editorId: null, busy: false, url: "", text: "", showText: false, message: "", warnings: [], pending: null };
+let recipeImportState = { editorId: null, busy: false, preparing: false, mode: "", images: [], showImages: false,
+  url: "", text: "", showText: false, message: "", warnings: [], pending: null };
 let aiKeyClient = null;
 let aiKeySession = "", aiKeyTarget = "", aiKeySerial = 0;
 let aiKeyEditorReturn = null;
@@ -1795,6 +1797,7 @@ function syncMealEditorDraftFromDom() {
 function resetRecipeImport() {
   recipeImportSerial += 1;
   recipeImportState = { editorId: state.editingMealId, busy: false,
+    preparing: false, mode: "", images: [], showImages: false,
     url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [], pending: null };
 }
 
@@ -1803,6 +1806,50 @@ function syncRecipeImportFields() {
   const text = app.querySelector("[data-import-text]");
   if (url) recipeImportState.url = url.value;
   if (text) recipeImportState.text = text.value;
+}
+
+async function addRecipeImages(files) {
+  if (!state.editingMealId || state.activeView !== "meals" || recipeImportState.busy || recipeImportState.preparing) return;
+  if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
+  const selected = Array.from(files || []);
+  if (!selected.length) return;
+  syncMealEditorDraftFromDom(); syncRecipeImportFields();
+  recipeImportState.showImages = true;
+  if (recipeImportState.images.length + selected.length > 4) {
+    recipeImportState.message = IMAGE_LIMIT_MESSAGE; render(); return;
+  }
+  const editorId = state.editingMealId, serial = recipeImportSerial, generation = syncGeneration;
+  const valid = () => serial === recipeImportSerial && generation === syncGeneration && state.editingMealId === editorId;
+  recipeImportState.preparing = true; recipeImportState.message = ""; render();
+  try {
+    const prepared = [];
+    for (const file of selected) {
+      prepared.push(await prepareRecipeImage(file));
+      if (!valid()) return;
+    }
+    recipeImportState.images.push(...prepared);
+  } catch { if (valid()) recipeImportState.message = IMAGE_ERROR_MESSAGE; }
+  finally { if (valid()) {
+    syncMealEditorDraftFromDom(); syncRecipeImportFields();
+    recipeImportState.preparing = false; render();
+  } }
+}
+
+function removeRecipeImage(index) {
+  if (recipeImportState.busy || recipeImportState.preparing) return;
+  syncMealEditorDraftFromDom(); syncRecipeImportFields();
+  recipeImportState.images.splice(index, 1); render();
+}
+
+function pasteRecipeImages(event) {
+  if (!state.editingMealId || state.activeView !== "meals" || !app.querySelector(".recipe-import-panel")
+    || recipeImportState.busy || recipeImportState.preparing) return;
+  const files = Array.from(event.clipboardData?.items || [])
+    .filter(item => item.kind === "file" && item.type?.startsWith("image/"))
+    .map(item => item.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  event.preventDefault();
+  return addRecipeImages(files);
 }
 
 // Pending imports live only in recipeImportState, never in persisted/synced state.
@@ -1849,7 +1896,7 @@ function resolveRecipeImport(replace) {
 }
 
 async function startRecipeImport(mode = "url") {
-  if (!state.editingMealId || recipeImportState.busy || accessState.kind !== "ready" || accessState.offline
+  if (!state.editingMealId || recipeImportState.busy || recipeImportState.preparing || accessState.kind !== "ready" || accessState.offline
     || navigator.onLine === false || !firebaseConnection) return;
   if (!aiKeyUi.status?.configured || aiKeyUi.status.status === "invalid") return;
   if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
@@ -1857,8 +1904,10 @@ async function startRecipeImport(mode = "url") {
   syncRecipeImportFields();
   recipeImportState.pending = null;
   const url = normalizedRecipeUrl(recipeImportState.url);
-  if ((mode === "url" && !url) || (mode === "text" && recipeImportState.text.trim().length < 20)) {
-    recipeImportState.message = mode === "url" ? "Lim inn en lenke først." : "Lim inn oppskriftsteksten først.";
+  if ((mode === "url" && !url) || (mode === "text" && recipeImportState.text.trim().length < 20)
+    || (mode === "image" && !recipeImportState.images.length)) {
+    recipeImportState.message = mode === "url" ? "Lim inn en lenke først."
+      : mode === "image" ? "Velg minst ett bilde først." : "Lim inn oppskriftsteksten først.";
     recipeImportState.warnings = [];
     render();
     return;
@@ -1867,11 +1916,17 @@ async function startRecipeImport(mode = "url") {
   const serial = ++recipeImportSerial;
   const valid = () => serial === recipeImportSerial && generation === syncGeneration && accessState.kind === "ready"
     && accessState.user?.uid === uid && state.editingMealId === editorId && state.activeView === "meals";
-  recipeImportState.busy = true; recipeImportState.message = ""; recipeImportState.warnings = [];
+  recipeImportState.busy = true; recipeImportState.mode = mode; recipeImportState.message = ""; recipeImportState.warnings = [];
   render();
   const input = { mode, categories: categoryEntries().map(([key, label]) => ({ key, label })), units: getUnitOptions(),
-    ...(mode === "url" ? { url } : { text: recipeImportState.text, ...(url ? { sourceUrl: url } : {}) }) };
+    ...(mode === "url" ? { url } : { ...(mode === "image" ? { images: recipeImportState.images } : { text: recipeImportState.text }),
+      ...(url ? { sourceUrl: url } : {}) }) };
   try {
+    if (mode === "image") {
+      try { input.images = await recipeImagesForSend(input.images); }
+      catch { if (valid()) recipeImportState.message = IMAGE_ERROR_MESSAGE; return; }
+      if (!valid()) return;
+    }
     if (!recipeImporter) recipeImporter = createRecipeImporter({ firebaseApp: firebaseConnection.firebaseApp, sdkVersion: FIREBASE_SDK_VERSION });
     const result = await recipeImporter(input);
     if (!valid()) return;
@@ -1880,13 +1935,14 @@ async function startRecipeImport(mode = "url") {
     if (!result.ok) {
       if (result.code === "NEEDS_TEXT") {
         recipeImportState.showText = true;
-        recipeImportState.message = "Instagram og Facebook kan ikke hentes automatisk. Kopier bildeteksten og lim den inn her.";
+        recipeImportState.message = "Instagram og Facebook kan ikke hentes automatisk. Lim inn bildeteksten, eller ta et skjermbilde og bruk Importer fra bilde.";
         if (!state.draftMeal?.recipeUrl) state.draftMeal = { ...(state.draftMeal || {}), recipeUrl: url };
       } else recipeImportState.message = result.message || "Kunne ikke importere oppskriften.";
       if (result.code === "AI_NOT_CONFIGURED") await loadAiKeyStatus();
       return;
     }
     const importedIngredients = result.recipe.ingredients?.length || 0;
+    recipeImportState.images = [];
     const importedSteps = result.recipe.steps?.length || 0;
     const applied = applyRecipeImportToEditor(result.recipe);
     if (!applied) return;
@@ -1894,7 +1950,7 @@ async function startRecipeImport(mode = "url") {
       recipeImportState.pending = { recipe: result.recipe, valid,
         conflictIngredients: applied.conflictIngredients, conflictSteps: applied.conflictSteps };
     }
-    let host = "innlimt tekst";
+    let host = mode === "image" ? "bilde" : "innlimt tekst";
     try { if (result.recipe.recipeUrl) host = new URL(result.recipe.recipeUrl).hostname; } catch {}
     recipeImportState.message = applied.filledIngredients || applied.filledSteps
       ? `Importert fra ${host}: ${applied.filledIngredients} ingredienser og ${applied.filledSteps} steg. Se over før du lagrer.`
@@ -1915,6 +1971,16 @@ function bindRecipeImportEvents() {
   app.querySelector("[data-import-show-text]")?.addEventListener("click", () => {
     syncMealEditorDraftFromDom(); syncRecipeImportFields(); recipeImportState.showText = true; render();
   });
+  app.querySelector("[data-import-show-images]")?.addEventListener("click", () => {
+    syncMealEditorDraftFromDom(); syncRecipeImportFields(); recipeImportState.showImages = true; render();
+  });
+  app.querySelector("[data-import-image-files]")?.addEventListener("change", event => {
+    const files = Array.from(event.currentTarget.files || []);
+    event.currentTarget.value = "";
+    return addRecipeImages(files);
+  });
+  app.querySelectorAll("[data-import-remove-image]").forEach(button => button.addEventListener("click", () => removeRecipeImage(Number(button.dataset.importRemoveImage))));
+  app.querySelector("[data-import-images]")?.addEventListener("click", () => startRecipeImport("image"));
   app.querySelector("[data-import-fetch]")?.addEventListener("click", () => startRecipeImport("url"));
   app.querySelector("[data-import-interpret]")?.addEventListener("click", () => startRecipeImport("text"));
   app.querySelector("[data-import-replace]")?.addEventListener("click", () => resolveRecipeImport(true));
@@ -3904,5 +3970,6 @@ async function saveRemoteScopes(scopes, options = {}) {
   await Promise.all(writes);
 }
 
+document.addEventListener("paste", pasteRecipeImages);
 render();
 initFirebaseSync();

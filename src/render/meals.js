@@ -310,12 +310,18 @@ export function renderMealEditorView(options = {}) {
         ` : `
         <label for="recipeImportUrl">Lenke til oppskrift</label>
         <div class="recipe-import-url-row"><input id="recipeImportUrl" class="input" type="url" inputmode="url" data-import-url value="${escapeHtml(recipeImport.url || "")}" maxlength="2000" placeholder="https://…" ${recipeImport.busy ? "disabled" : ""}>
-          <button class="button secondary" type="button" data-import-fetch ${recipeImport.busy || !importAvailable ? "disabled" : ""}>Hent</button></div>
-        <button class="button ghost" type="button" data-import-show-text ${recipeImport.busy ? "disabled" : ""}>Lim inn tekst i stedet</button>
+          <button class="button secondary" type="button" data-import-fetch ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>Hent</button></div>
+        <div class="button-row"><button class="button ghost" type="button" data-import-show-text ${recipeImport.busy || recipeImport.preparing ? "disabled" : ""}>Lim inn tekst i stedet</button>
+          <button class="button ghost" type="button" data-import-show-images ${recipeImport.busy || recipeImport.preparing ? "disabled" : ""}>Importer fra bilde</button></div>
         ${recipeImport.showText ? `<label for="recipeImportText">Oppskriftstekst</label><textarea id="recipeImportText" class="textarea" data-import-text maxlength="20000" ${recipeImport.busy ? "disabled" : ""}>${escapeHtml(recipeImport.text || "")}</textarea>
-          <button class="button secondary" type="button" data-import-interpret ${recipeImport.busy || !importAvailable ? "disabled" : ""}>Tolk tekst</button>` : ""}
+          <button class="button secondary" type="button" data-import-interpret ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>Tolk tekst</button>` : ""}
+        ${recipeImport.showImages ? `<label for="recipeImportImages">Bilder og skjermbilder (inntil fire)</label>
+          <input id="recipeImportImages" class="input" type="file" accept="image/*" multiple data-import-image-files ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>
+          <ul>${(recipeImport.images || []).map((_, index) => `<li>Bilde ${index + 1} <button class="button ghost" type="button" data-import-remove-image="${index}" aria-label="Fjern bilde ${index + 1}" ${recipeImport.busy || recipeImport.preparing ? "disabled" : ""}>Fjern</button></li>`).join("")}</ul>
+          <button class="button secondary" type="button" data-import-images ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>Tolk bilder</button>` : ""}
         ${!importAvailable ? '<p class="field-hint">Oppskriftsimport krever innlogging og nett.</p>' : ""}
-        ${recipeImport.busy ? '<p role="status">Henter oppskrift … Det kan ta opptil et halvt minutt.</p>' : ""}
+        ${recipeImport.preparing ? '<p role="status">Klargjør bilder …</p>' : ""}
+        ${recipeImport.busy ? `<p role="status">${recipeImport.mode === "image" ? "Leser bildene … Det kan ta opptil et minutt." : "Henter oppskrift … Det kan ta opptil et halvt minutt."}</p>` : ""}
         ${recipeImport.message && !(recipeImport.pending && recipeImport.message === "Ingenting ble endret.") ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
         ${recipeImport.pending ? `<div class="recipe-import-choice" role="group" aria-label="Velg hva som skal erstattes">
           <p role="status">Importen har ${recipeImport.pending.recipe.ingredients?.length || 0} ingredienser og ${recipeImport.pending.recipe.steps?.length || 0} steg. Oppskriften har allerede ${recipeImport.pending.conflictIngredients && recipeImport.pending.conflictSteps ? "ingredienser og fremgangsmåte" : recipeImport.pending.conflictIngredients ? "ingredienser" : "fremgangsmåte"}.</p>

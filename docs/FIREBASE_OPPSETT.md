@@ -109,3 +109,19 @@ Andre deployforsøk lyktes med «Deploy complete!» og exitkode 0. De fire uendr
 Uinnlogget POST til aiKeyStatus med application/json og {"data":{}} ga HTTP 401 og {"error":{"message":"Innlogging eller tilgang mangler.","status":"UNAUTHENTICATED"}}. Funksjonen er dermed åpen for callable-transport, men avviser manglende Firebase-innlogging. Dette verifiserer ikke innlogget medlemskap, nøkkellagring eller OpenAI-tilgang; slike akseptansetester gjenstår etter apppublisering.
 
 Firestore-reglene og appfilene er ikke publisert av agenten. Ingen Git-kommandoer, secrets:access, login:ci, tjenestekontonøkler, slettingskommandoer eller OpenAI-nøkkel er brukt. aiKeySave/importRecipe er ikke kalt i skyen. functions/package-lock.json og functions/tests/logging.test.cjs må tas med i GitHub Desktop, i tillegg til endrede app-/test-/dokumentasjonsfiler i LEVERANSE_V96_AI_NOKKEL.md.
+
+## Bildeimport v102
+
+v101 er bekreftet publisert og testet av eier. Publiser functions før v102-appfilene med firebase deploy --only functions --project middagsplanlegger-6db4e. Ingen installasjon eller nye avhengigheter kreves i denne leveransen. KEY_ENCRYPTION_SECRET og krypterte OpenAI-nøkler skal beholdes. Ingen secrets:set/access, nøkkelkall eller regelpublisering inngår.
+
+Ny valgfri miljøvariabel OPENAI_RECIPE_IMAGE_MODEL velger bildemodellen. Uten den brukes OPENAI_RECIPE_MODEL, eller den eksisterende standardmodellen. Eventuell lokal functions/.env skal fortsatt holdes utenfor repoet. Serverens nøkkelvalidering tester fortsatt tekstmodellen; tilgangen til en separat bildemodell avdekkes ved en bildeimport. Modellen må støtte bildeinndata. Agenten endrer ingen miljøvariabler og gjør ingen OpenAI-kall i denne oppgaven.
+
+importRecipe bruker nå 120 sekunder og 512 MiB, samlet abortsignal 115 sekunder, AI 90 sekunder for bilder/45 for lenke og tekst. aiKeyStatus/Save/Test/Delete beholder sine innstillinger. Samme kvoter og nøkkel brukes. Logger kan inneholde source image, imageCount 1–4 og providerCode etter /^[a-z0-9_]{1,40}$/ uten ekstra blanke tegn, i tillegg til allerede tillatte felt. Aldri bilder, byteantall, filnavn, sideinnhold, e-post eller nøkkel. Oppskriftstekst, nettsideinnhold og bilder sendes med store:false ved brukerens Hent/Tolk tekst/Tolk bilder.
+
+### Utført serverpublisering v102, 2026-10-06
+
+Firebase CLI 15.18.0 (lokal Node v24.15.0) og eksisterende innlogging ble brukt med den eksisterende ignorerte sikkerhetshjelperen. projects:list bekreftet middagsplanlegger-6db4e. Ingen installasjon eller ny innlogging. Ett deployforsøk med --only functions --project middagsplanlegger-6db4e oppdaterte alle fem funksjoner og ga Deploy complete!/exitkode 0. Ingen retry eller endring av artifact-policy var nødvendig.
+
+functions:list viste importRecipe, aiKeyStatus, aiKeySave, aiKeyTest og aiKeyDelete som callable v2 i europe-west1/nodejs22. importRecipe har 512 MiB; de andre har 256 MiB. Uinnlogget JSON-POST til aiKeyStatus med {"data":{}} ga HTTP 401 og {"error":{"message":"Innlogging eller tilgang mangler.","status":"UNAUTHENTICATED"}}.
+
+KEY_ENCRYPTION_SECRET er urørt, ingen secrets:set/access eller aiKeySave/importRecipe-kall er kjørt. Ingen regelpublisering, Git-kommandoer, --force, sletting eller OpenAI-kall. Ingen bilder/sideinnhold eller nøkkel er lagret/logget lokalt. Ingen debuglogg eller midlertidig hemmelighetsfil ble opprettet. Se LEVERANSE_V102.md for full filoversikt og kontrollresultat. Appfilene publiseres separat av eier i GitHub Desktop; minimumsversjonen forblir 101. Ekte bildeimport og nettleser-/iPhone-dekoding kontrolleres etter apppublisering.

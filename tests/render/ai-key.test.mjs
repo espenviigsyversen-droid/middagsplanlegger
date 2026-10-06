@@ -6,7 +6,9 @@ const escapeHtml = value => String(value ?? "").replaceAll("<", "&lt;").replaceA
 for (const isAdmin of [true, false]) for (const configured of [true, false]) {
   const status = { configured, status: "connected", masked: configured ? "sk-p…1234" : "" };
   const html = renderAiKeyView({ isAdmin, status, available: true, escapeHtml });
-  assert.match(html, /AI og oppskriftsimport/); assert.match(html, /lagres kryptert/); assert.match(html, /trykker Hent eller Tolk tekst/);
+  assert.match(html, /AI og oppskriftsimport/); assert.match(html, /lagres kryptert/);
+  assert.match(html, /Oppskriftstekst, nettsideinnhold og bilder sendes til OpenAI/);
+  assert.match(html, /trykker Hent, Tolk tekst eller Tolk bilder/);
   assert.equal(html.includes("sk-p…1234"), configured);
   assert.equal(html.includes("data-ai-key-save"), isAdmin);
   if (isAdmin) { assert.match(html, /type="password" autocomplete="off"/); assert.doesNotMatch(html, /value="sk-/); }

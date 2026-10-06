@@ -34,8 +34,8 @@ const modules = {
 const source = fs.readFileSync(path.join(__dirname, "../index.js"), "utf8");
 vm.runInNewContext(source, { require: name => { assert.ok(modules[name], name); return modules[name]; }, exports: exported, process: { env: {} } });
 const handler = exported.importRecipe, options = handler.options;
-assert.equal(options.region, "europe-west1"); assert.equal(options.timeoutSeconds, 60);
-assert.equal(options.memory, "256MiB"); assert.equal(options.maxInstances, 3); assert.equal(options.enforceAppCheck, false);
+assert.equal(options.region, "europe-west1"); assert.equal(options.timeoutSeconds, 120);
+assert.equal(options.memory, "512MiB"); assert.equal(options.maxInstances, 3); assert.equal(options.enforceAppCheck, false);
 assert.equal(options.secrets[0].name, "KEY_ENCRYPTION_SECRET");
 assert.deepEqual(secrets, ["KEY_ENCRYPTION_SECRET"]);
 for (const action of ["Status", "Save", "Test", "Delete"]) {

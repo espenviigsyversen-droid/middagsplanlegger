@@ -34,6 +34,8 @@ node tests/render/account.test.mjs
 node tests/domain/recipe-import.test.mjs
 node tests/sync/recipe-import.test.mjs
 node tests/app/recipe-import.test.mjs
+node tests/domain/image-prepare.test.mjs
+node functions/tests/image.test.cjs
 node functions/tests/core.test.cjs
 node functions/tests/extract.test.cjs
 node functions/tests/addresses.test.cjs
@@ -42,6 +44,19 @@ node functions/tests/index.test.cjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v102
+
+Eier har bekreftet at v101 er publisert og testet. v102 utvider import til bilder og skjermbilder. Functions publiseres først, etter lokale tester og med eiers uttrykkelige godkjenning, bare --only functions til middagsplanlegger-6db4e. Lenke/tekst er bakoverkompatible med v101. Datamodell, regler, kvoter, nøkkelhåndtering og REQUIRED_MIN_APP_VERSION 101 beholdes.
+
+1. Kontroller serverpubliseringen i LEVERANSE_V102.md: alle fem callable v2-funksjoner i europe-west1/nodejs22, importRecipe 512 MiB, og uinnlogget aiKeyStatus gir HTTP 401/UNAUTHENTICATED. Ingen aiKeySave eller importRecipe kalles av agenten i skyen.
+2. Eier publiserer v102-appfilene samlet gjennom GitHub Desktop. Den nye src/domain/image-prepare.js må følge med; den finnes i begge service worker-listene. Strategien er uendret. Lukk/åpne appen helt på PC/iPhone og kontroller v102.
+3. Velg et skjermbilde og et kamera-/kokebokbilde, også et rotert iPhone-bilde/HEIC. Kontroller riktig retning, mengder, ingrediensgrupper, porsjoner og steg. Velg bilder i flere omganger, fjern et bilde, test grensen på fire og uleselig bilde. Ingen miniatyr eller filnavn skal vises.
+4. På PC: lim inn bilde mens importpanelet er åpent; prøv også vanlig tekstinnliming. Importer flere bilder av én oppskrift og kontroller rekkefølgen. Tolk bilder viser ventetekst, og resultatet har kontrolladvarselen. Uten lenke skal meldingen vise bilde.
+5. Prøv bildeimport inn i en oppskrift med innhold: tomme deler fylles straks, konflikter gir Erstatt/Behold. Ingenting lagres før Lagre. Avbryt, bytt oppskrift og konto mens forminsking/server venter; ingen gamle bilder eller svar skal dukke opp. Kontroller at backup ikke har bilder.
+6. Kontroller lenke-/tekstimport som før, NEEDS_TEXT med tips om skjermbilde, nettkrav og personvernforklaringen i AI-innstillinger. Vanlig oppskriftslagring, ukeplan, handleliste og synk skal virke som v101.
+
+Alle 41 lokale testskript og node --check av 36 kildefiler bestod. Testene bruker syntetiske JPEG-data og canvas-/DOM-/SDK-stubber uten nettverk. Serveren ble publisert 2026-10-06 med CLI 15.18.0 på første forsøk; funksjonsliste/minne er kontrollert og uinnlogget aiKeyStatus ga HTTP 401/UNAUTHENTICATED. Hemmeligheten er urørt og regler er ikke publisert. Ekte PC/iPhone-dekoding og innlogget AI-import kontrolleres av eier etter apppublisering. Se LEVERANSE_V102.md for endrede/nye filer, testresultat og serverpublisering.
 
 ## Utrulling av v101
 
