@@ -65,6 +65,8 @@ assert.equal(run("loadState().previousView"), "shopping");
 run('state.activeView = "shopping"; renderShell("");');
 assert.deepEqual([...app.innerHTML.matchAll(/class="nav-button[^"]*" data-view="([^"]+)"/g)].map(match => match[1]),
   ["shopping", "calendar", "planner", "meals"]);
+// Explicit test fixtures replace production examples removed in v95.
+run('accessState = { kind: "ready", user: { uid: "test", email: "test@example.com" }, role: "admin" }; state.meals = [{ id: "taco", title: "Taco", categories: [], recipeUrl: "", baseServings: 4, ingredients: [{name:"Paprika",amount:"1",unit:"stk"}], steps: ["Stek"], suitability: [] }];');
 const initialData = snapshot("syncPayload()");
 run('state.weekOffset = 2; state.mealPicker = { open: true, dayIndex: 1, query: "" };');
 const search = element({ value: "Lasagne <ny>" });
@@ -167,7 +169,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v94");
+assert.equal(exported.appVersion, "v95");
 assert.deepEqual(exported.data, snapshot("syncPayload()"));
 assert.equal(downloads.at(-1).clicked, true);
 assert.match(downloads.at(-1).download, /^middagsapp-backup-\d{4}-\d{2}-\d{2}\.json$/);

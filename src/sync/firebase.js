@@ -1,6 +1,7 @@
 export function createRemoteRefs({ db, doc, collection, familyId }) {
   return {
-    legacyState: doc(db, "families", familyId, "app", "state"),
+    meta: doc(db, "families", familyId, "app", "meta"),
+    members: collection(db, "families", familyId, "members"),
     profile: doc(db, "families", familyId, "app", "profile"),
     preferences: doc(db, "families", familyId, "app", "preferences"),
     metadata: doc(db, "families", familyId, "app", "metadata"),
@@ -25,21 +26,24 @@ export async function initFirebaseClient(options = {}) {
     import(`https://www.gstatic.com/firebasejs/${sdkVersion}/firebase-firestore.js`),
   ]);
 
-  const { getAuth, onAuthStateChanged, signInAnonymously } = authModule;
-  const { getFirestore, doc, collection, getDoc, getDocs, onSnapshot, setDoc, updateDoc, runTransaction, deleteDoc, serverTimestamp } = firestoreModule;
+  const { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } = authModule;
+  const { getFirestore, doc, collection, getDoc, getDocs, getDocFromServer, getDocsFromServer, onSnapshot, setDoc, updateDoc, runTransaction, deleteDoc, serverTimestamp } = firestoreModule;
   const firebaseApp = initializeApp(firebaseConfig);
   const auth = getAuth(firebaseApp);
   const db = getFirestore(firebaseApp);
   const refs = createRemoteRefs({ db, doc, collection, familyId });
-  const firestoreApi = { doc, getDoc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp,
+  const firestoreApi = { doc, getDoc, getDocs, getDocFromServer, getDocsFromServer, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp,
     runTransaction: (callback) => runTransaction(db, callback),
   };
 
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) return;
-    await onAuthReady({ user, refs, firestoreApi });
-  });
-
-  await signInAnonymously(auth);
-  return { refs, firestoreApi };
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const connection = { refs, firestoreApi,
+    signIn: () => signInWithPopup(auth, provider),
+    signOut: () => signOut(auth),
+  };
+  connection.unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    Promise.resolve(onAuthReady({ ...connection, user })).catch(options.onAuthError || (() => {}));
+  }, options.onAuthError);
+  return connection;
 }

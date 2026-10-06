@@ -60,6 +60,7 @@ function connection({ archive = old, migrationError, writeResult = () => Promise
     deleteDoc: (...args) => { calls.push(["delete", ...args]); return writeResult("delete"); },
     onSnapshot: (ref, options, callback, error) => {
       calls.push(["listen", ref, options]); listener = callback; listenerError = error;
+      return () => calls.push(["unlisten", ref]);
     },
   };
   return { api, refs, calls,
@@ -172,5 +173,36 @@ left.enqueue(diffShoppingItems([item("a")], []));
 right.enqueue(diffShoppingItems([item("a")], [item("a", { checked: true })]));
 await settle();
 assert.equal(store.has("a"), false);
+
+// v95 bypasses archive migration after explicit setup. Stop cancels queued
+// work and ignores late snapshots, errors and acknowledgements from that user.
+const stoppedClient = connection({ migrationError: { code: "permission-denied" } });
+const lateAck = deferred();
+stoppedClient.api.setDoc = (...args) => { stoppedClient.calls.push(["add", ...args]); return lateAck.promise; };
+const stoppedStatuses = [], stoppedItems = [];
+const stoppedSync = createShoppingSync({ onStatus: s => stoppedStatuses.push(s), onItems: items => stoppedItems.push(items) });
+await stoppedSync.start({ ...stoppedClient, skipMigration: true });
+assert.equal(stoppedClient.calls.some(call => call[0] === "transaction"), false);
+stoppedSync.enqueue(diffShoppingItems([], [item("sent")]));
+stoppedSync.stop();
+const statusCount = stoppedStatuses.length;
+stoppedClient.snapshot([item("late")]);
+stoppedClient.failListener({ code: "permission-denied" });
+stoppedSync.enqueue(diffShoppingItems([], [item("never-sent")]));
+lateAck.resolve(); await settle();
+assert.deepEqual(stoppedItems, []);
+assert.equal(stoppedStatuses.length, statusCount);
+assert.equal(stoppedClient.calls.filter(call => call[0] === "add").length, 1);
+assert.equal(stoppedClient.calls.filter(call => call[0] === "unlisten").length, 1);
+const unsent = createShoppingSync();
+unsent.enqueue(diffShoppingItems([], [item("queued")]));
+const migrationWait = deferred();
+const interrupted = connection();
+interrupted.api.runTransaction = () => migrationWait.promise;
+const interruptedStart = unsent.start(interrupted);
+unsent.stop();
+migrationWait.resolve();
+assert.equal(await interruptedStart, false);
+assert.equal(interrupted.calls.some(call => ["add", "listen"].includes(call[0])), false);
 
 console.log("sync shopping tests ok");

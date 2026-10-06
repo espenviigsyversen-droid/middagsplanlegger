@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { renderAccessScreen, renderAccountView } from "../../src/render/account.js";
+const escapeHtml = value => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+const user = { email: "own@example.com" };
+const members = [{ email: user.email, role: "admin" }, { email: "other@example.com", role: "member" }];
+const admin = renderAccountView({ email: user.email, role: "admin", members, escapeHtml });
+assert.match(admin, /deg/);
+assert.match(admin, /data-member-role="other@example.com"/);
+assert.doesNotMatch(admin, /data-member-role="own@example.com"|data-remove-member="own@example.com"/);
+assert.match(admin, /data-add-member/);
+assert.match(admin, /Adressen må være en Google-konto/);
+const member = renderAccountView({ email: user.email, role: "member", members, escapeHtml });
+assert.match(member, /other@example.com/);
+assert.doesNotMatch(member, /data-add-member|data-member-role|data-remove-member/);
+const offline = renderAccountView({ email: user.email, role: "admin", members, offline: true, escapeHtml });
+assert.match(offline, /krever nett/);
+assert.doesNotMatch(offline, /data-add-member/);
+for (const kind of ["login", "denied", "update", "setup", "error", "checking"]) {
+  const html = renderAccessScreen({ access: { kind, role: "admin", user }, escapeHtml });
+  assert.doesNotMatch(html, /nav-button|data-shopping-input/);
+}
+const denied = renderAccessScreen({ access: { kind: "denied", user: { email: '<img src="x">' }, message: '<script>error</script>' }, escapeHtml });
+assert.doesNotMatch(denied, /<img|<script/);
+assert.match(denied, /role="alert"/);
+assert.match(denied, /data-access-retry/);
+assert.match(denied, /data-sign-out/);
+const setup = renderAccessScreen({ access: { kind: "setup", role: "admin" }, summary: { exportedAt: "2026-10-06", appVersion: "v94", meals: 3, weeks: 2, items: 4 }, escapeHtml });
+assert.match(setup, /3 oppskrifter · 2 uker · 4 varer/);
+assert.match(setup, /data-confirm-restore/);
+console.log("render account tests ok");

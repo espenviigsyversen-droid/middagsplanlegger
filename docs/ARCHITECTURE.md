@@ -11,7 +11,10 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/domain/backup.js` bygger en versjonert eksport av domenedata og et datert filnavn. Modulen kjenner ikke UI, nedlasting eller Firebase.
 - `src/domain/suggestions.js` inneholder rene poengregler for forslagmotoren, mens historikk og state fortsatt eies av `app.js`.
 - `src/domain/weeks.js` inneholder rene uke- og datofunksjoner som kan testes og videreutvikles uten UI.
-- `src/sync/firebase.js` laster Firebase SDK, logger inn anonymt og bygger Firestore-referanser.
+- `src/sync/firebase.js` laster Firebase SDK, følger innloggingsstatus og tilbyr Google-innlogging fra knappetrykk.
+- `src/sync/access.js` håndterer prosjektmerket cache, medlemskontroll, offline-tilgang og versjonsvakt.
+- `src/sync/restore.js` validerer og oppsummerer sikkerhetskopier, bygger dokumentlisten og utfører eksplisitt oppsett med enkeltstående writes.
+- `src/render/account.js` tegner tilgangsskjermene og Konto og medlemmer.
 - `src/sync/reads.js` bygger lokale state-patches fra Firestore snapshots for oppskrifter og uker.
 - `src/sync/state.js` inneholder rene synkbeslutninger: hvilke scopes som er endret, hvilke uker som må lagres, og når remote data er eldre enn lokale endringer.
 - `src/sync/writes.js` bygger Firestore writes for de ulike sync-scopene uten å eie appens render- eller statusflyt.
@@ -34,11 +37,11 @@ Appen har ingen bundler og ingen installerte npm-avhengigheter. Lokale moduler i
 Oppstart:
 
 1. `index.html` viser loading screen.
-2. `app.js` leser state fra `localStorage` og starter nye økter på Handleliste.
-3. `render()` tegner aktiv visning.
-4. Loading screen fjernes.
-5. Firebase anonym innlogging og Firestore-synk startes.
-6. Remote data kan patche lokal state og trigge ny render.
+2. `app.js` leser prosjektmerket state fra `localStorage`. Manglende/ulik prosjekt-ID gir tomme domenedata. Nye økter starter på Handleliste.
+3. Firebase melder innloggingsstatus. Lasteskjermen beholdes mens status og tilgang kontrolleres. Uten innlogging vises bare Google-knappen; popup åpnes kun fra knappetrykk, med kontovalg.
+4. Innlogget bruker må ha verifisert e-post og gyldig rolle i eget medlemsdokument. Deretter leses `app/meta` fra serveren. Uten markør vises oppsettskjermen; for høy minimumsversjon viser oppdateringsskjermen.
+5. Først etter godkjent medlemskap, oppsett og versjon vises appen og domenesynken startes. En tidligere godkjent enhet kan åpne lokale data uten nett med «Lokal lagring».
+6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over 95.
 
 Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fanger feil før første render, inkludert lastingsfeil på appens script-element via en fangende `window.error`-lytter. Hvis appflaten fortsatt er tom etter 12 sekunder, vises samme feiltilstand: spinneren skjules, en forklaring vises og brukeren kan laste siden på nytt. En MutationObserver avslutter overvåkingen når appen har rendret. Eksisterende `hideLoadingScreen()` fjerner lasteskjermen også etter sen oppstart. Vernet er uavhengig av appens modulimporter og endrer ikke lagring, cacher eller navigasjon.
 
@@ -95,7 +98,9 @@ Eksporten er et øyeblikksbilde av denne enheten, ikke en bekreftet fersk kopi f
 
 ## Synk
 
-Firebase Firestore brukes med anonym innlogging og en fast familie-ID. Firebase SDK-lasting, anonym innlogging og Firestore-referanser ligger i `src/sync/firebase.js`. `src/sync/reads.js` bygger lokale patches fra remote snapshots, og `src/sync/writes.js` bygger writes for scopes som profile, preferences, metadata, meals og weeks. `app.js` eier fortsatt når snapshots skal aksepteres, når lagring planlegges og hvordan UI-status vises.
+Fra v95 brukes det egne Firebase-prosjektet `middagsplanlegger-6db4e` med Google-innlogging og familie-ID `familien`. Ingen kode kobler til det gamle prosjektet. `firestore.rules` i repoet er fasit: verifisert e-post og medlemsdokument kreves; medlemsadministrasjon og skriving til `app/meta` krever administrator. Vanlige medlemmer har samme tilgang til domenedata. Firebase standard innloggingspersistens brukes.
+
+`src/sync/reads.js` bygger lokale patches fra remote snapshots, og `src/sync/writes.js` bygger writes for scopes som profile, preferences, metadata, meals og weeks. `app.js` eier fortsatt når snapshots skal aksepteres, når lagring planlegges og hvordan UI-status vises. Eksisterende dokumentformat og konfliktbeskyttelse beholdes. Alle writes er enkeltstående dokumentkall; ikke batch eller transaksjoner med mange dokumenter, siden medlemsreglene krever oppslag og slike operasjoner har en grense på 20 regeloppslag.
 
 Data er splittet i flere dokumenter/collections:
 
@@ -105,6 +110,8 @@ Data er splittet i flere dokumenter/collections:
 - shoppingItems (ett dokument per vare; app/shopping er arkiv)
 - meals
 - weeks
+- members (e-post i små bokstaver som dokument-ID; rolle og valgfri addedAt/addedBy)
+- app/meta (schemaVersion, initializedAt, initializedBy, minAppVersion; administratorstyrt)
 
 For profile, preferences, metadata, meals og weeks bruker synkstrategien `clientUpdatedAt`, `pendingRemoteScopes` og `pendingWeekKeys` for å unngå at eldre remote data overskriver lokale endringer. Før Firestore-writes utføres, leser write-laget remote `clientUpdatedAt` for samme dokument. Hvis remote er nyere enn lokal state, droppes lokal write slik at en gammel device ikke kan overskrive nyere planlegging. Manglende remote dokumenter seedes bare ved eksplisitt førstegangsoppsett/migrering eller når lokal state faktisk har `pendingLocalSync`.
 
@@ -112,7 +119,7 @@ For profile, preferences, metadata, meals og weeks bruker synkstrategien `client
 
 Modulen src/sync/shopping.js eier separat varebasert synk. Brukerflytene sender fortsatt ny items-liste til setState; appen normaliserer varene, tildeler nye varer createdAt = nå + indeks og sender en diff umiddelbart. Eksisterende createdAt beholdes. Bare endrede felt sendes med updateDoc; nye varer bruker setDoc og slettinger deleteDoc. Ingen debounce, forhåndslesing eller writeBatch brukes for disse operasjonene. Handlelisteendringer påvirker ikke global clientUpdatedAt/pendingLocalSync, og generatedForWeek er bare lokal.
 
-Etter innlogging gjennomføres migrering i én Firestore-transaksjon: app/shopping leses; uten migratedToItemsAt opprettes shoppingItems fra skyens shoppingList, med eksisterende ID-er og createdAt = fast starttid 0 + indeks. Arkivet får bare migratedToItemsAt med merge. Transaksjonsretry leser markøren på nytt; parallelle migreringer oppretter dermed ikke listen på nytt. Manglende skydata gir tom migrering. Lokal cache brukes aldri til migreringen.
+I v93/v94 gjennomførte oppstarten migrering fra skyens app/shopping i én transaksjon. I v95 kjøres denne historiske migreringen ikke: eksplisitt oppsett skriver vare-dokumentene og `app/shopping.migratedToItemsAt` før meta-markøren. Den gamle hjelpefunksjonen beholdes og testes for tidligere migreringsformat, men brukes ikke i v95-oppstart.
 
 Deretter sendes minnekøen i registrert rekkefølge og collection-lytteren startes uten å vente på write-bekreftelser. Lytteren ber om metadataendringer og ignorerer cache-snapshots fram til første serversnapshot; senere brukes alle snapshots. Varer sorteres på createdAt og deretter ID. Remote-patcher erstatter bare items, beholder generatedForWeek og skriver ikke tilbake. Identisk innhold utløser ingen ny innholdsrender. Rendering fra synk/status bevarer tekst, markering og fokus i manuelt varefelt.
 
@@ -121,6 +128,16 @@ Synker vises mens operasjoner venter eller før første serversnapshot. Bare bek
 Kjent begrensning: køen er bare i minnet. Offline-endringer sendes når nettet kommer tilbake så lenge appen forblir åpen og synken allerede er startet. Ved mislykket migrering kreves ny oppstart. Usynkede v92-endringer overføres ikke, og første serversnapshot kan erstatte dem. Gamle v92-klienter bruker arkivet og deler ikke videre handleliste med v93. Utrulling og tilbakerulling er beskrevet i docs/RELEASE.md.
 
 ## PWA og oppdatering
+
+### Tilgang, oppsett og gjenoppretting fra v95
+
+Tilgangsstate og medlemsrollen ligger utenfor synket domenestate. Konto og medlemmer viser egen e-post og medlemslisten; administratorer kan endre andre medlemmer. Selvredigering stoppes både i UI, skrivehjelper og regler. Utlogging bevarer lokal state, men fjerner offline-medlemsflagget. Ved kontobytte, utlogging og versjonsblokkering avsluttes lyttere og timere, og minnekøen forkastes. Generasjonstoken gjør at svar fra eldre async-operasjoner ikke starter synk eller sender nye writes. Allerede sendte SDK-operasjoner kan ikke trekkes tilbake.
+
+Oppsett er bare tilgjengelig når `app/meta.initializedAt` mangler. Administratoren velger og validerer sikkerhetskopi, ser oppsummeringen og bekrefter. Før første write leses ID-ene i meals, weeks og shoppingItems fra serveren. Fremmede dokumenter avviser hele forsøket; dokumenter med de samme ID-ene kan overskrives ved retry. Deretter skrives profile, preferences, metadata, middager, unionen av seks ukekart, handlevarer med `createdAt = 0 + indeks`, handlemarkør og til slutt meta. Ingen medlemsdokumenter endres. Ingen opplasting fra lokal cache eller bruk av legacy `app/state` finnes. «Start med tom database» krever tomme samlinger og skriver de tre standarddokumentene, handlemarkør og meta til slutt.
+
+Feil før meta gir uferdig oppsett og tillater nytt forsøk med samme fil. Gjennomfør oppsett fra én administratorenhet om gangen. For ny innlesing må eier slette meta og tømme de tre samlingene manuelt, med members beholdt; ingen automatisk sletting. Se `FIREBASE_OPPSETT.md` og `RELEASE.md`.
+
+Offline-tilgang krever et lokalt flagg for riktig prosjekt, familie og UID/e-post, fra en tidligere godkjent og initialisert økt. Flagget er lokal bekvemmelighet, ikke en erstatning for Firestore-reglene. Offline-oppstart starter ikke Firebase-lyttere eller writes. Last appen inn igjen når nettet er tilbake for å kontrollere medlemskap og starte synk. Handlelisteendringer fra en slik lokal økt har fortsatt ingen varig operasjonskø og kan erstattes av skylisten. Ved avvist medlemskap slettes flagget og appinnhold skjules.
 
 `service-worker.js` cacher appens statiske filer. Appfiler som `index.html`, `app.js`, `styles.css`, `manifest.json` og `service-worker.js` hentes med network-first-strategi.
 

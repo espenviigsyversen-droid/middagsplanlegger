@@ -18,12 +18,12 @@ function testCreateRemoteRefs() {
   const refs = createRemoteRefs({ db, doc, collection, familyId: "familien" });
 
   assert.deepEqual(refs.profile.parts, [db, "families", "familien", "app", "profile"]);
-  assert.deepEqual(refs.legacyState.parts, [db, "families", "familien", "app", "state"]);
+  assert.deepEqual(refs.meta.parts, [db, "families", "familien", "app", "meta"]);
   assert.deepEqual(refs.meals.parts, [db, "families", "familien", "meals"]);
   assert.deepEqual(refs.weeks.parts, [db, "families", "familien", "weeks"]);
   assert.equal(calls.filter(([type]) => type === "doc").length, 5);
   assert.deepEqual(refs.shoppingItems.parts, [db, "families", "familien", "shoppingItems"]);
-  assert.equal(calls.filter(([type]) => type === "collection").length, 3);
+  assert.equal(calls.filter(([type]) => type === "collection").length, 4);
 }
 
 testCreateRemoteRefs();
@@ -32,13 +32,19 @@ testCreateRemoteRefs();
 const db = { name: "stub-db" };
 let authCallback;
 let transactionDb;
+let popupCalls = 0;
+let logoutCalls = 0;
 const updateDoc = () => {};
+const getDocFromServer = () => {};
+const getDocsFromServer = () => {};
 const sdk = {
   initializeApp: () => ({}), getAuth: () => ({}),
   onAuthStateChanged: (_auth, callback) => { authCallback = callback; },
-  signInAnonymously: async () => {}, getFirestore: () => db,
+  GoogleAuthProvider: class { setCustomParameters(parameters) { assert.deepEqual(JSON.parse(JSON.stringify(parameters)), { prompt: "select_account" }); } },
+  signInWithPopup: async () => { popupCalls += 1; return { user: { uid: "stub-user" } }; },
+  signOut: async () => { logoutCalls += 1; }, getFirestore: () => db,
   doc: (...parts) => parts, collection: (...parts) => parts,
-  updateDoc, runTransaction: (database, callback) => { transactionDb = database; return callback("transaction"); },
+  updateDoc, getDocFromServer, getDocsFromServer, runTransaction: (database, callback) => { transactionDb = database; return callback("transaction"); },
 };
 const source = (await readFile(new URL("../../src/sync/firebase.js", import.meta.url), "utf8"))
   .replaceAll("export ", "").replaceAll("import(`", "sdkImport(`");
@@ -47,9 +53,16 @@ vm.runInContext(source, context);
 let ready;
 context.options = { familyId: "familien", sdkVersion: "stub", firebaseConfig: {},
   onAuthReady: async (connection) => { ready = connection; } };
-await vm.runInContext("initFirebaseClient(options)", context);
+const client = await vm.runInContext("initFirebaseClient(options)", context);
+assert.equal(popupCalls, 0);
+await client.signIn();
+assert.equal(popupCalls, 1);
+await client.signOut();
+assert.equal(logoutCalls, 1);
 await authCallback({ uid: "stub-user" });
 assert.equal(ready.firestoreApi.updateDoc, updateDoc);
+assert.equal(ready.firestoreApi.getDocFromServer, getDocFromServer);
+assert.equal(ready.firestoreApi.getDocsFromServer, getDocsFromServer);
 assert.equal(await ready.firestoreApi.runTransaction(async (transaction) => transaction), "transaction");
 assert.equal(transactionDb, db);
 

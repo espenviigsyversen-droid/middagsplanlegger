@@ -3179,3 +3179,24 @@ button {
     transform: scale(1);
   }
 }
+
+/* Account access and explicit database setup (v95). */
+.access-screen { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+.access-panel { width: 100%; max-width: 540px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); }
+.access-panel h1 { font-size: 1.55rem; overflow-wrap: anywhere; }
+.access-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.access-actions > p, .restore-summary { width: 100%; }
+.restore-file-label { cursor: pointer; position: relative; overflow: hidden; }
+.restore-file-label input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.restore-file-label:focus-within { outline: 2px solid var(--brand); outline-offset: 3px; }
+.restore-summary { border-top: 1px solid var(--line); padding-top: 12px; }
+.restore-summary .button { margin: 4px 4px 4px 0; }
+.account-message { overflow-wrap: anywhere; color: var(--text); }
+.account-panel { padding: 18px; }
+.member-list { padding: 0; list-style: none; }
+.member-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.member-list li > div { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+.member-list li span { display: block; color: var(--muted); }
+.member-list .select { width: auto; }
+.member-add-form { display: grid; gap: 12px; margin-top: 18px; }
+.member-add-form label { display: grid; gap: 6px; }

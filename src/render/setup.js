@@ -53,6 +53,7 @@ export function renderSetupView(options = {}) {
     <section class="settings-section">
       <h3 class="settings-section-title">App</h3>
       <div class="settings-list">
+        ${renderSettingsRowView({ title: "Konto og medlemmer", subtitle: "Google-konto og familiens tilgang", view: "account-settings", escapeHtml })}
         ${renderSettingsRowView({
           title: "Oppdatering og versjon",
           subtitle: `Versjon ${appVersion}`,

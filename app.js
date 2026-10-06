@@ -49,6 +49,9 @@ import {
   shouldDeferRemotePayload,
   syncedScopesForPatch as getSyncedScopesForPatch,
 } from "./src/sync/state.js";
+import { stateForProject, createAccessSession, offlineMemberMatches, loginErrorMessage, isNetworkError, writeMember } from "./src/sync/access.js";
+import { validateBackup, summarizeBackup, executeRestore } from "./src/sync/restore.js";
+import { renderAccessScreen, renderAccountView } from "./src/render/account.js";
 import { initFirebaseClient } from "./src/sync/firebase.js";
 import {
   buildMealsRemotePatch,
@@ -126,137 +129,18 @@ const defaultPlanModeOptions = {
 };
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAMPfQ9gX9rbuvcPsVjYVtq5IT_orjDBPs",
-  authDomain: "home-tasks-app-18de3.firebaseapp.com",
-  projectId: "home-tasks-app-18de3",
-  storageBucket: "home-tasks-app-18de3.firebasestorage.app",
-  messagingSenderId: "253720858709",
-  appId: "1:253720858709:web:8c5d8d0d13574e33c384dc",
+  apiKey: "AIzaSyBguv9pz0exQzMPH3cYYz6tVksJGUNBsEg",
+  authDomain: "middagsplanlegger-6db4e.firebaseapp.com",
+  projectId: "middagsplanlegger-6db4e",
+  storageBucket: "middagsplanlegger-6db4e.firebasestorage.app",
+  messagingSenderId: "449556442190",
+  appId: "1:449556442190:web:980e3c597122b57fed271f"
 };
 
 const FIREBASE_SDK_VERSION = "12.13.0";
 const FAMILY_ID = "familien";
 const VARIATION_LOOKBACK_WEEKS = 4;
-const defaultMeals = [
-  {
-    id: "tikka",
-    title: "Tikka masala",
-    description: "Mild curry med ris og naan. En trygg familiefavoritt som ofte gir rester.",
-    categories: ["kjott"],
-    kidFriendly: true,
-    favorite: true,
-    leftovers: "likely",
-    prepTime: "medium",
-    suitability: ["weekday", "weekend", "guests"],
-    minDaysBetween: 21,
-    keyIngredients: ["ris", "kylling"],
-    ingredients: [
-      { name: "Kylling", amount: "600", unit: "g" },
-      { name: "Tikka masala-saus", amount: "1", unit: "glass" },
-      { name: "Ris", amount: "4", unit: "porsjoner" },
-      { name: "Naan", amount: "1", unit: "pakke" },
-    ],
-    steps: ["Stek kylling", "La saus og krydder småkoke", "Server med ris og naan"],
-  },
-  {
-    id: "laks",
-    title: "Ovnsbakt laks",
-    description: "Laks med poteter, rømme og agurksalat.",
-    categories: ["fisk"],
-    kidFriendly: true,
-    favorite: false,
-    leftovers: "none",
-    prepTime: "quick",
-    suitability: ["weekday"],
-    minDaysBetween: 14,
-    keyIngredients: ["potet", "laks"],
-    ingredients: [
-      { name: "Laksefilet", amount: "5", unit: "stk" },
-      { name: "Poteter", amount: "900", unit: "g" },
-      { name: "Rømme", amount: "1", unit: "beger" },
-      { name: "Agurk", amount: "1", unit: "stk" },
-    ],
-    steps: ["Bak laksen i ovn", "Kok poteter", "Rør sammen agurksalat"],
-  },
-  {
-    id: "pasta",
-    title: "Pasta bolognese",
-    description: "Rask hverdagsmiddag med kjøttsaus og grønnsaker.",
-    categories: ["pasta", "kjott"],
-    kidFriendly: true,
-    favorite: true,
-    leftovers: "possible",
-    prepTime: "quick",
-    suitability: ["weekday", "weekend"],
-    minDaysBetween: 10,
-    keyIngredients: ["pasta", "kjottdeig"],
-    ingredients: [
-      { name: "Pasta", amount: "500", unit: "g" },
-      { name: "Kjøttdeig", amount: "500", unit: "g" },
-      { name: "Hakkede tomater", amount: "2", unit: "bokser" },
-      { name: "Parmesan", amount: "", unit: "" },
-    ],
-    steps: ["Kok pasta", "Lag kjøttsaus", "Server med parmesan"],
-  },
-  {
-    id: "suppe",
-    title: "Tomatsuppe med egg",
-    description: "Enkel suppe med kokt egg og grovt brød.",
-    categories: ["suppe", "vegetar"],
-    kidFriendly: true,
-    favorite: false,
-    leftovers: "possible",
-    prepTime: "quick",
-    suitability: ["weekday"],
-    minDaysBetween: 10,
-    keyIngredients: ["tomat", "egg"],
-    ingredients: [
-      { name: "Tomatsuppe", amount: "1", unit: "pose" },
-      { name: "Egg", amount: "5", unit: "stk" },
-      { name: "Grovt brød", amount: "1", unit: "stk" },
-    ],
-    steps: ["Kok suppe", "Kok egg", "Server med brød"],
-  },
-  {
-    id: "wok",
-    title: "Grønnsakswok",
-    description: "Wok med nudler, grønnsaker og soyasaus.",
-    categories: ["vegetar"],
-    kidFriendly: false,
-    favorite: false,
-    leftovers: "none",
-    prepTime: "quick",
-    suitability: ["weekday"],
-    minDaysBetween: 14,
-    keyIngredients: ["nudler", "grønnsaker"],
-    ingredients: [
-      { name: "Nudler", amount: "400", unit: "g" },
-      { name: "Wokgrønnsaker", amount: "700", unit: "g" },
-      { name: "Soyasaus", amount: "", unit: "" },
-    ],
-    steps: ["Stek grønnsaker raskt", "Vend inn nudler", "Smak til med saus"],
-  },
-  {
-    id: "taco",
-    title: "Fredagstaco",
-    description: "Taco med skåler på bordet og valgfritt fyll.",
-    categories: ["kjott"],
-    kidFriendly: true,
-    favorite: true,
-    leftovers: "possible",
-    prepTime: "quick",
-    suitability: ["weekend", "guests"],
-    minDaysBetween: 7,
-    keyIngredients: ["lefser", "kjottdeig"],
-    ingredients: [
-      { name: "Tortillalefser", amount: "1", unit: "pakke" },
-      { name: "Kjøttdeig", amount: "500", unit: "g" },
-      { name: "Tacokrydder", amount: "1", unit: "pose" },
-      { name: "Grønnsaker", amount: "", unit: "" },
-    ],
-    steps: ["Stek fyll", "Kutt grønnsaker", "Sett alt på bordet"],
-  },
-];
+const defaultMeals = [];
 
 const defaultState = {
   activeView: "shopping",
@@ -304,25 +188,9 @@ const defaultState = {
     },
   },
   meals: defaultMeals,
-  plan: {
-    0: "laks",
-    1: "pasta",
-    2: "suppe",
-    3: "",
-    4: "taco",
-    5: "",
-    6: "tikka",
-  },
+  plan: {},
   plansByWeek: {},
-  lockedPlan: {
-    0: true,
-    1: false,
-    2: false,
-    3: false,
-    4: true,
-    5: false,
-    6: false,
-  },
+  lockedPlan: {},
   lockedPlansByWeek: {},
   dayTypesByWeek: {},
   servingsByWeek: {},
@@ -333,7 +201,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v94";
+const APP_VERSION = "v95";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -347,7 +215,20 @@ let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
 let shoppingSyncStatus = null;
-const shoppingSync = createShoppingSync({
+let accessState = { kind: "checking" };
+let firebaseConnection = null;
+let currentAuthUser = null;
+let accessSession = null;
+let syncEnabled = false;
+let syncGeneration = 0;
+const syncUnsubscribers = [];
+let restoreBackup = null;
+let accountBusy = false;
+let accountMembers = [];
+let accountMessage = "";
+let shoppingSync = makeShoppingSync();
+
+function makeShoppingSync() { return createShoppingSync({
   onItems: (items) => {
     if (JSON.stringify(items) === JSON.stringify(state.shoppingList.items)) return;
     state.shoppingList = { ...state.shoppingList, items };
@@ -360,13 +241,13 @@ const shoppingSync = createShoppingSync({
     // The existing sync listeners may also set status. Keep shopping pending/error visible.
     render();
   },
-});
+}); }
 
 function loadState() {
   const saved = localStorage.getItem("middagsapp-state");
-  if (!saved) return normalizeStateForStartup(structuredClone(defaultState));
+  if (!saved) return normalizeStateForStartup(stateForProject(null, defaultState, firebaseConfig.projectId));
   try {
-    return normalizeStateForStartup({ ...structuredClone(defaultState), ...JSON.parse(saved) });
+    return normalizeStateForStartup(stateForProject(JSON.parse(saved), defaultState, firebaseConfig.projectId));
   } catch {
     return normalizeStateForStartup(structuredClone(defaultState));
   }
@@ -561,7 +442,7 @@ function dayPlansMeal(value) {
 }
 
 function saveState() {
-  localStorage.setItem("middagsapp-state", JSON.stringify(state));
+  localStorage.setItem("middagsapp-state", JSON.stringify({ ...state, projectId: firebaseConfig.projectId }));
 }
 
 function patchTouchesSyncedData(patch) {
@@ -587,7 +468,7 @@ function setState(patch) {
   saveState();
   render(false);
   syncWakeLock();
-  if ("shoppingList" in patch && !applyingRemoteState) {
+  if ("shoppingList" in patch && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
     shoppingSync.enqueue(diffShoppingItems(previousState.shoppingList.items, state.shoppingList.items));
   }
   scheduleRemoteSaveForPatch(patch, previousState);
@@ -661,46 +542,6 @@ function applyRemoteStatePatch(patch) {
     filters: state.filters,
   };
   state = normalizeState({ ...structuredClone(defaultState), ...state, ...patch, ...uiState });
-  saveState();
-  render();
-}
-
-function applyRemotePayload(payload) {
-  const remoteClientUpdatedAt = Number(payload.clientUpdatedAt || 0);
-  const localClientUpdatedAt = Number(state.clientUpdatedAt || 0);
-  if (shouldDeferRemotePayload({ pendingLocalSync: state.pendingLocalSync, remoteClientUpdatedAt, localClientUpdatedAt })) {
-    setTimeout(() => scheduleRemoteSave(0), 0);
-    return;
-  }
-  const remoteState = {
-    family: payload.family,
-    mealPreferences: payload.mealPreferences,
-    meals: payload.meals,
-    metadata: payload.metadata,
-    plansByWeek: payload.plansByWeek,
-    lockedPlansByWeek: payload.lockedPlansByWeek,
-    dayTypesByWeek: payload.dayTypesByWeek,
-    servingsByWeek: payload.servingsByWeek,
-    dayModesByWeek: payload.dayModesByWeek,
-    dayNotesByWeek: payload.dayNotesByWeek,
-    clientUpdatedAt: remoteClientUpdatedAt,
-    pendingLocalSync: false,
-  };
-  const uiState = {
-    activeView: state.activeView,
-    editingMealId: state.editingMealId,
-    draftMeal: state.draftMeal,
-    draftIngredients: state.draftIngredients,
-    draftSteps: state.draftSteps,
-    selectedMealId: state.selectedMealId,
-    selectedRecipeContext: state.selectedRecipeContext,
-    editingShoppingItemId: state.editingShoppingItemId,
-    keepScreenAwake: state.keepScreenAwake,
-    previousView: state.previousView,
-    weekOffset: state.weekOffset,
-    filters: state.filters,
-  };
-  state = normalizeState({ ...structuredClone(defaultState), ...state, ...remoteState, ...uiState });
   saveState();
   render();
 }
@@ -1404,7 +1245,7 @@ function renderShoppingList() {
 function renderShell(viewHtml) {
   const displayedSyncStatus = syncStatusText();
   const isRecipeView = state.activeView === "recipe";
-  const settingsViews = new Set(["setup", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
+  const settingsViews = new Set(["setup", "account-settings", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
   const isSettingsView = settingsViews.has(state.activeView);
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
@@ -3329,6 +3170,14 @@ function bindEvents() {
 }
 
 function render(preserveShoppingInput = true) {
+  if (accessState.kind !== "ready") {
+    syncMealPickerScrollLock(false);
+    releaseWakeLock();
+    app.innerHTML = renderAccessScreen({ access: accessState, summary: restoreBackup ? summarizeBackup(restoreBackup) : null, busy: accountBusy, escapeHtml });
+    bindAccountEvents();
+    if (accessState.kind !== "checking") hideLoadingScreen();
+    return;
+  }
   const oldInput = preserveShoppingInput ? app.querySelector("[data-shopping-input]") : null;
   const draft = oldInput ? { value: oldInput.value, focused: document.activeElement === oldInput,
     start: oldInput.selectionStart, end: oldInput.selectionEnd, direction: oldInput.selectionDirection } : null;
@@ -3339,6 +3188,7 @@ function render(preserveShoppingInput = true) {
     shopping: renderShoppingList,
     recipe: renderMealDetail,
     setup: renderSetup,
+    "account-settings": () => renderAccountView({ email: accessState.user?.email || "", role: accessState.role, members: accountMembers, message: accountMessage, offline: accessState.offline, busy: accountBusy, escapeHtml }),
     "family-settings": renderFamilySettings,
     "app-settings": renderAppSettings,
     "meal-preferences": renderMealPreferencesSetup,
@@ -3353,6 +3203,7 @@ function render(preserveShoppingInput = true) {
   syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
+  bindAccountEvents();
   const newInput = draft ? app.querySelector("[data-shopping-input]") : null;
   if (newInput) {
     newInput.value = draft.value;
@@ -3432,66 +3283,213 @@ document.addEventListener("visibilitychange", () => {
 });
 
 async function initFirebaseSync() {
+  if (navigator.onLine === false) { showOfflineStartup(); return; }
   try {
-    await initFirebaseClient({
-      firebaseConfig,
-      sdkVersion: FIREBASE_SDK_VERSION,
-      familyId: FAMILY_ID,
-      onAuthReady: async ({ refs, firestoreApi }) => {
-        Object.assign(remoteRefs, refs);
-        window.middagsplanDoc = firestoreApi.doc;
-        window.middagsplanGetDoc = firestoreApi.getDoc;
-        window.middagsplanGetDocs = firestoreApi.getDocs;
-        window.middagsplanSetDoc = firestoreApi.setDoc;
-        window.middagsplanDeleteDoc = firestoreApi.deleteDoc;
-        window.middagsplanServerTimestamp = firestoreApi.serverTimestamp;
-        syncStatus = "Synk aktiv";
-        render();
-        try {
-          await migrateLegacyStateIfNeeded(firestoreApi.getDoc, firestoreApi.getDocs);
-        } catch {
-          markSyncFailed();
-        }
-        await shoppingSync.start({ api: firestoreApi, refs: remoteRefs });
-        startSplitSyncListeners(firestoreApi.onSnapshot);
+    firebaseConnection = await initFirebaseClient({ firebaseConfig, sdkVersion: FIREBASE_SDK_VERSION, familyId: FAMILY_ID,
+      onAuthReady: async (connection) => {
+        currentAuthUser = connection.user;
+        firebaseConnection = connection;
+        if (!accessSession) accessSession = makeAccessSession(connection);
+        await accessSession.start(connection.user);
       },
+      onAuthError: () => { accessSession?.stop(); stopAllSync(); accessState = { kind: "error", message: "Kunne ikke kontrollere innloggingen. Prøv igjen." }; render(); },
     });
-  } catch {
-    syncStatus = "Lokal lagring";
-    render();
+  } catch (error) {
+    if (navigator.onLine === false || isNetworkError(error)) showOfflineStartup();
+    else { accessState = { kind: "error", message: "Kunne ikke laste inn innloggingen. Prøv igjen." }; render(); }
   }
 }
 
-async function remoteSplitStateExists(getDoc, getDocs) {
-  const documentSnapshots = await Promise.all([
-    getDoc(remoteRefs.profile),
-    getDoc(remoteRefs.preferences),
-    getDoc(remoteRefs.metadata),
-    getDoc(remoteRefs.shopping),
-  ]);
-  if (documentSnapshots.some((snapshot) => snapshot.exists())) return true;
-  if (!getDocs) return false;
-  const collectionSnapshots = await Promise.all([
-    getDocs(remoteRefs.meals),
-    getDocs(remoteRefs.weeks),
-  ]);
-  return collectionSnapshots.some((snapshot) => !snapshot.empty);
+function readOfflineMembership() {
+  try { return JSON.parse(localStorage.getItem("middagsapp-membership") || "null"); } catch { return null; }
+}
+function clearOfflineMembership() { localStorage.removeItem("middagsapp-membership"); }
+function showOfflineStartup() {
+  accessSession?.stop();
+  stopAllSync();
+  const flag = readOfflineMembership();
+  if (offlineMemberMatches(flag, { projectId: firebaseConfig.projectId, familyId: FAMILY_ID })) {
+    if (Number(flag.minAppVersion || 0) > 95) accessState = { kind: "update" };
+    else {
+      accessState = { kind: "ready", user: { uid: flag.uid, email: flag.email }, role: flag.role, offline: true };
+      syncStatus = "Lokal lagring";
+    }
+  } else accessState = { kind: "login", message: "Krever nett første gang" };
+  render();
+}
+function stopAllSync() {
+  syncEnabled = false;
+  syncGeneration += 1;
+  for (const unsubscribe of syncUnsubscribers.splice(0)) unsubscribe?.();
+  Object.values(remoteSaveTimers).forEach(clearTimeout);
+  for (const key of Object.keys(remoteSaveTimers)) delete remoteSaveTimers[key];
+  pendingRemoteScopes.clear(); pendingMealDeleteIds.clear(); pendingWeekKeys.clear();
+  shoppingSync.stop(); shoppingSync = makeShoppingSync(); shoppingSyncStatus = null;
+  restoreBackup = null;
+  accountMembers = []; accountMessage = "";
+}
+function makeAccessSession(connection) {
+  const { refs, firestoreApi: api } = connection;
+  return createAccessSession({ api, refs, projectId: firebaseConfig.projectId, familyId: FAMILY_ID, appVersion: 95,
+    readOffline: readOfflineMembership,
+    writeOffline: (flag) => localStorage.setItem("middagsapp-membership", JSON.stringify(flag)),
+    clearOffline: clearOfflineMembership, onStop: stopAllSync,
+    onScreen: (screen) => { accessState = screen; if (screen.offline) syncStatus = "Lokal lagring"; render(); },
+    onReady: async ({ valid }) => {
+      Object.assign(remoteRefs, refs);
+      syncEnabled = true;
+      syncStatus = "Kobler til synk";
+      const token = syncGeneration;
+      window.middagsplanDoc = api.doc;
+      window.middagsplanGetDoc = api.getDoc;
+      window.middagsplanGetDocs = api.getDocs;
+      window.middagsplanSetDoc = (...args) => token === syncGeneration && syncEnabled ? api.setDoc(...args) : Promise.resolve();
+      window.middagsplanDeleteDoc = (...args) => token === syncGeneration && syncEnabled ? api.deleteDoc(...args) : Promise.resolve();
+      window.middagsplanServerTimestamp = api.serverTimestamp;
+      await shoppingSync.start({ api, refs, skipMigration: true });
+      if (!valid() || token !== syncGeneration) return;
+      startSplitSyncListeners((ref, next, error) => {
+        const unsubscribe = api.onSnapshot(ref, (snapshot) => { if (valid() && token === syncGeneration) next(snapshot); },
+          (failure) => { if (valid() && token === syncGeneration) error(failure); });
+        syncUnsubscribers.push(unsubscribe);
+      });
+    },
+  });
 }
 
-async function migrateLegacyStateIfNeeded(getDoc, getDocs) {
-  const profileSnapshot = await getDoc(remoteRefs.profile);
-  if (profileSnapshot.exists()) return;
-  const legacySnapshot = await getDoc(remoteRefs.legacyState);
-  if (legacySnapshot.exists()) {
-    applyingRemoteState = true;
-    applyRemotePayload(legacySnapshot.data());
-    applyingRemoteState = false;
-    await saveAllRemoteState({ allowMissingRemoteWrite: true });
+async function retryAccess() {
+  if (accountBusy) return;
+  if (firebaseConnection && accessSession) await accessSession.start(currentAuthUser);
+  else await initFirebaseSync();
+}
+
+async function signOutAccount() {
+  accountBusy = false;
+  currentAuthUser = null;
+  clearOfflineMembership();
+  accessSession?.stop();
+  stopAllSync();
+  accessState = { kind: "login", message: "" };
+  render();
+  try { await firebaseConnection?.signOut(); }
+  catch { accessState.message = "Utloggingen kunne ikke fullføres. Prøv igjen når du er på nett."; render(); }
+}
+
+async function signInAccount() {
+  if (accountBusy || !firebaseConnection) {
+    if (!firebaseConnection) { accessState.message = "Krever nett første gang. Trykk Prøv igjen når du er på nett."; render(); }
     return;
   }
-  if (!(await remoteSplitStateExists(getDoc, getDocs))) {
-    await saveAllRemoteState({ allowMissingRemoteWrite: true });
+  // This call must remain directly in the click handler, before any awaited work.
+  const login = firebaseConnection.signIn();
+  accountBusy = true;
+  try {
+    const result = await login;
+    if (result?.user && ["login", "denied", "error"].includes(accessState.kind)) {
+      currentAuthUser = result.user;
+      if (!accessSession) accessSession = makeAccessSession(firebaseConnection);
+      await accessSession.start(result.user);
+    }
   }
+  catch (error) {
+    const message = loginErrorMessage(error);
+    if (message) accessState = { kind: "login", message };
+  } finally { accountBusy = false; render(); }
+}
+
+async function loadAccountMembers() {
+  if (accessState.kind !== "ready" || accessState.offline || !firebaseConnection) return;
+  const token = syncGeneration;
+  try {
+    const snapshot = await firebaseConnection.firestoreApi.getDocsFromServer(firebaseConnection.refs.members);
+    if (token !== syncGeneration || accessState.kind !== "ready") return;
+    accountMembers = snapshot.docs.map((doc) => ({ email: doc.id, role: doc.data().role })).sort((a, b) => a.email.localeCompare(b.email));
+    accountMessage = "";
+  } catch {
+    if (token !== syncGeneration) return;
+    accountMessage = "Kunne ikke hente medlemslisten. Sjekk nettforbindelsen og prøv igjen.";
+  }
+  render();
+}
+
+async function changeMember(email, memberRole, remove = false) {
+  if (accountBusy || accessState.offline || !firebaseConnection) return;
+  const token = syncGeneration;
+  accountBusy = true;
+  try {
+    await writeMember({ api: firebaseConnection.firestoreApi, refs: firebaseConnection.refs,
+      role: accessState.role, ownEmail: accessState.user.email, email, memberRole, remove,
+      valid: () => token === syncGeneration && accessState.kind === "ready" });
+    if (token === syncGeneration) await loadAccountMembers();
+  } catch (error) {
+    if (token === syncGeneration) accountMessage = error.code === "permission-denied"
+      ? "Du har ikke tillatelse til å endre medlemslisten. Prøv igjen etter ny innlogging." : error.message || "Kunne ikke lagre medlemmet.";
+  } finally { accountBusy = false; render(); }
+}
+
+function emptySetupBackup() {
+  const data = structuredClone(defaultState);
+  return { app: "middagsapp", exportVersion: 1, exportedAt: new Date().toISOString(), appVersion: APP_VERSION,
+    data: { family: data.family, mealPreferences: data.mealPreferences, metadata: data.metadata, meals: [],
+      plansByWeek: {}, lockedPlansByWeek: {}, dayTypesByWeek: {}, servingsByWeek: {}, dayModesByWeek: {}, dayNotesByWeek: {},
+      shoppingList: { items: [], generatedForWeek: null }, clientUpdatedAt: 0 } };
+}
+
+async function restoreDatabase(backup) {
+  if (accountBusy || accessState.kind !== "setup" || accessState.role !== "admin" || !firebaseConnection) return;
+  const token = syncGeneration;
+  const user = accessState.user;
+  accountBusy = true;
+  accessState.message = "";
+  render();
+  try {
+    const data = await executeRestore({ backup, email: user.email.toLowerCase(), role: accessState.role,
+      api: firebaseConnection.firestoreApi, refs: firebaseConnection.refs,
+      valid: () => token === syncGeneration && accessState.kind === "setup" && accessState.user?.uid === user.uid });
+    state = normalizeStateForStartup({ ...structuredClone(defaultState), ...data, projectId: firebaseConfig.projectId, pendingLocalSync: false });
+    // Stored shopping timestamps must match the restored documents.
+    state.shoppingList.items = state.shoppingList.items.map((item, index) => ({ ...item, createdAt: index }));
+    saveState();
+    accountBusy = false;
+    await accessSession.start(user);
+  } catch (error) {
+    if (token === syncGeneration) accessState.message = error.code === "permission-denied"
+      ? "Du har ikke tillatelse til oppsettet. Kontroller administratorrolle og Firestore-regler." : error.message || "Innlesingen mislyktes. Prøv igjen med samme fil.";
+  } finally { accountBusy = false; render(); }
+}
+
+function bindAccountEvents() {
+  app.querySelector("[data-google-login]")?.addEventListener("click", signInAccount);
+  app.querySelector("[data-access-retry]")?.addEventListener("click", retryAccess);
+  app.querySelectorAll("[data-sign-out]").forEach((button) => button.addEventListener("click", signOutAccount));
+  if (accessState.kind !== "ready") app.querySelector("[data-refresh-app]")?.addEventListener("click", refreshApp);
+  app.querySelector("[data-restore-file]")?.addEventListener("change", async (event) => {
+    if (accountBusy || accessState.role !== "admin") return;
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const token = syncGeneration;
+    try {
+      const backup = validateBackup(JSON.parse(await file.text()));
+      if (token !== syncGeneration || accessState.kind !== "setup") return;
+      restoreBackup = backup; accessState.message = "";
+    } catch { if (token === syncGeneration) { restoreBackup = null; accessState.message = "Ugyldig sikkerhetskopi. Velg en fullstendig Middagsapp JSON-fil."; } }
+    render();
+  });
+  app.querySelector("[data-confirm-restore]")?.addEventListener("click", () => { if (restoreBackup) restoreDatabase(restoreBackup); });
+  app.querySelector("[data-cancel-restore]")?.addEventListener("click", () => { if (!accountBusy) { restoreBackup = null; render(); } });
+  app.querySelector("[data-empty-setup]")?.addEventListener("click", () => {
+    if (!accountBusy && window.confirm("Vil du starte med en tom database uten oppskrifter, ukeplaner eller handlevarer?")) restoreDatabase(emptySetupBackup());
+  });
+  app.querySelectorAll('[data-view="account-settings"]').forEach((button) => button.addEventListener("click", loadAccountMembers));
+  app.querySelector("[data-add-member]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    changeMember(form.get("email"), form.get("role"));
+  });
+  app.querySelectorAll("[data-member-role]").forEach((select) => select.addEventListener("change", () => changeMember(select.dataset.memberRole, select.value)));
+  app.querySelectorAll("[data-remove-member]").forEach((button) => button.addEventListener("click", () => {
+    if (window.confirm(`Fjerne ${button.dataset.removeMember} fra familiens medlemsliste?`)) changeMember(button.dataset.removeMember, null, true);
+  }));
 }
 
 function startSplitSyncListeners(onSnapshot) {
@@ -3593,7 +3591,8 @@ function remoteDocumentIsOlder(scope, remoteClientUpdatedAt) {
     if (scope === "weeks") {
       Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
     }
-    setTimeout(() => scheduleRemoteSave(0, [scope]), 0);
+    const token = syncGeneration;
+    setTimeout(() => { if (token === syncGeneration && syncEnabled) scheduleRemoteSave(0, [scope]); }, 0);
     return true;
   }
   return false;
@@ -3609,27 +3608,26 @@ function markSyncFailed() {
   render();
 }
 
-async function saveAllRemoteState(options = {}) {
-  Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-  await saveRemoteScopes(["profile", "preferences", "metadata", "meals", "weeks"], options);
-}
-
 function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "meals", "weeks"]) {
-  if (!remoteRefs.profile || applyingRemoteState) return;
+  if (!syncEnabled || !remoteRefs.profile || applyingRemoteState) return;
   scopes.forEach((scope) => pendingRemoteScopes.add(scope));
   const key = [...new Set(scopes)].sort().join("-");
   clearTimeout(remoteSaveTimers[key]);
+  const token = syncGeneration;
   remoteSaveTimers[key] = setTimeout(async () => {
+    if (!syncEnabled || token !== syncGeneration) return;
     try {
       syncStatus = "Synker";
       render();
       await saveRemoteScopes(scopes);
+      if (!syncEnabled || token !== syncGeneration) return;
       scopes.forEach((scope) => pendingRemoteScopes.delete(scope));
       state.pendingLocalSync = pendingRemoteScopes.size > 0;
       saveState();
       syncStatus = "Synket";
       render();
     } catch {
+      if (!syncEnabled || token !== syncGeneration) return;
       syncStatus = "Synk feilet";
       render();
     }
@@ -3637,6 +3635,8 @@ function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "me
 }
 
 async function saveRemoteScopes(scopes, options = {}) {
+  if (!syncEnabled) return;
+  const token = syncGeneration;
   const uniqueScopes = [...new Set(scopes)];
   const updatedAt = window.middagsplanServerTimestamp();
   const clientUpdatedAt = state.clientUpdatedAt || Date.now();
@@ -3647,8 +3647,8 @@ async function saveRemoteScopes(scopes, options = {}) {
     api: {
       doc: window.middagsplanDoc,
       getDoc: window.middagsplanGetDoc,
-      setDoc: window.middagsplanSetDoc,
-      deleteDoc: window.middagsplanDeleteDoc,
+      setDoc: (...args) => token === syncGeneration && syncEnabled ? window.middagsplanSetDoc(...args) : Promise.resolve(),
+      deleteDoc: (...args) => token === syncGeneration && syncEnabled ? window.middagsplanDeleteDoc(...args) : Promise.resolve(),
     },
     updatedAt,
     clientUpdatedAt,
@@ -3660,6 +3660,7 @@ async function saveRemoteScopes(scopes, options = {}) {
     weekPayload,
   });
 
+  if (token !== syncGeneration) return;
   if (uniqueScopes.includes("meals")) pendingMealDeleteIds.clear();
   if (uniqueScopes.includes("weeks")) pendingWeekKeys.clear();
 

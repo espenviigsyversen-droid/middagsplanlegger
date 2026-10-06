@@ -26,9 +26,38 @@ node tests/sync/reads.test.mjs
 node tests/sync/state.test.mjs
 node tests/sync/writes.test.mjs
 node tests/sync/shopping.test.mjs
+node tests/sync/access.test.mjs
+node tests/sync/restore.test.mjs
+node tests/app/access-startup.test.mjs
+node tests/render/account.test.mjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v95
+
+Sett først opp `middagsplanlegger-6db4e` etter `FIREBASE_OPPSETT.md`: Google-innlogging, autorisert appdomene, Firestore-regler fra repoet og det første administrator-medlemsdokumentet. Repo-filene publiserer ikke reglene automatisk via GitHub Pages.
+
+1. Før publisering: alle enheter på v94 er på nett og viser «Synket». Last ned en ny sikkerhetskopi på PC og behold JSON-filen. v95 nullstiller lokale domenedata som mangler riktig prosjekt-ID.
+2. Publiser v95, med alle nye moduler og oppdaterte assets.
+3. PC: åpne appen, logg inn med Google, velg «Les inn sikkerhetskopi», kontroller oppsummeringen og bekreft. Kontroller oppskrifter, ukeplaner, kategorier/rekkefølge og handleliste etterpå. Bruk én administratorenhet til oppsettet.
+4. Under Innstillinger → Konto og medlemmer: legg til det andre voksne medlemmet som administrator. Adressen må være en Google-konto, i små bokstaver.
+5. Øvrige enheter: lukk appen helt, også åpne PC-vinduer, åpne den igjen, kontroller v95, logg inn og kontroller at innholdet stemmer.
+6. En enhet som fortsatt kjører v94 skriver til det gamle prosjektet. Slike endringer følger ikke med til v95. Det gamle prosjektet skal beholdes som arkiv under utrullingen.
+
+Test Google-innlogging og at innloggingen huskes etter lukking i iPhone-hjemskjermappen. Test to enheter med handlevarer, ukeplan og oppskrifter, vanlig medlems manglende administratortilgang, en avvist Google-konto, og flymodus ved oppstart på en tidligere godkjent enhet. Offline-oppstart gir «Lokal lagring»; last inn på nytt når nettet er tilbake. Handlelisteendringer har ingen varig offline-kø.
+
+Versjonsvakten testes ved å sette `app/meta.minAppVersion` til 96 i konsollen: åpen v95 skal stoppe synk og vise «Appen må oppdateres». Sett tilbake til 95 og last appen inn igjen. Bare administratorer kan skrive meta, og v95-oppsett setter minimum 95.
+
+### Ny innlesing eller avbrutt oppsett
+
+En avbrutt innlesing kan kjøres på nytt med samme fil: ID-er som finnes i filen overskrives. Fremmede dokumenter avviser forsøket før noe skrives. Ingen automatisk sletting foretas, og members røres aldri. Meta skrives bare etter at alle andre skriver har lyktes.
+
+For en full ny innlesing må eier manuelt slette `families/familien/app/meta` og tømme samlingene meals, weeks og shoppingItems i Firebase-konsollen. Behold members. Lukk andre appøkter før dette og åpne administratorenheten igjen. Tomt oppsett krever også tomme samlinger. Oppsettflyten overskriver profile, preferences og metadata og skriver handlemarkøren.
+
+### Tilbakerulling
+
+Tilbakerulling til v94 kobler til det gamle prosjektet og viser innholdet der. Endringer gjort i det nye v95-prosjektet følger ikke med tilbake. Ta sikkerhetskopi og koordiner alle enheter før et slikt valg.
 
 ## Versjonsbump
 

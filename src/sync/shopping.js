@@ -64,11 +64,15 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
   let serverSeen = false;
   let failed = false;
   let pending = 0;
+  let generation = 0;
+  let unsubscribe;
+  let stopped = false;
   const queue = [];
   const publishStatus = () => onStatus(failed ? "Synk feilet"
     : pending || !serverSeen ? "Synker" : "Synket");
 
   function dispatch(operation) {
+    const token = generation;
     let result;
     try {
       const ref = api.doc(refs.shoppingItems, operation.id);
@@ -83,14 +87,17 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
       result = Promise.reject(error);
     }
     Promise.resolve(result).catch((error) => {
+      if (token !== generation) return;
       if (!(operation.type === "updated" && error.code === "not-found")) failed = true;
     }).finally(() => {
+      if (token !== generation) return;
       pending -= 1;
       publishStatus();
     });
   }
 
   function enqueue(diff) {
+    if (stopped) return;
     const operations = [
       ...diff.added.map(({ id, ...fields }) => ({ type: "added", id, fields })),
       ...diff.updated.map(({ id, fields }) => ({ type: "updated", id, fields })),
@@ -108,23 +115,28 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
   async function start(connection) {
     if (starting) return starting;
     ({ api, refs } = connection);
+    const token = generation;
     starting = (async () => {
       publishStatus();
       try {
-        await migrateShoppingItems({ api, refs });
+        if (!connection.skipMigration) await migrateShoppingItems({ api, refs });
+        if (token !== generation) return false;
         ready = true;
         for (const operation of queue.splice(0)) dispatch(operation);
-        api.onSnapshot(refs.shoppingItems, { includeMetadataChanges: true }, (snapshot) => {
+        unsubscribe = api.onSnapshot(refs.shoppingItems, { includeMetadataChanges: true }, (snapshot) => {
+          if (token !== generation) return;
           if (snapshot.metadata.fromCache && !serverSeen) return;
           if (!snapshot.metadata.fromCache) serverSeen = true;
           onItems(shoppingItemsFromDocs(snapshot.docs));
           publishStatus();
         }, () => {
+          if (token !== generation) return;
           failed = true;
           publishStatus();
         });
         return true;
       } catch {
+        if (token !== generation) return false;
         ready = false;
         failed = true;
         publishStatus();
@@ -134,5 +146,14 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
     return starting;
   }
 
-  return { enqueue, start };
+  function stop() {
+    generation += 1;
+    stopped = true;
+    ready = false;
+    queue.length = 0;
+    pending = 0;
+    unsubscribe?.();
+  }
+
+  return { enqueue, start, stop };
 }

@@ -13,7 +13,8 @@ Appen kan kjøres uten byggsteg og publiseres som vanlige statiske filer, for ek
 - Gjennomgang av ingredienser før varer legges til i handlelisten.
 - Familieinnstillinger, raske dager og preferanser.
 - Lokal lagring i nettleseren.
-- Firebase/Firestore-synk med anonym innlogging.
+- Firebase/Firestore-synk med Google-innlogging og medlemsstyrt tilgang.
+- Eksplisitt førstegangsoppsett fra sikkerhetskopi, og administrasjon av medlemmer.
 - PWA-støtte med manifest, ikoner, service worker og loading screen.
 
 ## Kjør lokalt
@@ -36,7 +37,10 @@ C:\Users\espen\Documents\GitHub\middagsplanlegger
 - `app.js`: hovedlogikk, state, rendering, hendelser og Firebase-synk.
 - `src/domain/meals.js`: rene oppskrifts- og måltidshjelpere.
 - `src/domain/shopping.js`: rene mengde- og handlelistefunksjoner.
-- `src/sync/shopping.js`: migrering, vareendringer, minnekø og handlelistelytter.
+- `src/sync/shopping.js`: vareendringer, minnekø og handlelistelytter.
+- `src/sync/access.js`: innloggingstilgang, prosjektmerket cache og versjonsvakt.
+- `src/sync/restore.js`: validering og eksplisitt gjenoppretting ved oppsett.
+- `firestore.rules`: tilgangsreglene som skal publiseres til det nye Firebase-prosjektet.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner.
 - `styles.css`: all styling og responsiv layout.
 - `service-worker.js`: PWA-cache og oppdateringsstrategi.
@@ -53,6 +57,7 @@ Les disse før større endringer:
 - `docs/ARCHITECTURE.md`
 - `docs/STATE_MODEL.md`
 - `docs/RELEASE.md`
+- `docs/FIREBASE_OPPSETT.md`
 
 ## Lokal kontroll
 
@@ -68,7 +73,7 @@ node tests/domain/weeks.test.mjs
 
 ## Publisering
 
-Arbeidsmappen er Git-klonen. Eier håndterer commit og publisering med GitHub Desktop; Codex bruker ingen Git-kommandoer. Utrullingsplanen for v93 i `docs/RELEASE.md` må følges på alle enheter.
+Arbeidsmappen er Git-klonen. Eier håndterer commit og publisering med GitHub Desktop; Codex bruker ingen Git-kommandoer. Følg «Utrulling av v95» i `docs/RELEASE.md`, og sett opp det nye Firebase-prosjektet etter `docs/FIREBASE_OPPSETT.md`. Gamle klienter fortsetter å bruke det gamle prosjektet; deres senere endringer overføres ikke.
 
 Appen har manuelt versjonsnummer. Når kode, CSS, HTML eller service worker endres, bump versjonen i:
 

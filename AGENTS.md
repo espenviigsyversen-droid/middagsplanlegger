@@ -40,7 +40,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/domain/backup.js`: bygging av versjonert sikkerhetskopi og filnavn uten UI- eller Firebase-avhengighet.
 - `src/domain/suggestions.js`: rene poengregler for forslagmotoren uten UI- eller Firebase-avhengighet.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner uten UI- eller Firebase-avhengighet.
-- `src/sync/firebase.js`: Firebase SDK-lasting, anonym innlogging og bygging av Firestore-referanser.
+- `src/sync/firebase.js`: Firebase SDK-lasting, Google-innlogging og bygging av Firestore-referanser.
 - `src/sync/reads.js`: bygging av lokale patches fra Firestore snapshots for meals og weeks.
 - `src/sync/state.js`: rene synkbeslutninger for scopes, ukeendringer og remote-konfliktbeskyttelse.
 - `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata, meals og weeks.
@@ -96,3 +96,15 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Migrering leser kun app/shopping i én transaksjon. shoppingList-feltet i arkivet skal aldri endres/slettes av v93; bare migratedToItemsAt legges til.
 - Minnekø sendes etter migrering, før collection-lytteren startes. Cache-snapshots ignoreres fram til første serversnapshot. Migreringsfeil beholder lokal liste og blokkerer handlelistelytteren til neste oppstart.
 - Ingen overføring av usynkede v92-endringer eller varig offline-kø. Følg utrullingsplanen i docs/RELEASE.md; v92 og v93 deler ikke løpende handleliste.
+
+## Tilgang og oppsett fra v95
+
+- Prosjektet er `middagsplanlegger-6db4e`, familie-ID er fortsatt `familien`. Det gamle prosjektet er arkiv og skal aldri kontaktes av v95.
+- `firestore.rules` i repoet er fasit. Google-innlogging krever verifisert e-post og et medlemsdokument. Bare administratorer kan skrive `app/meta` eller administrere andre medlemmer; egen rad skal ikke endres.
+- Medlemsreglene bruker dokumentoppslag. Hold skrivinger til enkeltstående dokumentkall; ikke innfør `writeBatch` eller transaksjoner med mange dokumenter (20-oppslagsgrensen for batch/transaksjon). Den historiske handlelistemigreringen kjøres ikke i v95.
+- Prosjekt-ID lagres sammen med lokal state. Manglende/ulik ID nullstiller domenedata til tomme standardverdier før synk. Ingen eksempeloppskrifter eller eksempelplan.
+- `src/sync/access.js` eier tilgangs- og versjonsvakten. Ingen domenelyttere eller vanlige writes før medlemskap og `app/meta.initializedAt` er kontrollert. Innlogging utløses bare av et knappetrykk.
+- Offline-medlemsflagget bindes til prosjekt, familie og bruker, og fjernes ved eksplisitt utlogging/avvist medlemskap. Ved utlogging, kontobytte og versjonsblokkering stoppes lyttere og timere, usendte operasjoner forkastes, lokal state beholdes.
+- `src/sync/restore.js` validerer sikkerhetskopi og eksisterende dokument-ID-er før første write. Ingen automatisk sletting og ingen legacy-opplasting fra `app/state`. Medlemslisten røres aldri av oppsett. `app/meta` skrives sist, kun av administrator etter vellykket oppsett.
+- Gjenoppretting av sikkerhetskopi er nå eksplisitt godkjent i oppsettflyten for v95; dette erstatter begrensningen mot import under «Nye flyter fra v91».
+- Etter slike endringer: kjør `tests/sync/access.test.mjs`, `tests/sync/restore.test.mjs`, `tests/app/access-startup.test.mjs` og `tests/render/account.test.mjs`, i tillegg til relevante eksisterende tester.

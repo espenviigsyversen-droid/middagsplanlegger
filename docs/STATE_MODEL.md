@@ -12,6 +12,10 @@ middagsapp-state
 
 Synkede deler lagres også i Firestore når Firebase er tilgjengelig.
 
+Fra v95 lagres `projectId: "middagsplanlegger-6db4e"` sammen med state. Manglende eller avvikende ID nullstiller family, mealPreferences, metadata, meals, alle seks *ByWeek-kart, shoppingList, clientUpdatedAt og pendingLocalSync før noe kan sendes til skyen. Standardmetadata og familieinnstillinger beholdes som tomt oppsetts grunnlag; oppskrifter og plan inneholder ingen eksempeldata. Lik prosjekt-ID beholder domenedata, med vanlig normalisering. Prosjekt-ID er lokal og inngår ikke i sikkerhetskopiens domenepayload.
+
+`middagsapp-membership` lagrer `{ projectId, familyId, uid, email, role, initialized, minAppVersion }` etter vellykket serverkontroll. Flagget brukes bare for lokal tilgang uten nett, og fjernes ved utlogging eller avvist medlemskap. Medlemsrollen, innlogget bruker, oppsettskjerm og filoppsummering ligger i separat tilgangs-/UI-state; de synkes og eksporteres ikke. Lokal state slettes ikke ved utlogging. En ny konto må alltid gjennom serverkontroll før den får se domenedata på nett.
+
 ## Viktige state-felter
 
 UI-state:
@@ -68,9 +72,16 @@ Appen synker ikke hele state som ett dokument lenger. Den bruker flere områder:
 - `families/{FAMILY_ID}/meals/{mealId}`
 - `families/{FAMILY_ID}/weeks/{weekKey}`
 
-Det finnes også legacy-støtte for:
+Fra v95 finnes også:
 
-- `families/{FAMILY_ID}/app/state`
+- `families/{FAMILY_ID}/members/{email}`: dokument-ID er e-post i små bokstaver; `{ role: "admin" | "member", addedAt, addedBy }`. Første manuelt opprettede administrator kan ha bare role.
+- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion: 95 }`. Bare administratorer skriver dette; alle medlemmer leser.
+
+Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
+
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig synk skriver aldri til meta. Hvis minAppVersion overstiger 95, avsluttes synken og appen krever oppdatering.
+
+Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
 ## Uker
 
@@ -149,6 +160,8 @@ Varer slås sammen basert på navn og enhet. Mengder slås sammen når begge kan
 
 ### Firestore og migrering fra v93
 
+Dette avsnittet beskriver v93/v94-migreringen. Fra v95 erstattes den ved oppstart av eksplisitt oppsett fra sikkerhetskopi, som skriver handlemarkøren og starter varelytteren direkte. Transaksjonsmigreringen kjøres ikke i det nye prosjektet.
+
 Dokument-ID i shoppingItems er varens eksisterende id; id lagres ikke i dokumentfeltene. Dokumentet inneholder name, amount, unit, category, checked, custom, createdAt og updatedAt (serverTimestamp). updatedAt tas bort ved lesing. Sortering bruker createdAt stigende og så ID. generatedForWeek beholdes kun lokalt og i sikkerhetskopien.
 
 Migreringen leser kun skyens app/shopping i én transaksjon. Hvis migratedToItemsAt finnes, skjer ingen ny oppretting. Ellers normaliseres skyvarene med opprinnelige ID-er og createdAt = 0 + indeks, og markøren skrives med merge. shoppingList-feltet i app/shopping endres eller slettes aldri av v93. Manglende dokument/handleliste gir tom migrering. Arkivet er ingen løpende v93-handleliste.
@@ -160,6 +173,8 @@ Minnekø før klar sendes etter vellykket migrering, før lytteren startes. Cach
 ### Kjente begrensninger og overgang
 
 Offline-endringer har ingen varig operasjonskø. De sendes når nettet kommer tilbake bare hvis appen forblir åpen og synken er startet. Lukking/omlasting kan miste usynkede endringer; første serversnapshot erstatter lokal liste. Mislykket migrering prøves igjen ved neste oppstart.
+
+Fra v95 forkastes også minnekø, timere og øvrige usendte operasjoner ved utlogging, kontobytte eller versjonsblokkering. Lokal state beholdes. Allerede sendte SDK-operasjoner kan ikke kanselleres. Ved ny godkjent innlogging startes synken rent på nytt. Offline-oppstart med godkjent medlemsflagg viser «Lokal lagring» og starter ingen synk; last appen inn igjen når nett er tilgjengelig. Endringer i handlelisten fra en slik økt overføres ikke automatisk og kan erstattes av første serversnapshot.
 
 Usynkede v92-endringer overføres ikke. pendingLocalSync er globalt og identifiserer ikke handlelisteendringer. Lokal liste flettes derfor ikke inn i skyen; det kunne gjeninnført varer slettet på andre enheter. Før oppdatering må alle enheter være på nett, vise Synket og ha lik handleliste. v92-klienter som fortsetter å kjøre, skriver bare til arkivet. Disse senere endringene overføres ikke til v93. Se Utrulling av v93 i docs/RELEASE.md.
 
@@ -186,7 +201,7 @@ Sikkerhetskopi har `exportVersion: 1` og inneholder en kopi av `syncPayload()` u
 ## Viktige risikopunkter
 
 - `setState` lagrer og rendrer umiddelbart. Vær forsiktig med hyppige input-events.
-- Remote patches bevarer noe UI-state, men ikke alt. Nye UI-felter bør vurderes i `applyRemoteStatePatch` og `applyRemotePayload`.
+- Remote patches bevarer noe UI-state, men ikke alt. Nye UI-felter bør vurderes i `applyRemoteStatePatch`.
 - Nye felter i den opprinnelige scope-synken må legges til i `syncedStateKeys`, `syncPayload`, `syncedScopesForPatch` og remote save/listener-logikk.
 - Firestore-writes for profile, preferences, metadata, meals og weeks skal sjekke remote `clientUpdatedAt` før skriving. Hvis remote er nyere enn lokal `clientUpdatedAt`, skal lokal cache ikke overskrive remote.
 - Manglende remote dokumenter skal ikke automatisk seedes fra lokal cache ved vanlig oppstart. Det er bare tillatt ved eksplisitt migrering/førstegangsoppsett eller når appen har `pendingLocalSync`.
