@@ -67,7 +67,8 @@ function testShoppingListRender() {
     shoppingIconHtml: "<svg></svg>",
     escapeHtml,
   });
-  assert.match(html, /1 gjenstår · 1 avhuket/);
+  assert.doesNotMatch(html, /gjenstår|view-lead/);
+  assert.match(html, /shopping-view-header/);
   assert.match(html, /Tørrvarer/);
   assert.match(html, /I kurven \(1\)/);
 }

@@ -154,11 +154,20 @@ assert.deepEqual(snapshot("invalidOrder.metadata.storeCategoryOrder"), []);
 run('state.family.name = "<img src=x onerror=alert(1)>"; renderShell("");');
 assert.match(app.innerHTML, /&lt;img src=x onerror=alert\(1\)&gt; sin middagsplan/);
 assert.doesNotMatch(app.innerHTML, /<img/);
+// Shell uses the effective status (including pending shopping writes), with
+// readable text always present and the compact class only on Synket.
+for (const status of ["Synket", "Kobler til synk", "Synker", "Synk feilet", "Lokal lagring"]) {
+  context.testSyncStatus = status;
+  run('syncStatus = testSyncStatus; renderShell("");');
+  assert.equal(app.innerHTML.includes("sync-pill--synced"), status === "Synket");
+  assert.ok(app.innerHTML.includes('<span class="sync-status-label">' + status + '</span>'));
+}
+run('syncStatus = "Kobler til synk";');
 context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v93");
+assert.equal(exported.appVersion, "v94");
 assert.deepEqual(exported.data, snapshot("syncPayload()"));
 assert.equal(downloads.at(-1).clicked, true);
 assert.match(downloads.at(-1).download, /^middagsapp-backup-\d{4}-\d{2}-\d{2}\.json$/);

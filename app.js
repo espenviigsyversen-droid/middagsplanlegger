@@ -333,7 +333,7 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v93";
+const APP_VERSION = "v94";
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -1402,6 +1402,7 @@ function renderShoppingList() {
 }
 
 function renderShell(viewHtml) {
+  const displayedSyncStatus = syncStatusText();
   const isRecipeView = state.activeView === "recipe";
   const settingsViews = new Set(["setup", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
   const isSettingsView = settingsViews.has(state.activeView);
@@ -1423,7 +1424,7 @@ function renderShell(viewHtml) {
             </div>
           </div>
           <div class="topbar-actions">
-            <div class="sync-pill"><span class="sync-dot"></span> ${escapeHtml(syncStatusText())}</div>
+            <div class="sync-pill${displayedSyncStatus === "Synket" ? " sync-pill--synced" : ""}"><span class="sync-dot" aria-hidden="true"></span><span class="sync-status-label">${escapeHtml(displayedSyncStatus)}</span></div>
             <button class="topbar-settings-button ${isSettingsView ? "active" : ""}" data-view="setup" aria-label="Innstillinger" title="Innstillinger">
               ${icon("settings")}
             </button>

@@ -170,3 +170,17 @@ Eier håndterer commit og publisering fra Git-klonen med GitHub Desktop. Codex b
 9. Ukeplan, oppskrifter og innstillinger synkes som før. Kontroller også sikkerhetskopi på PC/iPhone og oppstartsvernet fra v92.
 
 17 lokale testskript og syntakskontroller kjøres før levering. Lokale SDK-/DOM-stubber erstatter ikke denne manuelle akseptansen. Service worker har bare fått versjonsbump og shopping-modulen i begge asset-listene; strategien er uendret.
+
+## Visningsendring v94
+
+Handlelisten har ikke lenger tellelinje. Ved bredde opptil 640 px er toppfeltet kompakt på tvers av visninger, og Synket vises som bare prikk med statustekst bevart for skjermlesere. Andre statuser har fortsatt synlig tekst. Overskrift og Generer fra plan står på samme rad; avstandene over listen er redusert. Data, synk og navigasjon er uendret fra v93.
+
+Etter publisering:
+
+1. Kontroller v94 på PC og iPhone-hjemskjermappen.
+2. På iPhone med cirka 390 px bredde: kontroller at første kategori starter minst 110 px høyere enn før. Lokal nettleserkontroll viste cirka 146 px forbedring; faktisk iPhone må kontrolleres separat.
+3. Kontroller at tellelinjen er borte på både PC og mobil, og at PC ellers ser uendret ut.
+4. På mobil: Synket skal bare vise prikk. Slå på flymodus og endre noe; ventende/feilet synk skal ha synlig tekst. Ikke slett state eller cacher.
+5. Kontroller langt familienavn med ellipsis, minst 44 px innstillingsknapp og kompakt toppfelt i Kalender, Planlegger, Oppskrifter og Innstillinger.
+
+Se docs/LEVERANSE_V94.md for filoversikt og kontrollresultater. Utrullingsbegrensningene for v93 gjelder fortsatt ved oppdatering av enheter som kjører v92.

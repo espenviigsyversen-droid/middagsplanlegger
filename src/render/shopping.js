@@ -159,12 +159,11 @@ export function renderShoppingListView(options = {}) {
 
   return `
     ${generateModalHtml}${itemEditorHtml}
-    <section class="view-header meals-view-header">
+    <section class="view-header meals-view-header shopping-view-header">
       <div class="meals-header-row">
         <h2 class="view-title">Handleliste</h2>
         <button class="button compact" data-generate-list>${shoppingIconHtml} Generer fra plan</button>
       </div>
-      ${!isEmpty ? `<p class="view-lead">${unchecked.length} gjenstår · ${checked.length} avhuket</p>` : ""}
     </section>
 
     <div class="shopping-add-wrap">
