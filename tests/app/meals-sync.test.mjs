@@ -68,16 +68,17 @@ const quick = fixture(); await quick.start(); quick.server(quick.snapshot("state
 quick.run('state.mealPicker = {open:true,dayIndex:2,query:"Helt ny hurtigmiddag"}; addQuickMealForPicker()');
 assert.equal(quick.calls.length, 1); assert.equal(quick.calls[0][0], "set"); assert.match(quick.calls[0][1], /^meals\//);
 assert.equal(quick.run("pendingRemoteScopes.has('meals')"), false);
-assert.equal(quick.run("pendingRemoteScopes.has('weeks')"), true, "Picker also deliberately updates the plan");
+assert.equal(quick.run("pendingRemoteScopes.has('weeks')"), false, "Plan changes use separate day/field sync");
+assert.equal(quick.run("state.pendingLocalSync"), false);
+assert.equal(quick.run("state.clientUpdatedAt"), 1234);
 
 const deleted = fixture(); await deleted.start(); deleted.server(deleted.snapshot("state.meals")); deleted.calls.length = 0;
 deleted.run('state.plansByWeek = {"2026-10-05":{1:"meal-24",2:"meal-25"}}; state.editingMealId="meal-24"; deleteCurrentMeal()');
 assert.deepEqual(deleted.calls, [["delete", "meals/meal-24"]]);
 assert.equal(deleted.run('state.plansByWeek["2026-10-05"][1]'), "");
 await deleted.run('saveRemoteScopes(["weeks"])');
-assert.equal(deleted.calls.filter(call => call[0] === "set").length, 1);
-assert.equal(deleted.calls.at(-1)[1], "weeks/2026-10-05"); assert.equal(deleted.calls.at(-1)[2].plan[2], "meal-25");
-assert.ok(deleted.calls.filter(call => call[0] === "get").every(call => call[1].startsWith("weeks/")));
+assert.deepEqual(deleted.calls, [["delete", "meals/meal-24"]], "Legacy weeks scope does nothing; day/field writes covered by app weeks tests");
+assert.equal(deleted.run("state.pendingLocalSync"), false);
 
 // Remote B must not replace local A or editor/import state. Unchanged recipe objects stay intact.
 let acknowledge;

@@ -22,7 +22,8 @@ node tests/render/planner.test.mjs
 node tests/render/setup.test.mjs
 node tests/render/shopping.test.mjs
 node tests/sync/firebase.test.mjs
-node tests/sync/reads.test.mjs
+node tests/sync/weeks.test.mjs
+node tests/app/weeks-sync.test.mjs
 node tests/sync/state.test.mjs
 node tests/sync/writes.test.mjs
 node tests/sync/shopping.test.mjs
@@ -41,6 +42,20 @@ node functions/tests/index.test.cjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v101
+
+v100 er publisert og i bruk. v101 flytter ukesynken til endringer per dag og felt. Dokumentstier/form, backup/restore og funksjoner/regler beholdes. REQUIRED_MIN_APP_VERSION er 101, fordi v100 kan overskrive hele uker. Ingen nettverk eller publisering inngår i denne leveransen.
+
+1. Før eiers publisering: la alle enheter vise Synket, last ned ny sikkerhetskopi på PC og lukk gamle klienter helt, også åpne PC-vinduer. Usynkede v100-ukeendringer overføres ikke automatisk fra cache.
+2. Publiser v101-appfilene samlet gjennom GitHub Desktop. src/sync/weeks.js må følge med. Fjern src/sync/reads.js og tests/sync/reads.test.mjs som markert i leveranserapporten; reads-modulen er tatt ut av begge service worker-listene.
+3. Åpne administratorens v101 på nett først. Kontroller at app/meta.minAppVersion faktisk er 101 før øvrige enheter tas i bruk. Heving er best effort med stille feil og nytt forsøk ved neste oppstart. v100 skal få oppdateringsskjerm; v101 skal slippe inn. Oppsett/restore skriver også 101.
+4. Åpne øvrige enheter på nett og kontroller versjonen. Test valg av middag, lås, dagstype, porsjoner, dagsmodus/notat, Fyll uke, Bytt uke, Tøm uke, hurtigmiddag og sletting fra flere uker. Tøm uke skal ikke slette ukedokumentet.
+5. På to enheter: endre tirsdag og fredag i samme uke. Begge endringer skal bevares. Endre også samme dag/felt; siste skyverdi skal vises når skriving er kvittert og et nyere serverbilde uten ventende skrivinger finnes. Status skal bli Synket. Kontroller åpent oppskriftsutkast/importvalg og valgt uke under synk.
+6. Kontroller uke uten serverdokument: standardverdier og ingen cache-opplasting. Offline-oppstart viser lokale data uten lyttere/skriving og uten varig kø. Bevar viktige usynkede endringer i backup før omlasting.
+7. Kontroller backup/restore med plan, låser, dagstype, porsjoner, modus og notat. Samme eksportformat og felt brukes; bare minimumet endres til 101. Ingen server-/regelpublisering eller migrering kreves.
+
+Alle 39 lokale testskript og node --check av alle 35 kildefiler bestod. Se LEVERANSE_V101.md for endrede/nye/slettede filer og kartlegging av mutasjoner/oppstart. PC-/iPhone- og to-enhetstest gjenstår etter eiers publisering.
 
 ## Utrulling av v100
 

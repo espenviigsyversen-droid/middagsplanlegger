@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { backupFixture } from "../helpers/backup-fixture.mjs";
 import { validateBackup, summarizeBackup, buildRestoreDocuments, checkRestoreCollections, executeRestore } from "../../src/sync/restore.js";
+import { WEEK_FIELDS, weeksFromDocs } from "../../src/sync/weeks.js";
 
 const backup = backupFixture();
 const clone = validateBackup(backup);
@@ -17,8 +18,21 @@ for (const mutation of [b => b.app = "other", b => b.exportVersion = 2, b => b.d
   const input = backupFixture(); mutation(input); assert.throws(() => validateBackup(input), /Ugyldig/);
 }
 const docs = buildRestoreDocuments(backup, { email: "admin@example.com" });
-assert.deepEqual(docs.at(-1), { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: "admin@example.com", minAppVersion: 100 }, marker: "meta" });
+assert.deepEqual(docs.at(-1), { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: "admin@example.com", minAppVersion: 101 }, marker: "meta" });
 assert.deepEqual(docs.filter(d => d.path[0] === "weeks").map(d => d.path[1]), ["2026-10-05", "2026-10-12"]);
+const restoredWeeks = weeksFromDocs(docs.filter(d => d.path[0] === "weeks").map(d => ({ id: d.path[1], data: () => d.data })), backup.data.family.familySize);
+for (const stateField of Object.keys(WEEK_FIELDS)) {
+  for (const [key, days] of Object.entries(backup.data[stateField])) {
+    for (const [day, value] of Object.entries(days)) assert.equal(restoredWeeks[stateField][key][day], value);
+  }
+}
+const completeWeekBackup = backupFixture();
+const fullWeekValues = { plansByWeek: "meal-1", lockedPlansByWeek: true, dayTypesByWeek: "weekend",
+  servingsByWeek: 3, dayModesByWeek: "away", dayNotesByWeek: "Alle felt" };
+for (const [field, value] of Object.entries(fullWeekValues)) completeWeekBackup.data[field]["2026-10-05"] = { 2: value };
+const fullWeekDocs = buildRestoreDocuments(completeWeekBackup, { email: "admin@example.com" }).filter(d => d.path[0] === "weeks");
+const fullWeekState = weeksFromDocs(fullWeekDocs.map(d => ({ id: d.path[1], data: () => d.data })), 4);
+for (const [field, value] of Object.entries(fullWeekValues)) assert.equal(fullWeekState[field]["2026-10-05"][2], value);
 assert.deepEqual(docs.filter(d => d.path[0] === "shoppingItems").map(d => [d.path[1], d.data.createdAt]), [["item-z", 0], ["item-a", 1]]);
 assert.equal(docs.find(d => d.path[0] === "shoppingItems").data.id, undefined);
 assert.equal(docs.find(d => d.path[0] === "shoppingItems").data.checked, true);
@@ -65,7 +79,7 @@ for (const key of ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servin
 const emptyDocs = buildRestoreDocuments(empty, { email: "admin@example.com" });
 const v96 = execution({ meta: { minAppVersion: 96 } });
 await executeRestore({ ...v96.args, appVersion: 96 });
-assert.equal(v96.calls.at(-1).data.minAppVersion, 100, "Restore requires clients with per-document recipe sync");
+assert.equal(v96.calls.at(-1).data.minAppVersion, 101, "Restore requires clients with per-day/field week sync");
 assert.equal(checkRestoreCollections(emptyDocs, {}), true);
 assert.throws(() => checkRestoreCollections(emptyDocs, { meals: ["meal-1"] }), /1 dokumenter/);
 assert.equal(emptyDocs.length, 5);

@@ -15,8 +15,8 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/sync/access.js` håndterer prosjektmerket cache, medlemskontroll, offline-tilgang og versjonsvakt.
 - `src/sync/restore.js` validerer og oppsummerer sikkerhetskopier, bygger dokumentlisten og utfører eksplisitt oppsett med enkeltstående writes.
 - `src/render/account.js` tegner tilgangsskjermene og Konto og medlemmer.
-- `src/sync/reads.js` bygger lokale state-patches fra Firestore snapshots for uker.
-- `src/sync/state.js` inneholder rene synkbeslutninger: hvilke scopes som er endret, hvilke uker som må lagres, og når remote data er eldre enn lokale endringer.
+- `src/sync/weeks.js` bygger ukediffer per dag/felt og standardutfylte snapshots, samler writes i 500 ms og beskytter ventende lokale endringer.
+- `src/sync/state.js` inneholder rene synkbeslutninger: hvilke scopes som er endret og når remote data er eldre enn lokale endringer, samt listen over seks ukefelter.
 - `src/sync/writes.js` bygger Firestore writes for de ulike sync-scopene uten å eie appens render- eller statusflyt.
 - `src/sync/shopping.js` håndterer migrering og separat varebasert handlelistesynk fra v93.
 - `src/sync/meals.js` håndterer oppskriftsdiffer og synk per dokument fra v100, med minnekø og vern for ventende lokale oppskriftsendringer.
@@ -43,7 +43,7 @@ Oppstart:
 3. Firebase melder innloggingsstatus. Lasteskjermen beholdes mens status og tilgang kontrolleres. Uten innlogging vises bare Google-knappen; popup åpnes kun fra knappetrykk, med kontovalg.
 4. Innlogget bruker må ha verifisert e-post og gyldig rolle i eget medlemsdokument. Deretter leses `app/meta` fra serveren. Uten markør vises oppsettskjermen; for høy minimumsversjon viser oppdateringsskjermen.
 5. Først etter godkjent medlemskap, oppsett og versjon vises appen og domenesynken startes. En tidligere godkjent enhet kan åpne lokale data uten nett med «Lokal lagring».
-6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over appens numeriske versjonsnummer (100 fra v100). Online administratoroppstart hever minimumet til REQUIRED_MIN_APP_VERSION (100) med én best-effort updateDoc når det er lavere; ved feil fortsetter appen og neste oppstart prøver igjen. Vanlige medlemmer og offline-oppstart skriver ikke meta. Etter tilgangsvern startes mealsSync og shoppingSync sammen, deretter dagens fire scope-lyttere for profil/preferanser/metadata/uker.
+6. Remote data kan patche lokal state og trigge ny render. Meta-lytteren stopper all synk hvis oppsettet fjernes eller minimumsversjonen økes over appens numeriske versjonsnummer (101 fra v101). Online administratoroppstart hever minimumet til REQUIRED_MIN_APP_VERSION (101) med én best-effort updateDoc når det er lavere; ved feil fortsetter appen og neste oppstart prøver igjen. Vanlige medlemmer og offline-oppstart skriver ikke meta. Etter tilgangsvern startes mealsSync, shoppingSync og weeksSync sammen, deretter tre scope-lyttere for profil/preferanser/metadata.
 
 Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fanger feil før første render, inkludert lastingsfeil på appens script-element via en fangende `window.error`-lytter. Hvis appflaten fortsatt er tom etter 12 sekunder, vises samme feiltilstand: spinneren skjules, en forklaring vises og brukeren kan laste siden på nytt. En MutationObserver avslutter overvåkingen når appen har rendret. Eksisterende `hideLoadingScreen()` fjerner lasteskjermen også etter sen oppstart. Vernet er uavhengig av appens modulimporter og endrer ikke lagring, cacher eller navigasjon.
 
@@ -55,7 +55,7 @@ Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fa
 - `defaultState` og state-normalisering.
 - State/persistens: `loadState`, `saveState`, `setState`.
 - Importert domenelogikk: oppskrift/måltid fra `src/domain/meals.js`, mengder/handleliste fra `src/domain/shopping.js`, forslagpoeng fra `src/domain/suggestions.js` og uke/dato fra `src/domain/weeks.js`.
-- Importert synklogikk: Firebase-oppkobling fra `src/sync/firebase.js`, snapshot-lesing fra `src/sync/reads.js`, konflikt-/scopebeslutninger fra `src/sync/state.js` og write-bygging fra `src/sync/writes.js`.
+- Importert synklogikk: Firebase-oppkobling fra `src/sync/firebase.js`, egen operasjons-/snapshotflyt i shopping/meals/weeks-modulene, konflikt-/scopebeslutninger fra `src/sync/state.js` og write-bygging fra `src/sync/writes.js`.
 - Importert renderlogikk: kalender-HTML fra `src/render/calendar.js`, oppskrifts-HTML fra `src/render/meals.js`, planlegger-HTML fra `src/render/planner.js`, innstillings-HTML fra `src/render/setup.js` og handleliste-HTML fra `src/render/shopping.js`.
 - Synk-hjelpere og Firestore payloads.
 - Rendering av modal- og komponentdeler.
@@ -156,7 +156,7 @@ v99 endrer bare klienten. Functions, Firestore-regler, dokumentformat, minimum 9
 
 Fra v95 brukes det egne Firebase-prosjektet `middagsplanlegger-6db4e` med Google-innlogging og familie-ID `familien`. Ingen kode kobler til det gamle prosjektet. `firestore.rules` i repoet er fasit: verifisert e-post og medlemsdokument kreves; medlemsadministrasjon og skriving til `app/meta` krever administrator. Vanlige medlemmer har samme tilgang til domenedata. Firebase standard innloggingspersistens brukes.
 
-`src/sync/reads.js` bygger lokale ukepatches fra remote snapshots, og `src/sync/writes.js` bygger writes for profile, preferences, metadata og weeks. Meals og shoppingItems har egne operasjoner og lyttere. `app.js` eier fortsatt når scopes lagres og hvordan UI-status vises. Alle writes er enkeltstående dokumentkall; ikke batch eller transaksjoner med mange dokumenter, siden medlemsreglene krever oppslag og slike operasjoner har en grense på 20 regeloppslag.
+`src/sync/writes.js` bygger writes for profile, preferences og metadata. Weeks, meals og shoppingItems har egne operasjoner og lyttere. `app.js` eier fortsatt når scopes lagres og hvordan UI-status vises. Alle writes er enkeltstående dokumentkall; ikke batch eller transaksjoner med mange dokumenter, siden medlemsreglene krever oppslag og slike operasjoner har en grense på 20 regeloppslag. Den gamle reads.js-modulen er fjernet fra v101.
 
 Data er splittet i flere dokumenter/collections:
 
@@ -169,7 +169,7 @@ Data er splittet i flere dokumenter/collections:
 - members (e-post i små bokstaver som dokument-ID; rolle og valgfri addedAt/addedBy)
 - app/meta (schemaVersion, initializedAt, initializedBy, minAppVersion; administratorstyrt)
 
-For profile, preferences, metadata og weeks bruker synkstrategien `clientUpdatedAt`, `pendingRemoteScopes` og `pendingWeekKeys` for å unngå at eldre remote data overskriver lokale endringer. Før Firestore-writes utføres, leser write-laget remote `clientUpdatedAt` for samme dokument. Hvis remote er nyere enn lokal state, droppes lokal write slik at en gammel device ikke kan overskrive nyere planlegging. Manglende remote scopedokumenter seedes bare ved eksplisitt førstegangsoppsett/migrering eller når lokal state faktisk har `pendingLocalSync`.
+For profile, preferences og metadata bruker synkstrategien `clientUpdatedAt` og `pendingRemoteScopes` for å unngå at eldre remote data overskriver lokale endringer. Før Firestore-writes utføres, leser write-laget remote `clientUpdatedAt` for samme dokument. Hvis remote er nyere enn lokal state, droppes lokal write slik at en gammel enhet ikke overskriver nyere data. Manglende remote scopedokumenter seedes bare ved eksplisitt førstegangsoppsett/migrering eller når lokal state faktisk har `pendingLocalSync`. Weeks er unntatt fra v101.
 
 ## Oppskriftssynk fra v100
 
@@ -181,9 +181,21 @@ onMeals oppdaterer bare state.meals ved faktisk innholdsendring og beholder uend
 
 Statusvisningen kombinerer scope-, handleliste- og oppskriftssynk: feil har prioritet, deretter Synker, ellers dagens status. Kø, SDK-venting, manglende første serverbilde og ubekreftet lokal operasjon viser Synker; skrive-/lytterfeil viser Synk feilet. Stopp forkaster all minnetilstand og gjør gamle callbacks ugyldige. Sendte SDK-operasjoner kan ikke trekkes tilbake. Offline-oppstart starter ingen synk og køer ikke lokale oppskriftsendringer; slike endringer kan erstattes av første serverbilde ved ny oppstart. Ingen varig kø eller automatisk retry er innført.
 
-Den gamle meals-scopen, slettesettet, hele-liste-lytteren og buildMealsRemotePatch er fjernet. Tomt serverbilde tømmer listen når ingen konkrete lokale operasjoner venter, selv om global pendingLocalSync er sann. Sikkerhetskopi/restore beholder format og flyt; restore bruker bare det nye felles minimumet 100. Den eksplisitte restore-skriveren kan fortsatt legge historisk clientUpdatedAt i meals; den ignoreres på samme måte som eksisterende dokumenter.
+Den gamle meals-scopen, slettesettet, hele-liste-lytteren og buildMealsRemotePatch er fjernet. Tomt serverbilde tømmer listen når ingen konkrete lokale operasjoner venter, selv om global pendingLocalSync er sann. Sikkerhetskopi/restore beholder format og flyt; restore bruker felles minimum 100 i v100, hevet til 101 fra v101. Den eksplisitte restore-skriveren kan fortsatt legge historisk clientUpdatedAt i meals; den ignoreres på samme måte som eksisterende dokumenter.
 
 R1 skjuler «Ingenting ble endret.» når erstatningsvalg venter. R2 bruker komma i nye formaterte handlemengder, men både punktum og komma tolkes. v100 er bare klientkode; functions/regler endres eller publiseres ikke.
+
+## Ukesynk fra v101
+
+diffWeeks sammenligner alle seks ukekart per uke og dag etter standardutfylling. Resultatet bruker ukedokumentets felt (plan, lockedPlan, dayTypes, servings, dayModes, dayNotes) og bare endrede dagverdier. Første endring starter et fast vindu på 500 ms per uke; nyere verdier for samme felt/dag erstatter tidligere verdier i vinduet. Én setDoc med merge:true og updatedAt skriver bare disse nested feltene, oppretter manglende dokument og trenger ingen getDoc. Tøm uke skriver endrede standardverdier; dokumentet slettes ikke.
+
+weeksSync har separat kø, timere, lytter, status og generasjon. Den starter sammen med shoppingSync/mealsSync etter tilgangsvern og stopper i stopAllSync. Usendte endringer beholdes bare til start/stopp i samme økt. Snapshot ber om metadataendringer og ignorerer cache til første serverbilde. weeksFromDocs bygger alle seks kart med standardverdier for manglende dager, og ignorerer begge tidsmarkørene. Uker uten dokument vises med standardverdier, uten cache-opplasting.
+
+Lokale verdier legges over hvert snapshot per uke/felt/dag. Hver celleoperasjon husker siste snapshot-løpenummer ved kølegging. Den fjernes når SDK har kvittert og siste bilde er fra serveren uten ventende skrivinger, med høyere nummer. Kontrollen kjøres både ved bilde og kvittering, med ny onWeeks-publisering om kvitteringen kommer sist. Innholdet sammenlignes ikke, og bare nyeste operasjon per celle gjelder. Dermed bevares ventende tirsdag mens fjern fredag tas inn, men en annen enhets nyere verdi for samme felt/dag blir synlig etter kvittering. Siste skriving av samme celle vinner. Feil beholder lokale verdier med Synk feilet, uten automatisk retry.
+
+onWeeks erstatter bare de seks domenekartene ved endring og bevarer valgt uke, åpent editorutkast, UI og importvalg. Ukeendringer via setState endrer verken clientUpdatedAt/pendingLocalSync eller andre scopes. Den gamle weeks-scopen, pendingWeekKeys, changedWeekKeys, weekPayload og buildWeeksRemotePatch er fjernet. replaceOpenWeek bygger nå planen lokalt og sender den gjennom setState, uten direkte mutasjon før differanseberegning; forslagene bruker fortsatt planen under bygging.
+
+REQUIRED_MIN_APP_VERSION er 101 ved administratorheving og restore. v100 skriver hele uker og må blokkeres før øvrige enheter brukes etter utrulling. Backup/restore beholder de seks kartene, unionen av ukenøkler og dokumentformen. Historisk clientUpdatedAt fra restore/eldre dokumenter ignoreres, og kan bli liggende etter merge-write. Frakoblet oppstart starter ingen synk/kø; ingen varig kø er innført. Service worker har bare ny versjon og oppdatert modulliste. Functions/regler er urørt.
 
 ## Handlelistesynk fra v93
 
@@ -230,7 +242,7 @@ Prioritert rekkefølge:
 5. Dele CSS i logiske områder.
 6. Legge til enkle tester for handleliste, mengder, ukeplan og synkbeskyttelse.
 
-Første testområder er etablert i `tests/domain/meals.test.mjs`, `tests/domain/shopping.test.mjs`, `tests/domain/suggestions.test.mjs`, `tests/domain/weeks.test.mjs`, `tests/render/calendar.test.mjs`, `tests/render/meals.test.mjs`, `tests/render/planner.test.mjs`, `tests/render/setup.test.mjs`, `tests/render/shopping.test.mjs`, `tests/sync/firebase.test.mjs`, `tests/sync/reads.test.mjs`, `tests/sync/state.test.mjs` og `tests/sync/writes.test.mjs`.
+Første testområder er etablert i `tests/domain/meals.test.mjs`, `tests/domain/shopping.test.mjs`, `tests/domain/suggestions.test.mjs`, `tests/domain/weeks.test.mjs`, `tests/render/calendar.test.mjs`, `tests/render/meals.test.mjs`, `tests/render/planner.test.mjs`, `tests/render/setup.test.mjs`, `tests/render/shopping.test.mjs`, `tests/sync/firebase.test.mjs`, `tests/sync/weeks.test.mjs` og `tests/app/weeks-sync.test.mjs`, `tests/sync/state.test.mjs` og `tests/sync/writes.test.mjs`.
 
 ## Foreslått fremtidig mappestruktur
 
@@ -246,7 +258,7 @@ src/
     weeks.js
   sync/
     firebase.js
-    reads.js
+    weeks.js
     state.js
     writes.js
   render/

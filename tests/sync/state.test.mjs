@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
-  changedWeekKeys,
   patchTouchesSyncedData,
+  WEEK_SYNC_FIELDS,
   remoteDocumentIsStale,
   shouldDeferRemotePayload,
   syncedScopesForPatch,
@@ -11,45 +11,31 @@ function testPatchTouchesSyncedData() {
   assert.equal(patchTouchesSyncedData({ activeView: "shopping" }), false);
   assert.equal(patchTouchesSyncedData({ shoppingList: { items: [] } }), false);
   assert.equal(patchTouchesSyncedData({ meals: [] }), false);
-  assert.equal(patchTouchesSyncedData({ plansByWeek: {} }), true);
+  assert.equal(patchTouchesSyncedData({ plansByWeek: {} }), false);
+  for (const field of WEEK_SYNC_FIELDS) {
+    assert.equal(patchTouchesSyncedData({ [field]: {} }), false);
+    assert.deepEqual(syncedScopesForPatch({ [field]: {} }), []);
+  }
+  assert.deepEqual(syncedScopesForPatch({ plansByWeek: {}, family: {} }), ["profile"]);
 }
 
 function testSyncedScopesForPatch() {
   assert.deepEqual(syncedScopesForPatch({ activeView: "planner" }), []);
   assert.deepEqual(syncedScopesForPatch({ family: {}, shoppingList: {} }), ["profile"]);
-  assert.deepEqual(syncedScopesForPatch({ plansByWeek: {}, dayNotesByWeek: {} }), ["weeks"]);
+  assert.deepEqual(syncedScopesForPatch({ plansByWeek: {}, dayNotesByWeek: {} }), []);
   assert.deepEqual(syncedScopesForPatch({ meals: [], metadata: {} }), ["metadata"]);
   assert.deepEqual(syncedScopesForPatch({ meals: [] }), []);
-}
-
-function testChangedWeekKeys() {
-  const previousState = {
-    plansByWeek: {
-      "2026-05-18": { 0: "pasta" },
-      "2026-05-25": { 0: "taco" },
-    },
-  };
-  const currentState = {
-    plansByWeek: {
-      "2026-05-18": { 0: "pasta" },
-      "2026-05-25": { 0: "fisk" },
-    },
-  };
-  assert.deepEqual(changedWeekKeys({ plansByWeek: currentState.plansByWeek }, previousState, currentState, "fallback"), ["2026-05-25"]);
-  assert.deepEqual(changedWeekKeys({ plansByWeek: {} }, { plansByWeek: {} }, { plansByWeek: {} }, "fallback"), ["fallback"]);
-  assert.deepEqual(changedWeekKeys({ shoppingList: {} }, previousState, currentState, "fallback"), []);
 }
 
 function testRemoteStaleness() {
   assert.equal(shouldDeferRemotePayload({ pendingLocalSync: true, remoteClientUpdatedAt: 10, localClientUpdatedAt: 20 }), true);
   assert.equal(shouldDeferRemotePayload({ pendingLocalSync: false, remoteClientUpdatedAt: 10, localClientUpdatedAt: 20 }), false);
-  assert.equal(remoteDocumentIsStale({ pendingScopes: new Set(["weeks"]), scope: "weeks", remoteClientUpdatedAt: 10, localClientUpdatedAt: 20 }), true);
-  assert.equal(remoteDocumentIsStale({ pendingScopes: new Set(["meals"]), scope: "weeks", remoteClientUpdatedAt: 10, localClientUpdatedAt: 20 }), false);
+  assert.equal(remoteDocumentIsStale({ pendingScopes: new Set(["profile"]), scope: "profile", remoteClientUpdatedAt: 10, localClientUpdatedAt: 20 }), true);
+  assert.equal(remoteDocumentIsStale({ pendingScopes: new Set(["metadata"]), scope: "profile", remoteClientUpdatedAt: 10, localClientUpdatedAt: 20 }), false);
 }
 
 testPatchTouchesSyncedData();
 testSyncedScopesForPatch();
-testChangedWeekKeys();
 testRemoteStaleness();
 
 console.log("sync state tests ok");

@@ -2,12 +2,6 @@ export const SYNCED_STATE_KEYS = [
   "family",
   "mealPreferences",
   "metadata",
-  "plansByWeek",
-  "lockedPlansByWeek",
-  "dayTypesByWeek",
-  "servingsByWeek",
-  "dayModesByWeek",
-  "dayNotesByWeek",
 ];
 
 export const WEEK_SYNC_FIELDS = [
@@ -29,28 +23,7 @@ export function syncedScopesForPatch(patch) {
   if ("family" in patch) scopes.add("profile");
   if ("mealPreferences" in patch) scopes.add("preferences");
   if ("metadata" in patch) scopes.add("metadata");
-  if (WEEK_SYNC_FIELDS.some((field) => field in patch)) scopes.add("weeks");
   return [...scopes];
-}
-
-export function changedWeekKeys(patch, previousState, currentState, fallbackWeekKey = "") {
-  const keys = new Set();
-  WEEK_SYNC_FIELDS.forEach((field) => {
-    if (!(field in (patch || {}))) return;
-    const previous = previousState?.[field] || {};
-    const current = currentState?.[field] || {};
-    Object.keys({ ...previous, ...current }).forEach((weekKey) => {
-      if (JSON.stringify(previous[weekKey] || {}) !== JSON.stringify(current[weekKey] || {})) {
-        keys.add(weekKey);
-      }
-    });
-  });
-
-  if (!keys.size && WEEK_SYNC_FIELDS.some((field) => field in (patch || {})) && fallbackWeekKey) {
-    keys.add(fallbackWeekKey);
-  }
-
-  return [...keys];
 }
 
 export function shouldDeferRemotePayload(options = {}) {

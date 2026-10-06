@@ -54,7 +54,7 @@ import {
   scoreRecentCategoryUse,
 } from "./src/domain/suggestions.js";
 import {
-  changedWeekKeys as getChangedWeekKeys,
+  WEEK_SYNC_FIELDS,
   patchTouchesSyncedData as syncPatchTouchesSyncedData,
   remoteDocumentIsStale,
   shouldDeferRemotePayload,
@@ -64,12 +64,9 @@ import { stateForProject, createAccessSession, offlineMemberMatches, loginErrorM
 import { validateBackup, summarizeBackup, executeRestore } from "./src/sync/restore.js";
 import { renderAccessScreen, renderAccountView } from "./src/render/account.js";
 import { initFirebaseClient } from "./src/sync/firebase.js";
-import {
-  buildWeeksRemotePatch,
-  maxClientUpdatedAtFromDocs,
-} from "./src/sync/reads.js";
 import { createShoppingSync, diffShoppingItems } from "./src/sync/shopping.js";
 import { createMealsSync, diffMeals } from "./src/sync/meals.js";
+import { createWeeksSync, diffWeeks } from "./src/sync/weeks.js";
 import { buildRemoteWrites } from "./src/sync/writes.js";
 import {
   renderCalendarView,
@@ -212,8 +209,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v100";
-const APP_VERSION_NUMBER = 100;
+const APP_VERSION = "v101";
+const APP_VERSION_NUMBER = 101;
 
 let state = loadState();
 const app = document.querySelector("#app");
@@ -221,12 +218,12 @@ let wakeLock = null;
 const remoteRefs = {};
 const remoteSaveTimers = {};
 const pendingRemoteScopes = new Set();
-const pendingWeekKeys = new Set();
 let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
 let shoppingSyncStatus = null;
 let mealsSyncStatus = null;
+let weeksSyncStatus = null;
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
 let currentAuthUser = null;
@@ -247,6 +244,24 @@ let aiKeyEditorReturn = null;
 let aiKeyUi = { status: null, loading: false, busy: false, message: "" };
 let shoppingSync = makeShoppingSync();
 let mealsSync = makeMealsSync();
+let weeksSync = makeWeeksSync();
+
+function makeWeeksSync() { return createWeeksSync({
+  getFamilySize: () => state.family.familySize,
+  setTimer: setTimeout, clearTimer: clearTimeout,
+  onWeeks: (incoming) => {
+    if (WEEK_SYNC_FIELDS.every(field => JSON.stringify(state[field] || {}) === JSON.stringify(incoming[field] || {}))) return;
+    // Only replace domain maps; selected week, editor and pending import stay intact.
+    for (const field of WEEK_SYNC_FIELDS) state[field] = incoming[field];
+    saveState();
+    render();
+  },
+  onStatus: (status) => {
+    if (weeksSyncStatus === status) return;
+    weeksSyncStatus = status;
+    render();
+  },
+}); }
 
 function makeMealsSync() { return createMealsSync({
   onMeals: (incoming) => {
@@ -508,7 +523,10 @@ function setState(patch) {
   if ("meals" in patch && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
     mealsSync.enqueue(diffMeals(previousState.meals, state.meals));
   }
-  scheduleRemoteSaveForPatch(patch, previousState);
+  if (WEEK_SYNC_FIELDS.some(field => field in patch) && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
+    weeksSync.enqueue(diffWeeks(previousState, state));
+  }
+  scheduleRemoteSaveForPatch(patch);
 }
 
 function syncPayload() {
@@ -528,32 +546,13 @@ function syncPayload() {
   };
 }
 
-function weekPayload(weekKey) {
-  return {
-    plan: { ...emptyWeekPlan(), ...(state.plansByWeek?.[weekKey] || {}) },
-    lockedPlan: { ...emptyWeekLocks(), ...(state.lockedPlansByWeek?.[weekKey] || {}) },
-    dayTypes: { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[weekKey] || {}) },
-    servings: { ...emptyWeekServings(state.family.familySize), ...(state.servingsByWeek?.[weekKey] || {}) },
-    dayModes: { ...emptyWeekDayModes(), ...(state.dayModesByWeek?.[weekKey] || {}) },
-    dayNotes: { ...emptyWeekDayNotes(), ...(state.dayNotesByWeek?.[weekKey] || {}) },
-    clientUpdatedAt: state.clientUpdatedAt || 0,
-  };
-}
-
 function syncedScopesForPatch(patch) {
   return getSyncedScopesForPatch(patch);
 }
 
-function changedWeekKeys(patch, previousState) {
-  return getChangedWeekKeys(patch, previousState, state, getWeekKey());
-}
-
-function scheduleRemoteSaveForPatch(patch, previousState) {
+function scheduleRemoteSaveForPatch(patch) {
   const scopes = syncedScopesForPatch(patch);
   if (!scopes.length) return;
-  if (scopes.includes("weeks")) {
-    changedWeekKeys(patch, previousState).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-  }
   scheduleRemoteSave(700, scopes);
 }
 
@@ -578,7 +577,7 @@ function applyRemoteStatePatch(patch) {
 }
 
 function syncStatusText() {
-  const statuses = [syncStatus, shoppingSyncStatus, mealsSyncStatus];
+  const statuses = [syncStatus, shoppingSyncStatus, mealsSyncStatus, weeksSyncStatus];
   if (statuses.includes("Synk feilet")) return "Synk feilet";
   if (statuses.includes("Synker")) return "Synker";
   return syncStatus;
@@ -2716,11 +2715,9 @@ function replaceOpenWeek() {
       plan[index] = "";
     }
   });
-  state.plansByWeek = { ...(state.plansByWeek || {}), [getWeekKey()]: plan };
   dayNames.forEach((_, index) => {
     if (!lockedPlan[index] && dayPlansMeal(dayModes[index])) {
       plan[index] = pickSuggestion(index, plan);
-      state.plansByWeek[getWeekKey()] = plan;
     }
   });
   setCurrentPlan(plan);
@@ -3619,9 +3616,10 @@ function stopAllSync() {
   for (const unsubscribe of syncUnsubscribers.splice(0)) unsubscribe?.();
   Object.values(remoteSaveTimers).forEach(clearTimeout);
   for (const key of Object.keys(remoteSaveTimers)) delete remoteSaveTimers[key];
-  pendingRemoteScopes.clear(); pendingWeekKeys.clear();
+  pendingRemoteScopes.clear();
   shoppingSync.stop(); shoppingSync = makeShoppingSync(); shoppingSyncStatus = null;
   mealsSync.stop(); mealsSync = makeMealsSync(); mealsSyncStatus = null;
+  weeksSync.stop(); weeksSync = makeWeeksSync(); weeksSyncStatus = null;
   restoreBackup = null;
   accountMembers = []; accountMessage = "";
 }
@@ -3643,7 +3641,7 @@ function makeAccessSession(connection) {
       window.middagsplanSetDoc = (...args) => token === syncGeneration && syncEnabled ? api.setDoc(...args) : Promise.resolve();
       window.middagsplanDeleteDoc = (...args) => token === syncGeneration && syncEnabled ? api.deleteDoc(...args) : Promise.resolve();
       window.middagsplanServerTimestamp = api.serverTimestamp;
-      await Promise.all([shoppingSync.start({ api, refs, skipMigration: true }), mealsSync.start({ api, refs })]);
+      await Promise.all([shoppingSync.start({ api, refs, skipMigration: true }), mealsSync.start({ api, refs }), weeksSync.start({ api, refs })]);
       if (!valid() || token !== syncGeneration) return;
       startSplitSyncListeners((ref, next, error) => {
         const unsubscribe = api.onSnapshot(ref, (snapshot) => { if (valid() && token === syncGeneration) next(snapshot); },
@@ -3821,35 +3819,6 @@ function startSplitSyncListeners(onSnapshot) {
     });
   }, markSyncFailed);
 
-  onSnapshot(remoteRefs.weeks, (snapshot) => {
-    if (snapshot.empty) {
-      if (state.pendingLocalSync) {
-        pendingWeekKeys.add(getWeekKey());
-        scheduleRemoteSave(0, ["weeks"]);
-      }
-      return;
-    }
-    const maxClientUpdatedAt = maxClientUpdatedAtFromDocs(snapshot.docs);
-    if (remoteDocumentIsOlder("weeks", maxClientUpdatedAt)) return;
-    const remotePatch = buildWeeksRemotePatch({
-      docs: snapshot.docs,
-      currentState: state,
-      familySize: state.family.familySize,
-      defaults: {
-        emptyWeekPlan,
-        emptyWeekLocks,
-        emptyWeekDayTypes,
-        emptyWeekServings,
-        emptyWeekDayModes,
-        emptyWeekDayNotes,
-      },
-    });
-    applyingRemoteState = true;
-    pendingRemoteScopes.delete("weeks");
-    applyRemoteStatePatch({ ...remotePatch, pendingLocalSync: pendingRemoteScopes.size > 0 });
-    applyingRemoteState = false;
-    markSynced();
-  }, markSyncFailed);
 }
 
 function applyRemoteDocument(scope, data, apply) {
@@ -3865,9 +3834,6 @@ function applyRemoteDocument(scope, data, apply) {
 function remoteDocumentIsOlder(scope, remoteClientUpdatedAt) {
   const localClientUpdatedAt = Number(state.clientUpdatedAt || 0);
   if (remoteDocumentIsStale({ pendingScopes: pendingRemoteScopes, scope, remoteClientUpdatedAt, localClientUpdatedAt })) {
-    if (scope === "weeks") {
-      Object.keys(state.plansByWeek || {}).forEach((weekKey) => pendingWeekKeys.add(weekKey));
-    }
     const token = syncGeneration;
     setTimeout(() => { if (token === syncGeneration && syncEnabled) scheduleRemoteSave(0, [scope]); }, 0);
     return true;
@@ -3885,7 +3851,7 @@ function markSyncFailed() {
   render();
 }
 
-function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata", "weeks"]) {
+function scheduleRemoteSave(delay = 700, scopes = ["profile", "preferences", "metadata"]) {
   if (!syncEnabled || !remoteRefs.profile || applyingRemoteState) return;
   scopes.forEach((scope) => pendingRemoteScopes.add(scope));
   const key = [...new Set(scopes)].sort().join("-");
@@ -3931,13 +3897,9 @@ async function saveRemoteScopes(scopes, options = {}) {
     clientUpdatedAt,
     pendingLocalSync: state.pendingLocalSync,
     allowMissingRemoteWrite: Boolean(options.allowMissingRemoteWrite),
-    pendingWeekKeys,
-    currentWeekKey: getWeekKey(),
-    weekPayload,
   });
 
   if (token !== syncGeneration) return;
-  if (uniqueScopes.includes("weeks")) pendingWeekKeys.clear();
 
   await Promise.all(writes);
 }

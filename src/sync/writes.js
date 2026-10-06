@@ -43,16 +43,12 @@ export async function buildRemoteWrites(options = {}) {
     api = {},
     updatedAt,
     clientUpdatedAt = Date.now(),
-    pendingWeekKeys = [],
-    currentWeekKey = "",
-    weekPayload = () => ({}),
     pendingLocalSync = false,
     allowMissingRemoteWrite = false,
   } = options;
 
   const uniqueScopes = [...new Set(scopes)];
   const writes = [];
-  const weekKeys = pendingWeekKeys instanceof Set ? [...pendingWeekKeys] : [...pendingWeekKeys];
 
   if (uniqueScopes.includes("profile")) {
     if (await canWriteRemoteRef({ ref: refs.profile, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
@@ -69,16 +65,6 @@ export async function buildRemoteWrites(options = {}) {
   if (uniqueScopes.includes("metadata")) {
     if (await canWriteRemoteRef({ ref: refs.metadata, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
       writes.push(api.setDoc(refs.metadata, { metadata: state.metadata, clientUpdatedAt, updatedAt }, { merge: true }));
-    }
-  }
-
-  if (uniqueScopes.includes("weeks")) {
-    const keysToWrite = weekKeys.length ? weekKeys : [currentWeekKey].filter(Boolean);
-    for (const weekKey of keysToWrite) {
-      const ref = api.doc(refs.weeks, weekKey);
-      if (await canWriteRemoteRef({ ref, api, clientUpdatedAt, pendingLocalSync, allowMissingRemoteWrite })) {
-        writes.push(api.setDoc(ref, { ...weekPayload(weekKey), updatedAt }, { merge: true }));
-      }
     }
   }
 

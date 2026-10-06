@@ -18,7 +18,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i handlelistesynk: kjør `node tests/sync/shopping.test.mjs`.
 - Etter endringer i synk-/konfliktlogikk: kjør `node tests/sync/state.test.mjs`.
 - Etter endringer i Firebase-oppkobling/referanser: kjør `node tests/sync/firebase.test.mjs`.
-- Etter endringer i remote snapshot-/patch-bygging: kjør `node tests/sync/reads.test.mjs`.
+- Etter endringer i remote snapshot-/patch-bygging: kjør `node tests/sync/weeks.test.mjs` og `node tests/sync/meals.test.mjs`.
 - Etter endringer i Firestore write-/payload-bygging: kjør `node tests/sync/writes.test.mjs`.
 - Etter endringer i handleliste-rendering: kjør `node tests/render/shopping.test.mjs`.
 - Etter endringer i oppskrifts-rendering: kjør `node tests/render/meals.test.mjs`.
@@ -27,7 +27,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i setup-rendering: kjør `node tests/render/setup.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
-- For profile, preferences, metadata og weeks skal synk-writes beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`. Fra v100 synkes meals med egne operasjoner per dokument, uten getDoc eller global tidsmarkør; se reglene nedenfor.
+- For profile, preferences og metadata skal synk-writes beskytte mot stale lokale cacher: les remote `clientUpdatedAt` før skriving og ikke seed manglende remote dokumenter fra lokal cache uten migrering eller `pendingLocalSync`. Fra v100 synkes meals per dokument og fra v101 weeks per dag/felt, uten getDoc eller global tidsmarkør; se reglene nedenfor.
 - Ved endringer i appkode eller CSS som skal publiseres: bump versjon på alle relevante steder.
 - Appen skal starte nye økter på Handleliste, selv om siste lagrede view var noe annet.
 
@@ -41,9 +41,9 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/domain/suggestions.js`: rene poengregler for forslagmotoren uten UI- eller Firebase-avhengighet.
 - `src/domain/weeks.js`: rene uke- og datofunksjoner uten UI- eller Firebase-avhengighet.
 - `src/sync/firebase.js`: Firebase SDK-lasting, Google-innlogging og bygging av Firestore-referanser.
-- `src/sync/reads.js`: bygging av lokale patches fra Firestore snapshots for weeks.
-- `src/sync/state.js`: rene synkbeslutninger for scopes, ukeendringer og remote-konfliktbeskyttelse.
-- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences, metadata og weeks.
+- `src/sync/weeks.js`: ukediffer per dag/felt, standardverdier ved lesing, 500 ms samling av writes og vern for ventende lokale endringer. Erstatter den fjernede reads.js-modulen.
+- `src/sync/state.js`: rene synkbeslutninger for scopes og remote-konfliktbeskyttelse, samt listen over de seks ukefeltene.
+- `src/sync/writes.js`: bygging av Firestore writes for profile, preferences og metadata.
 - `src/sync/meals.js`: normaliserte oppskriftsdiffer, operasjoner per dokument, minnekø og lytter med vern for ventende lokale endringer.
 - `src/sync/version.js`: én REQUIRED_MIN_APP_VERSION, brukt ved administratorheving og gjenoppretting.
 - `src/sync/shopping.js`: migrering, varebasert synk, minnekø og handlelistelytter.
@@ -124,7 +124,7 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Etter importendringer: kjør `node tests/domain/recipe-import.test.mjs`, `node tests/sync/recipe-import.test.mjs`, `node tests/app/recipe-import.test.mjs`, `node tests/render/meals.test.mjs`.
 - Serverkontroller: `node functions/tests/core.test.cjs`, `node functions/tests/extract.test.cjs`, `node functions/tests/addresses.test.cjs`, `node functions/tests/import.test.cjs`, `node functions/tests/index.test.cjs`. Kjør også node --check for index.js og alle functions/lib-filer.
 - Etter nøkkelendringer: kjør `node functions/tests/keys.test.cjs`, `node functions/tests/key-service.test.cjs`, `node functions/tests/diagnostics.test.cjs`, `node tests/sync/ai-key.test.mjs`, `node tests/render/ai-key.test.mjs` og `node tests/app/ai-key.test.mjs`, i tillegg til importtestene.
-- Functions-filer skal ikke inn i service worker. Nye klientmoduler må inn i begge asset-listene. Appens versjonsvakt følger aktuell versjon; oppsett bruker REQUIRED_MIN_APP_VERSION (100 fra v100) for å beskytte ingrediensgrupper og oppskriftssynk per dokument.
+- Functions-filer skal ikke inn i service worker. Nye klientmoduler må inn i begge asset-listene. Appens versjonsvakt følger aktuell versjon; oppsett bruker REQUIRED_MIN_APP_VERSION (101 fra v101) for å beskytte ingrediensgrupper, oppskriftssynk per dokument og ukesynk per dag/felt.
 
 ## Delvis oppskriftsimport fra v97
 
@@ -156,6 +156,17 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Upsert er setDoc av hele oppskriften med updatedAt, uten merge/getDoc/batch/transaksjon. Sletting er deleteDoc. normalizeMeals deles mellom oppstart, differ og skydata; updatedAt/clientUpdatedAt ignoreres. Tomt serverbilde er tom liste med unntak for konkrete ventende lokale operasjoner.
 - Minnekø og siste lokale operasjon per ID er runtime-state. Hvert snapshot får et løpenummer, og operasjonen husker siste nummer ved kølegging. Fjern siste lokale operasjon når SDK har kvittert og siste bilde er fra serveren uten ventende skrivinger, med høyere nummer enn operasjonens. Ikke sammenlign innhold: en annen enhets nyere versjon eller gjenopprettede oppskrift skal bli synlig. Kjør kontrollen både ved bilde og kvittering, og publiser oppdatert liste også ved kvittering. Ta samtidig inn andre oppskrifters fjernendringer. Cache ignoreres til første serverbilde. Avviste operasjoner beholdes med Synk feilet. Stopp forkaster kø/ventende tilstand/løpenummer og gjør gamle callbacks ugyldige. Ingen varig kø eller automatisk retry bygges.
 - onMeals skal ikke endre clientUpdatedAt/pendingLocalSync, utkast, UI eller ventende importvalg. Rene oppskriftsendringer skal ikke planlegge andre scopes. Sletting og hurtigmiddag endrer også ukeplan med dagens separate uke-synk; metadataopprydding skriver metadata/preferanser bare når disse faktisk er i patchen.
-- REQUIRED_MIN_APP_VERSION er 100 fra v100 og brukes av access/restore. Oppsett skriver meta sist som før. Administrator på nett hever minimumet én gang per oppstart; vanlige medlemmer/offline gjør ingen slik skriving. v99 og eldre må oppdateres før de kan skrive igjen. Appversjonen sammenlignes numerisk.
+- REQUIRED_MIN_APP_VERSION var 100 i v100, og er hevet til 101 fra v101 for ukesynken. Konstanten brukes av access/restore. Oppsett skriver meta sist som før. Administrator på nett hever minimumet én gang per oppstart; vanlige medlemmer/offline gjør ingen slik skriving. Eldre klienter må oppdateres før de kan skrive igjen. Appversjonen sammenlignes numerisk.
 - Importpanelet skal skjule «Ingenting ble endret.» mens et valg venter. formatShoppingAmount bruker komma; tolking skal fortsatt godta punktum.
-- Kjør node tests/sync/meals.test.mjs og node tests/app/meals-sync.test.mjs, i tillegg til relevante eksisterende state/reads/writes/access/restore/import/shopping-tester og alle testskript. Nye meals/version-moduler skal stå i begge service worker-listene. Functions og firestore.rules inngår ikke i v100-endringen.
+- Kjør node tests/sync/meals.test.mjs og node tests/app/meals-sync.test.mjs, i tillegg til relevante eksisterende state/weeks/writes/access/restore/import/shopping-tester og alle testskript. Nye meals/version-moduler skal stå i begge service worker-listene. Functions og firestore.rules inngår ikke i v100-endringen.
+
+## Ukesynk fra v101
+
+- Alle brukerendringer av de seks *ByWeek-kartene skal gå gjennom setState. diffWeeks sammenligner standardutfylte verdier per uke, felt og dag (0–6), og køer bare faktiske endringer. Ikke gjeninnfør weeks som global scope, pendingWeekKeys, changedWeekKeys, weekPayload eller automatisk cache-opplasting.
+- Hver berørt uke får én setDoc med nested maps for bare endrede dager/felt, updatedAt og merge:true. Ingen getDoc/batch/transaksjon. Dokumentet opprettes ved behov; Tøm uke skriver bare endrede standardverdier og sletter ikke dokumentet.
+- Første endring starter et fast vindu på 500 ms per uke. Flere endringer i vinduet samles, siste verdi per felt/dag gjelder. Usendte endringer venter på start. Stopp fjerner timere og køer, med generasjonsvern for sene callbacks/kvitteringer.
+- Ventende lokale verdier legges over serverbilder per uke/felt/dag. Løpenummer ved kølegging, SDK-kvittering og et nyere serverbilde uten ventende skrivinger avgjør fjerning, uten innholdssammenligning, som i mealsSync. Kontrollen og eventuell listepublisering kjøres både ved bilde og kvittering. Bare nyeste operasjon per celle gjelder. Avviste skrivinger beholdes med Synk feilet.
+- weeksFromDocs fyller standardverdier og ignorerer clientUpdatedAt/updatedAt. Cache ignoreres til første serverbilde. Uker uten serverdokument eller lokal ventende endring vises med standardverdier; det er ingen automatisk opplasting.
+- onWeeks erstatter bare de seks domenekartene ved endring, og bevarer valgt uke, editorutkast, UI og ventende importvalg. Rene ukeendringer endrer ikke clientUpdatedAt/pendingLocalSync og skriver ikke andre scopes. Profil/preferanser/metadata beholder dagens vern.
+- REQUIRED_MIN_APP_VERSION er 101, brukt både ved administratorheving og restore; v100 og eldre må stenges ute. Backup/restore-formatet og ukedokumentformen er uendret. Den historiske clientUpdatedAt i ukedokumenter ignoreres; merge-writes trenger ikke fjerne den. Offline-oppstart starter ingen synk/kø, og ingen varig kø bygges.
+- Kjør node tests/sync/weeks.test.mjs og node tests/app/weeks-sync.test.mjs, i tillegg til alle øvrige testskript og node --check av kildefilene. weeks.js må ligge i begge service worker-listene; den fjernede reads.js skal ikke ligge der. Functions og firestore.rules inngår ikke i v101.

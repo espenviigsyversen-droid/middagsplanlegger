@@ -58,7 +58,7 @@ Synkstatus:
 - `clientUpdatedAt`
 - `pendingLocalSync`
 
-`clientUpdatedAt` er klientens siste tidspunkt for endring i den opprinnelige scope-synken (profile/preferences/metadata/weeks). Handlevarer er unntatt fra v93 og oppskrifter fra v100. `pendingLocalSync` gjelder bare disse fire scopes og sporer verken handleliste- eller oppskriftsoperasjoner. Oppskriftspatch alene endrer ingen av de to feltene. Vanlig oppstart skal ikke alene gjøre lokal cache til en remote write.
+`clientUpdatedAt` er klientens siste tidspunkt for endring i scope-synken (profile/preferences/metadata). Handlevarer er unntatt fra v93, oppskrifter fra v100 og uker fra v101. `pendingLocalSync` gjelder bare disse tre scopes og sporer ikke handleliste-, oppskrifts- eller ukeoperasjoner. Rene oppskrifts-/ukepatcher endrer ingen av de to feltene. Vanlig oppstart skal ikke alene gjøre lokal cache til en remote write.
 
 ## Firestore-splitting
 
@@ -75,7 +75,7 @@ Appen synker ikke hele state som ett dokument lenger. Den bruker flere områder:
 Fra v95 finnes også:
 
 - `families/{FAMILY_ID}/members/{email}`: dokument-ID er e-post i små bokstaver; `{ role: "admin" | "member", addedAt, addedBy }`. Første manuelt opprettede administrator kan ha bare role.
-- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion }`. Gjeldende minimum er 100 fra v100. Bare administratorer skriver dette; alle medlemmer leser.
+- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion }`. Gjeldende minimum er 101 fra v101. Bare administratorer skriver dette; alle medlemmer leser.
 
 Fra utvidet v96 finnes serverprivate dokumenter, uten endringer i domenemodellen eller klientreglene:
 
@@ -89,7 +89,7 @@ KEY_ENCRYPTION_SECRET er en serverhemmelighet og bindes bare til krypterende/dek
 
 Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
 
-En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Tilgangsflyten gjør én egen best-effort updateDoc til REQUIRED_MIN_APP_VERSION ved online administratoroppstart når minimumet er lavere. Denne konstanten er 100 fra v100 og brukes også ved restore. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens numeriske versjon (100 fra v100), avsluttes synken og appen krever oppdatering. v99 får dermed oppdateringsskjerm når minimumet er 100. Nytt oppsett og gjenoppretting skriver 100.
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Tilgangsflyten gjør én egen best-effort updateDoc til REQUIRED_MIN_APP_VERSION ved online administratoroppstart når minimumet er lavere. Denne konstanten er 101 fra v101 og brukes også ved restore. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens numeriske versjon (101 fra v101), avsluttes synken og appen krever oppdatering. v100 får dermed oppdateringsskjerm når minimumet er 101. Nytt oppsett og gjenoppretting skriver 101.
 
 Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
@@ -109,6 +109,18 @@ En weekKey er ISO-lignende dato for mandagen i uken, for eksempel:
 ```text
 2026-05-18
 ```
+
+### Ukesynk per dag og felt fra v101
+
+Ukedokumentene beholder plan, lockedPlan, dayTypes, servings, dayModes og dayNotes med dagsnøkler 0–6. diffWeeks sammenligner standardutfylte dager og gir bare endrede verdier, gruppert per uke/felt. Manglende uke/dag bruker dagens standardverdier og familiestørrelse; weeksFromDocs ignorerer clientUpdatedAt/updatedAt. En uke uten dokument og uten ventende lokal endring vises med standardverdier, uten å skrive opp lokal cache.
+
+weeksSync ligger utenfor domenestate: lokale celleoperasjoner, kø med ett 500 ms vindu per uke, antall sendte SDK-writes, siste snapshot/løpenummer, status og generasjon. Ingenting av dette lagres i localStorage, synkepayload eller backup. Siste verdi per felt/dag i vinduet sendes i én setDoc med merge:true per berørt uke og updatedAt. Bare de oppgitte dagene flettes; manglende dokument opprettes. Tøm uke skriver bare standardverdier som faktisk endres og sletter ikke dokumentet.
+
+Hver celleoperasjon husker løpenummer ved kølegging. Lokale verdier legges over serverbildet til SDK har kvittert og siste bilde er fra serveren uten ventende skrivinger, med høyere nummer. Ingen innholdssammenligning; en annen enhets nyere verdi for samme celle blir da synlig. Kontrollen kjøres ved både bilde og kvittering, og onWeeks publiserer også når kvitteringen kommer sist. Bare nyeste operasjon per celle gjelder. Andre dager/felt oppdateres underveis. Avviste operasjoner beholdes med Synk feilet.
+
+onWeeks erstatter bare de seks kartene, og bevarer UI, valgt uke, editorutkast og recipeImportState.pending. Rene ukeendringer endrer ikke global clientUpdatedAt/pendingLocalSync. Profil/preferanser/metadata har fortsatt sitt gamle vern. Cache ignoreres til første serverbilde; stopp/kontobytte forkaster timere/kø og ugyldiggjør gamle callbacks. Offline-oppstart har ingen synk/kø; usynkede endringer kan erstattes ved ny oppstart. Varig kø og automatisk retry inngår ikke.
+
+Backup/restore beholder samme seks kart, ukenøkkelunion, felter og dokumentform, men meta skrives med minimum 101. Historisk clientUpdatedAt i ukedokumenter ignoreres og kan fortsatt ligge der etter merge-write. Ingen Firestore-struktur, regler eller migrering endres.
 
 ## Oppskrifter
 
@@ -152,7 +164,7 @@ recipeImportState (URL, tekst, busy, meldinger, warnings og fra v99 pending) er 
 
 Serverens eneste nye lagring er `families/familien/private/importUsage` med UTC day, dailyCount og en kort liste av kalltidspunkter for rullerende vindu. Det er en privat teller, ikke oppskriftsdata. Klientens regler gir ikke tilgang; Admin SDK bruker én transaksjon på dette dokumentet. Members og øvrige domenesamlinger røres ikke av importfunksjonen.
 
-Fra v100 sammenlignes minAppVersion numerisk med appversjon 100; ved oppsett brukes den felles REQUIRED_MIN_APP_VERSION (100). Ingen datamigrering eller automatisk omskriving av eksisterende oppskrifter utføres. baseServings lagres uendret, og ledeteksten er «Porsjoner i oppskriften» med forklaring av oppskriftens mengdegrunnlag. «Ingenting ble endret.» skjules mens et importvalg venter.
+Fra v100 sammenlignes minAppVersion numerisk; ved oppsett brukes den felles REQUIRED_MIN_APP_VERSION (100 i v100, hevet til 101 i v101). Ingen datamigrering eller automatisk omskriving av eksisterende oppskrifter utføres. baseServings lagres uendret, og ledeteksten er «Porsjoner i oppskriften» med forklaring av oppskriftens mengdegrunnlag. «Ingenting ble endret.» skjules mens et importvalg venter.
 
 ## Oppskriftsoperasjoner fra v100
 
@@ -243,5 +255,5 @@ Sikkerhetskopi har `exportVersion: 1` og inneholder en kopi av `syncPayload()` u
 - `setState` lagrer og rendrer umiddelbart. Vær forsiktig med hyppige input-events.
 - Remote patches bevarer noe UI-state, men ikke alt. Nye UI-felter bør vurderes i `applyRemoteStatePatch`.
 - Nye felter i den opprinnelige scope-synken må legges til i `syncedStateKeys`, `syncPayload`, `syncedScopesForPatch` og remote save/listener-logikk.
-- Firestore-writes for profile, preferences, metadata og weeks skal sjekke remote `clientUpdatedAt` før skriving. Hvis remote er nyere enn lokal `clientUpdatedAt`, skal lokal cache ikke overskrive remote. Meals bruker egne konkrete operasjoner fra v100, uten global tidsmarkør eller getDoc.
+- Firestore-writes for profile, preferences og metadata skal sjekke remote `clientUpdatedAt` før skriving. Hvis remote er nyere enn lokal `clientUpdatedAt`, skal lokal cache ikke overskrive remote. Meals bruker egne konkrete operasjoner fra v100 og weeks per dag/felt fra v101, uten global tidsmarkør eller getDoc.
 - Manglende remote dokumenter skal ikke automatisk seedes fra lokal cache ved vanlig oppstart. Det er bare tillatt ved eksplisitt migrering/førstegangsoppsett eller når appen har `pendingLocalSync`.

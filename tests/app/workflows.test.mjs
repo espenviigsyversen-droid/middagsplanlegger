@@ -83,9 +83,9 @@ let prevented = false;
 search.handlers.keydown({ key: "Enter", preventDefault() { prevented = true; } });
 assert.equal(prevented, true);
 assert.equal(run("state.mealPicker.open"), false);
-assert.equal(run("renders"), beforeInput + 3); // Domain patch, per-recipe pending status and toast.
+assert.equal(run("renders"), beforeInput + 4); // Domain patch, recipe/week pending statuses and toast.
 assert.equal(run("getMeal(currentPlan()[1]).title"), "Lasagne <ny>");
-assert.equal(run("state.pendingLocalSync"), true);
+assert.equal(run("state.pendingLocalSync"), false);
 assert.equal(run("state.toast.message"), "«Lasagne <ny>» er lagt til. Oppskriften kan fylles ut senere.");
 assert.deepEqual(snapshot("state.meals.slice(0, -1)"), initialData.meals);
 assert.equal(run("Object.keys(state.plansByWeek).includes(getWeekKey(2))"), true);
@@ -158,7 +158,7 @@ assert.match(app.innerHTML, /&lt;img src=x onerror=alert\(1\)&gt; sin middagspla
 assert.doesNotMatch(app.innerHTML, /<img/);
 // Shell uses the effective status (including pending shopping writes), with
 // readable text always present and the compact class only on Synket.
-run('shoppingSyncStatus = null; mealsSyncStatus = null;');
+run('shoppingSyncStatus = null; mealsSyncStatus = null; weeksSyncStatus = null;');
 for (const status of ["Synket", "Kobler til synk", "Synker", "Synk feilet", "Lokal lagring"]) {
   context.testSyncStatus = status;
   run('syncStatus = testSyncStatus; renderShell("");');
@@ -170,7 +170,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v100");
+assert.equal(exported.appVersion, "v101");
 assert.deepEqual(exported.data, snapshot("syncPayload()"));
 assert.equal(downloads.at(-1).clicked, true);
 assert.match(downloads.at(-1).download, /^middagsapp-backup-\d{4}-\d{2}-\d{2}\.json$/);

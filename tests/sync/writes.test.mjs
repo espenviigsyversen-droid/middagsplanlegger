@@ -79,6 +79,7 @@ async function testBuildMealWritesAndDeletes() {
 
 async function testBuildWeekWrites() {
   const { api, calls } = createFakeApi();
+  api.getDoc = () => { throw new Error("Legacy weeks scope must not read weeks"); };
   await buildRemoteWrites({
     scopes: ["weeks"],
     state: {},
@@ -86,14 +87,9 @@ async function testBuildWeekWrites() {
     api,
     updatedAt: "server-time",
     pendingLocalSync: true,
-    pendingWeekKeys: [],
-    currentWeekKey: "2026-05-18",
-    weekPayload: (weekKey) => ({ plan: { 0: "pasta" }, clientUpdatedAt: 789, weekKey }),
   });
 
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].ref, { collectionRef: "weeks-ref", id: "2026-05-18" });
-  assert.deepEqual(calls[0].data, { plan: { 0: "pasta" }, clientUpdatedAt: 789, weekKey: "2026-05-18", updatedAt: "server-time" });
+  assert.equal(calls.length, 0, "Legacy weeks scope never writes whole weeks");
 }
 
 function testRemoteWriteDecisions() {
