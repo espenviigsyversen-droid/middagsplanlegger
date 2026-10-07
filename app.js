@@ -62,6 +62,7 @@ import {
   syncedScopesForPatch as getSyncedScopesForPatch,
 } from "./src/sync/state.js";
 import { stateForProject, createAccessSession, offlineMemberMatches, loginErrorMessage, isNetworkError, writeMember } from "./src/sync/access.js";
+import { createLocalStore, localStateForStorage } from "./src/sync/local-store.js";
 import { validateBackup, summarizeBackup, executeRestore } from "./src/sync/restore.js";
 import { renderAccessScreen, renderAccountView } from "./src/render/account.js";
 import { initFirebaseClient } from "./src/sync/firebase.js";
@@ -210,9 +211,11 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v104";
-const APP_VERSION_NUMBER = 104;
+const APP_VERSION = "v105";
+const APP_VERSION_NUMBER = 105;
 
+let localStoreFailed = false;
+const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
 let state = loadState();
 const app = document.querySelector("#app");
 let wakeLock = null;
@@ -300,12 +303,11 @@ function makeShoppingSync() { return createShoppingSync({
 }); }
 
 function loadState() {
-  const saved = localStorage.getItem("middagsapp-state");
-  if (!saved) return normalizeStateForStartup(stateForProject(null, defaultState, firebaseConfig.projectId));
+  const saved = localStore.read("middagsapp-state");
   try {
-    return normalizeStateForStartup(stateForProject(JSON.parse(saved), defaultState, firebaseConfig.projectId));
+    return normalizeStateForStartup(stateForProject(saved, defaultState, firebaseConfig.projectId));
   } catch {
-    return normalizeStateForStartup(structuredClone(defaultState));
+    return normalizeStateForStartup(stateForProject(null, defaultState, firebaseConfig.projectId));
   }
 }
 
@@ -319,6 +321,9 @@ function normalizeStateForStartup(nextState) {
     selectedRecipeContext: null,
     editingMealId: null,
     editingShoppingItemId: null,
+    draftMeal: null,
+    draftIngredients: null,
+    draftSteps: null,
     keepScreenAwake: false,
     mealPicker: { open: false, dayIndex: null, query: "" },
     plannerDaySheet: { open: false, dayIndex: null },
@@ -492,7 +497,7 @@ function dayPlansMeal(value) {
 }
 
 function saveState() {
-  localStorage.setItem("middagsapp-state", JSON.stringify({ ...state, projectId: firebaseConfig.projectId }));
+  return localStore.write("middagsapp-state", localStateForStorage(state, firebaseConfig.projectId));
 }
 
 function patchTouchesSyncedData(patch) {
@@ -2150,6 +2155,7 @@ function renderFamilySettings() {
 function renderAppSettings() {
   return renderAppSettingsView({
     appVersion: APP_VERSION,
+    localStoreFailed,
     escapeHtml,
   });
 }
@@ -3674,9 +3680,9 @@ async function initFirebaseSync() {
 }
 
 function readOfflineMembership() {
-  try { return JSON.parse(localStorage.getItem("middagsapp-membership") || "null"); } catch { return null; }
+  return localStore.read("middagsapp-membership");
 }
-function clearOfflineMembership() { localStorage.removeItem("middagsapp-membership"); }
+function clearOfflineMembership() { return localStore.remove("middagsapp-membership"); }
 function showOfflineStartup() {
   accessSession?.stop();
   stopAllSync();
@@ -3708,7 +3714,7 @@ function makeAccessSession(connection) {
   const { refs, firestoreApi: api } = connection;
   return createAccessSession({ api, refs, projectId: firebaseConfig.projectId, familyId: FAMILY_ID, appVersion: APP_VERSION_NUMBER,
     readOffline: readOfflineMembership,
-    writeOffline: (flag) => localStorage.setItem("middagsapp-membership", JSON.stringify(flag)),
+    writeOffline: (flag) => localStore.write("middagsapp-membership", flag),
     clearOffline: clearOfflineMembership, onStop: stopAllSync,
     onScreen: (screen) => { accessState = screen; if (screen.offline) syncStatus = "Lokal lagring"; render(); },
     onReady: async ({ valid }) => {

@@ -44,10 +44,17 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
   setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
   let api, refs, starting, unsubscribe;
   let ready = false, stopped = false, serverSeen = false, failed = false;
+  let deliveryFailed = false;
   let generation = 0, pending = 0, snapshotSequence = 0, lastSnapshot = null;
   const local = new Map(), staged = new Map();
-  const publishStatus = () => onStatus(failed ? "Synk feilet"
+  const publishStatus = () => onStatus(failed || deliveryFailed ? "Synk feilet"
     : pending || local.size || !serverSeen ? "Synker" : "Synket");
+
+  function deliverWeeks() {
+    try { onWeeks(currentWeeks()); deliveryFailed = false; }
+    catch { deliveryFailed = true; }
+    finally { publishStatus(); }
+  }
 
   function currentWeeks() {
     const result = structuredClone(lastSnapshot.weeks), standard = defaults(getFamilySize());
@@ -91,7 +98,7 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
     Promise.resolve(result).then(() => {
       if (token !== generation || stopped) return;
       operations.forEach(operation => { operation.acknowledged = true; });
-      if (retireConfirmed()) onWeeks(currentWeeks());
+      if (retireConfirmed()) deliverWeeks();
     }).catch(() => {
       if (token === generation && !stopped) failed = true;
     }).finally(() => {
@@ -144,7 +151,7 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
           if (!snapshot.metadata?.fromCache) serverSeen = true;
           lastSnapshot = { weeks: weeksFromDocs(snapshot.docs, getFamilySize()), sequence: snapshotSequence,
             authoritative: !snapshot.metadata?.fromCache && !snapshot.metadata?.hasPendingWrites };
-          retireConfirmed(); onWeeks(currentWeeks()); publishStatus();
+          retireConfirmed(); deliverWeeks();
         }, () => {
           if (token === generation && !stopped) { failed = true; publishStatus(); }
         });
@@ -161,7 +168,7 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
 
   function stop() {
     generation += 1;
-    stopped = true; ready = false; serverSeen = false; failed = false;
+    stopped = true; ready = false; serverSeen = false; failed = false; deliveryFailed = false;
     for (const entry of staged.values()) clearTimer(entry.timer);
     staged.clear(); local.clear(); pending = 0; snapshotSequence = 0; lastSnapshot = null; starting = null;
     unsubscribe?.(); unsubscribe = null;

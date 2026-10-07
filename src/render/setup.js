@@ -116,6 +116,7 @@ export function renderFamilySettingsView(options = {}) {
 export function renderAppSettingsView(options = {}) {
   const {
     appVersion = "",
+    localStoreFailed = false,
     escapeHtml = String,
   } = options;
 
@@ -128,6 +129,7 @@ export function renderAppSettingsView(options = {}) {
       <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
     <section class="panel setup-section">
+      ${localStoreFailed ? '<p class="status-note">Nettleserens lagring er full. Appen virker, men kan ikke startes uten nett på denne enheten.</p>' : ""}
       <p class="status-note">Middager og innstillinger i nettleseren beholdes når appen oppdateres.</p>
       <div class="app-update-row">
         <button class="button" data-refresh-app>Oppdater app</button>

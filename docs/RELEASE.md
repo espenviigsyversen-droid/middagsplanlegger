@@ -9,6 +9,8 @@ Kjør lokale kontroller:
 ```powershell
 node --check app.js
 node --check service-worker.js
+node tests/sync/local-store.test.mjs
+node tests/app/local-store.test.mjs
 node tests/domain/meals.test.mjs
 node tests/domain/shopping.test.mjs
 node tests/domain/backup.test.mjs
@@ -45,6 +47,18 @@ node functions/tests/index.test.cjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v105
+
+v104 er publisert. v105 er en klientretting som lar appen fortsette i minnet når opprinnelsens localStorage er full eller utilgjengelig. Ingen nettverk, functions-/regelpublisering eller endring av minsteversjon 101 inngår.
+
+1. Eier publiserer app.js, index.html, service-worker.js, de berørte synk-/renderfilene og den nye src/sync/local-store.js samlet i GitHub Desktop. Modulen er lagt i begge asset-listene. Lukk og åpne appen, og kontroller v105 på PC/iPhone.
+2. På den berørte PC-en: logg inn, kontroller synkede oppskrifter, uker og handleliste, og prøv navigasjon og endringer. Lagringsfeilen skal ikke hindre visning eller skriving til skyen; synkstatusen skal bli Synket.
+3. Innstillinger → Oppdatering og versjon viser «Nettleserens lagring er full. Appen virker, men kan ikke startes uten nett på denne enheten.» når lokal skriving feiler. Ingen toast/dialog eller lagringsfeil i toppstatusen. En senere vellykket skriving fjerner linjen.
+4. Appen sletter eller tømmer ingen nøkler for å frigjøre plass. Tidligere lokal kopi beholdes ved feil og kan være utdatert. Kontroller offline-oppstart på en enhet hvor lagring faktisk lykkes, med beholdte data, filtre og ukevalg og Handleliste som startside.
+5. Kontroller vanlig oppskriftslagring, importutkast, backup og synk mellom enheter. Utkast/dialoger/toast serialiseres ikke, men bevares i minnet under samme økt.
+
+Alle 44 testskript og syntakskontroll av 38 kildefiler bestod lokalt uten nettverk. Full/blokkert lagring er simulert med DOM-/Firestore-stubber, inkludert innlogging, klikk, dokumentwrites, øyeblikksbilder og gjenopprettet lokal lagring. Filer per mappe og detaljer står i LEVERANSE_V105.md. Ingen functions-/regelendring, nettverk, publisering eller Git-kommandoer. Ekte PC/iPhone-kontroll utføres av eier etter apppublisering.
 
 ## Utrulling av v104
 

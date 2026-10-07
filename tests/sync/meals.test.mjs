@@ -171,3 +171,18 @@ await late.start(lateCon); lateCon.snapshot([]); const length = lateStatuses.len
 lateAck.reject(new Error("old failure")); await settle(); assert.equal(lateStatuses.length, length);
 assert.equal(lateCon.calls.length, 1); assert.equal(lateCon.listeners[0].stopped, true);
 console.log("meals sync tests ok (per document, queue, snapshots, acknowledgements, generations)");
+for (const atAck of [false, true]) {
+  let throws = false, delivered = 0; const statuses = [], write = deferred(), con = connection(() => write.promise);
+  const sync = createMealsSync({ onMeals: () => { if (throws) throw new Error("Consumer failed"); delivered++; }, onStatus: status => statuses.push(status) });
+  await sync.start(con);
+  con.snapshot([meal("a")]);
+  if (atAck) {
+    sync.enqueue(diffMeals([meal("a")], [meal("a", { title: "Edited" })]));
+    con.snapshot([meal("a", { title: "Edited" })]); throws = true;
+    write.resolve(); await settle();
+  } else { throws = true; assert.doesNotThrow(() => con.snapshot([meal("a")])); }
+  assert.equal(statuses.at(-1), "Synk feilet");
+  const count = delivered; throws = false;
+  assert.doesNotThrow(() => con.snapshot([meal("a", { title: "Next snapshot" })]));
+  assert.equal(delivered, count + 1); assert.equal(statuses.at(-1), "Synket"); sync.stop();
+}

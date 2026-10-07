@@ -41,7 +41,7 @@ function advance(ms) {
   }
   now = end;
 }
-function fixture(write = () => Promise.resolve()) {
+function fixture(write = () => Promise.resolve(), onWeeks) {
   const calls = [], received = [], statuses = [], listeners = [];
   const connection = { refs: { weeks: "weeks" }, api: {
     doc: (collection, id) => `${collection}/${id}`, serverTimestamp: () => "server",
@@ -53,7 +53,7 @@ function fixture(write = () => Promise.resolve()) {
       const listener = { next, error, stopped: false }; listeners.push(listener); return () => { listener.stopped = true; };
     },
   } };
-  const sync = createWeeksSync({ onWeeks: weeks => received.push(weeks), onStatus: status => statuses.push(status), getFamilySize: () => 4 });
+  const sync = createWeeksSync({ onWeeks: weeks => { onWeeks?.(weeks); received.push(weeks); }, onStatus: status => statuses.push(status), getFamilySize: () => 4 });
   return { sync, calls, received, statuses, listeners, start: () => sync.start(connection),
     snapshot: (data = {}, metadata = {}, index = listeners.length - 1) => listeners[index].next({ docs: Object.entries(data).map(([id, data]) => doc(id, data)), metadata: { fromCache: false, hasPendingWrites: false, ...metadata } }) };
 }
@@ -143,6 +143,19 @@ try {
   const lateAck = deferred(), late = fixture(() => lateAck.promise); await late.start(); late.sync.enqueue({ [w]: { plan: { 1: "gammel" } } }); advance(500);
   late.sync.stop(); await late.start(); late.snapshot({}); const statuses = late.statuses.length;
   lateAck.reject(new Error("old account")); await settle(); assert.equal(late.statuses.length, statuses); late.sync.stop();
+  for (const atAck of [false, true]) {
+    let throws = false; const write = deferred();
+    const f = fixture(() => write.promise, () => { if (throws) throw new Error("Consumer failed"); });
+    await f.start(); f.snapshot({ [w]: {} });
+    if (atAck) {
+      f.sync.enqueue({ [w]: { plan: { 1: "a" } } }); advance(500);
+      f.snapshot({ [w]: { plan: { 1: "a" } } }); throws = true; write.resolve(); await settle();
+    } else { throws = true; assert.doesNotThrow(() => f.snapshot({ [w]: {} })); }
+    assert.equal(f.statuses.at(-1), "Synk feilet");
+    const count = f.received.length; throws = false;
+    assert.doesNotThrow(() => f.snapshot({ [w]: { plan: { 4: "next" } } }));
+    assert.equal(f.received.length, count + 1); assert.equal(f.statuses.at(-1), "Synket"); f.sync.stop();
+  }
   assert.equal(timers.size, 0);
 } finally {
   globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear;

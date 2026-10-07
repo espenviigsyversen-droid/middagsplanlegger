@@ -40,6 +40,10 @@ function testSetupRender() {
   assert.match(appPage, /Sikkerhetskopi/);
   assert.match(appPage, /data-download-backup/);
   assert.match(appPage, /slik de ligger på denne enheten/);
+  const storageMessage = "Nettleserens lagring er full. Appen virker, men kan ikke startes uten nett på denne enheten.";
+  assert.equal(appPage.includes(storageMessage), false);
+  assert.ok(renderAppSettingsView({ localStoreFailed: true }).includes(storageMessage));
+  assert.equal(renderSetupView({ localStoreFailed: true }).includes(storageMessage), false);
 
   const rows = renderMetadataRowsView({ entries: [["fisk", "Fisk"]], inputAttribute: "data-category-label", saveAttribute: "data-save-category", removeAttribute: "data-remove-category", editable: true, escapeHtml });
   assert.match(rows, /data-category-label="fisk"/);

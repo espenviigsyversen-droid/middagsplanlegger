@@ -63,12 +63,13 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
   let starting;
   let serverSeen = false;
   let failed = false;
+  let deliveryFailed = false;
   let pending = 0;
   let generation = 0;
   let unsubscribe;
   let stopped = false;
   const queue = [];
-  const publishStatus = () => onStatus(failed ? "Synk feilet"
+  const publishStatus = () => onStatus(failed || deliveryFailed ? "Synk feilet"
     : pending || !serverSeen ? "Synker" : "Synket");
 
   function dispatch(operation) {
@@ -127,8 +128,9 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
           if (token !== generation) return;
           if (snapshot.metadata.fromCache && !serverSeen) return;
           if (!snapshot.metadata.fromCache) serverSeen = true;
-          onItems(shoppingItemsFromDocs(snapshot.docs));
-          publishStatus();
+          try { onItems(shoppingItemsFromDocs(snapshot.docs)); deliveryFailed = false; }
+          catch { deliveryFailed = true; }
+          finally { publishStatus(); }
         }, () => {
           if (token !== generation) return;
           failed = true;
@@ -150,6 +152,7 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
     generation += 1;
     stopped = true;
     ready = false;
+    deliveryFailed = false;
     queue.length = 0;
     pending = 0;
     unsubscribe?.();

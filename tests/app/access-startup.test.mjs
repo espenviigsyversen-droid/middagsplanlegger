@@ -69,7 +69,7 @@ for (const [config, kind, text] of [
   [{ role: null }, "denied", /Du har ikke tilgang ennå/],
   [{ meta: null }, "setup", /data-restore-file/],
   [{ meta: null, role: "member" }, "setup", /En administrator må gjøre det først/],
-  [{ meta: { initializedAt: 1, minAppVersion: 105 } }, "update", /Appen må oppdateres/],
+  [{ meta: { initializedAt: 1, minAppVersion: 106 } }, "update", /Appen må oppdateres/],
 ]) {
   const f = fixture(config); await f.run("initFirebaseSync()"); await f.auth(user);
   assert.equal(f.run("accessState.kind"), kind);
@@ -113,7 +113,7 @@ assert.equal(ready.writes.length, 1, "Cancelled timers remain inert; only the in
 await ready.auth(user);
 assert.equal(ready.watchers.filter(w => !w.stopped).length, 7);
 ready.watchers.filter(w => !w.stopped).find(w => w.ref === "meta").callback({
-  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 105 }), metadata: { fromCache: false },
+  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 106 }), metadata: { fromCache: false },
 });
 assert.ok(ready.watchers.every(w => w.stopped));
 assert.match(ready.app.innerHTML, /Appen må oppdateres/);

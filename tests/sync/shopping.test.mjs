@@ -206,3 +206,10 @@ assert.equal(await interruptedStart, false);
 assert.equal(interrupted.calls.some(call => ["add", "listen"].includes(call[0])), false);
 
 console.log("sync shopping tests ok");
+let deliveryThrows = true, delivered = 0;
+const consumerStatuses = [], consumerCon = connection();
+const consumerSync = createShoppingSync({ onItems: () => { if (deliveryThrows) throw new Error("Consumer failed"); delivered++; }, onStatus: status => consumerStatuses.push(status) });
+await consumerSync.start({ ...consumerCon, skipMigration: true });
+assert.doesNotThrow(() => consumerCon.snapshot([item("a")])); assert.equal(consumerStatuses.at(-1), "Synk feilet");
+deliveryThrows = false; assert.doesNotThrow(() => consumerCon.snapshot([item("b")]));
+assert.equal(delivered, 1); assert.equal(consumerStatuses.at(-1), "Synket"); consumerSync.stop();

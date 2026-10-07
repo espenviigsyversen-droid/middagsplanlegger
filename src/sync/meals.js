@@ -27,14 +27,21 @@ export function mealsFromDocs(docs = []) {
 export function createMealsSync({ onMeals = () => {}, onStatus = () => {} } = {}) {
   let api, refs, starting, unsubscribe;
   let ready = false, stopped = false, serverSeen = false, failed = false;
+  let deliveryFailed = false;
   let generation = 0, pending = 0, snapshotSequence = 0;
   const queue = [];
   // Keep the latest local operation until its write is acknowledged and a newer
   // authoritative snapshot arrives. That snapshot may contain another writer's edit.
   const local = new Map();
   let lastSnapshot = null;
-  const publishStatus = () => onStatus(failed ? "Synk feilet"
+  const publishStatus = () => onStatus(failed || deliveryFailed ? "Synk feilet"
     : pending || local.size || !serverSeen ? "Synker" : "Synket");
+
+  function deliverMeals() {
+    try { onMeals(currentMeals(lastSnapshot.meals)); deliveryFailed = false; }
+    catch { deliveryFailed = true; }
+    finally { publishStatus(); }
+  }
 
   function retireConfirmed() {
     if (!lastSnapshot?.authoritative) return false;
@@ -68,7 +75,7 @@ export function createMealsSync({ onMeals = () => {}, onStatus = () => {} } = {}
     Promise.resolve(result).then(() => {
       if (token !== generation || stopped) return;
       operation.acknowledged = true;
-      if (retireConfirmed()) onMeals(currentMeals(lastSnapshot.meals));
+      if (retireConfirmed()) deliverMeals();
     }).catch(() => {
       if (token === generation && !stopped) failed = true;
     }).finally(() => {
@@ -115,8 +122,7 @@ export function createMealsSync({ onMeals = () => {}, onStatus = () => {} } = {}
           lastSnapshot = { meals: normalizeMeals(mealsFromDocs(snapshot.docs)), sequence: snapshotSequence,
             authoritative: !snapshot.metadata?.fromCache && !snapshot.metadata?.hasPendingWrites };
           retireConfirmed();
-          onMeals(currentMeals(lastSnapshot.meals));
-          publishStatus();
+          deliverMeals();
         }, () => {
           if (token !== generation || stopped) return;
           failed = true; publishStatus();
@@ -134,7 +140,7 @@ export function createMealsSync({ onMeals = () => {}, onStatus = () => {} } = {}
 
   function stop() {
     generation += 1;
-    stopped = true; ready = false; serverSeen = false; failed = false;
+    stopped = true; ready = false; serverSeen = false; failed = false; deliveryFailed = false;
     queue.length = 0; local.clear(); pending = 0; snapshotSequence = 0; lastSnapshot = null; starting = null;
     unsubscribe?.(); unsubscribe = null;
   }

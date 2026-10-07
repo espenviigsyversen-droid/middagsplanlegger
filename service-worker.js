@@ -1,4 +1,4 @@
-const CACHE_NAME = "middagsplan-v104";
+const CACHE_NAME = "middagsplan-v105";
 const ASSETS = [
   "./",
   "./index.html",
@@ -27,6 +27,7 @@ const ASSETS = [
   "./src/sync/weeks.js",
   "./src/sync/version.js",
   "./src/sync/access.js",
+  "./src/sync/local-store.js",
   "./src/sync/restore.js",
   "./src/render/account.js",
   "./manifest.json",
@@ -64,6 +65,7 @@ const NETWORK_FIRST_ASSETS = [
   "src/sync/weeks.js",
   "src/sync/version.js",
   "src/sync/access.js",
+  "src/sync/local-store.js",
   "src/sync/restore.js",
   "src/render/account.js",
   "manifest.json",
