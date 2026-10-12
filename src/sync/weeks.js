@@ -7,14 +7,14 @@ export const WEEK_FIELDS = {
   plansByWeek: "plan", lockedPlansByWeek: "lockedPlan", dayTypesByWeek: "dayTypes",
   servingsByWeek: "servings", dayModesByWeek: "dayModes", dayNotesByWeek: "dayNotes",
 };
-const defaults = familySize => ({
+const defaults = () => ({
   plan: emptyWeekPlan(), lockedPlan: emptyWeekLocks(), dayTypes: emptyWeekDayTypes(),
-  servings: emptyWeekServings(familySize), dayModes: emptyWeekDayModes(), dayNotes: emptyWeekDayNotes(),
+  servings: emptyWeekServings(), dayModes: emptyWeekDayModes(), dayNotes: emptyWeekDayNotes(),
 });
 const weekKeys = state => [...new Set(Object.keys(WEEK_FIELDS).flatMap(field => Object.keys(state?.[field] || {})))].sort();
 
-export function diffWeeks(prev = {}, next = {}, familySize = next.family?.familySize ?? prev.family?.familySize ?? 5) {
-  const changes = {}, standard = defaults(familySize);
+export function diffWeeks(prev = {}, next = {}) {
+  const changes = {}, standard = defaults();
   for (const weekKey of [...new Set([...weekKeys(prev), ...weekKeys(next)])].sort()) {
     for (const [stateField, field] of Object.entries(WEEK_FIELDS)) {
       for (let day = 0; day < 7; day++) {
@@ -27,9 +27,9 @@ export function diffWeeks(prev = {}, next = {}, familySize = next.family?.family
   return changes;
 }
 
-export function weeksFromDocs(docs = [], familySize = 5) {
+export function weeksFromDocs(docs = []) {
   const result = Object.fromEntries(Object.keys(WEEK_FIELDS).map(field => [field, {}]));
-  const standard = defaults(familySize);
+  const standard = defaults();
   for (const doc of [...docs].sort((a, b) => a.id.localeCompare(b.id))) {
     const data = doc.data();
     for (const [stateField, field] of Object.entries(WEEK_FIELDS)) {
@@ -40,24 +40,33 @@ export function weeksFromDocs(docs = [], familySize = 5) {
   return result;
 }
 
-export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFamilySize = () => 5,
+export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {},
   setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
   let api, refs, starting, unsubscribe;
   let ready = false, stopped = false, serverSeen = false, failed = false;
   let deliveryFailed = false;
   let generation = 0, pending = 0, snapshotSequence = 0, lastSnapshot = null;
-  const local = new Map(), staged = new Map();
+  const local = new Map(), staged = new Map(), waiters = new Set();
+  function settleWaiters() {
+    if (!failed && (pending || staged.size)) return;
+    for (const waiter of waiters) failed ? waiter.reject(new Error("Ukeskriving feilet.")) : waiter.resolve();
+    waiters.clear();
+  }
+  function waitForWrites() {
+    if (stopped) return Promise.reject(new Error("Ukesynken er stoppet."));
+    return new Promise((resolve, reject) => { waiters.add({ resolve, reject }); settleWaiters(); });
+  }
   const publishStatus = () => onStatus(failed || deliveryFailed ? "Synk feilet"
     : pending || local.size || !serverSeen ? "Synker" : "Synket");
 
   function deliverWeeks() {
-    try { onWeeks(currentWeeks()); deliveryFailed = false; }
+    try { onWeeks(currentWeeks(), { authoritative: lastSnapshot.authoritative }); deliveryFailed = false; }
     catch { deliveryFailed = true; }
     finally { publishStatus(); }
   }
 
   function currentWeeks() {
-    const result = structuredClone(lastSnapshot.weeks), standard = defaults(getFamilySize());
+    const result = structuredClone(lastSnapshot.weeks), standard = defaults();
     for (const operation of local.values()) {
       for (const [stateField, field] of Object.entries(WEEK_FIELDS)) {
         result[stateField][operation.weekKey] ??= { ...standard[field] };
@@ -103,7 +112,7 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
       if (token === generation && !stopped) failed = true;
     }).finally(() => {
       if (token !== generation || stopped) return;
-      pending -= 1; publishStatus();
+      pending -= 1; publishStatus(); settleWaiters();
     });
   }
 
@@ -149,29 +158,31 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {}, getFa
           snapshotSequence += 1;
           if (snapshot.metadata?.fromCache && !serverSeen) return;
           if (!snapshot.metadata?.fromCache) serverSeen = true;
-          lastSnapshot = { weeks: weeksFromDocs(snapshot.docs, getFamilySize()), sequence: snapshotSequence,
+          lastSnapshot = { weeks: weeksFromDocs(snapshot.docs), sequence: snapshotSequence,
             authoritative: !snapshot.metadata?.fromCache && !snapshot.metadata?.hasPendingWrites };
           retireConfirmed(); deliverWeeks();
         }, () => {
-          if (token === generation && !stopped) { failed = true; publishStatus(); }
+          if (token === generation && !stopped) { failed = true; publishStatus(); settleWaiters(); }
         });
         if (token !== generation || stopped) { stopListener?.(); return false; }
         unsubscribe = stopListener;
         return true;
       } catch {
         if (token !== generation || stopped) return false;
-        ready = false; failed = true; publishStatus(); return false;
+        ready = false; failed = true; publishStatus(); settleWaiters(); return false;
       }
     })();
     return starting;
   }
 
   function stop() {
+    for (const waiter of waiters) waiter.reject(new Error("Ukesynken er stoppet."));
+    waiters.clear();
     generation += 1;
     stopped = true; ready = false; serverSeen = false; failed = false; deliveryFailed = false;
     for (const entry of staged.values()) clearTimer(entry.timer);
     staged.clear(); local.clear(); pending = 0; snapshotSequence = 0; lastSnapshot = null; starting = null;
     unsubscribe?.(); unsubscribe = null;
   }
-  return { enqueue, start, stop };
+  return { enqueue, start, stop, waitForWrites };
 }

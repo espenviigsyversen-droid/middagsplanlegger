@@ -6,7 +6,7 @@ assert.deepEqual(parseAmountRange("½-1"), { min: 0.5, max: 1 });
 assert.deepEqual(parseAmountRange("1 1/2-2"), { min: 1.5, max: 2 });
 for (const value of ["4-3", "1-2-3", "3 stk", "3", "-4", "1/0-2"]) assert.equal(parseAmountRange(value), null);
 assert.equal(shoppingAmountValue("3-4"), 4);
-assert.equal(scaleAmount("3-4", 4, 5), "3,75–5");
+assert.equal(scaleAmount("3-4", 4, 5), "4–5");
 assert.equal(scaleAmount("3,2-4", 4, 5), "4–5");
 assert.equal(scaleAmount("3-4", 4, 4), "3-4");
 assert.equal(mergeShoppingAmount("3-4", "2–3"), "7");
@@ -19,6 +19,8 @@ import {
   orderStoreCategories,
   parseAmount,
   scaleAmount,
+  roundScaledAmount,
+  roundRecipeShoppingItems,
   shoppingMergeKey,
 } from "../../src/domain/shopping.js";
 
@@ -49,7 +51,7 @@ function testFormatAndScaleAmount() {
   assert.equal(scaleAmount("1/2", 4, 8), "1");
   assert.equal(scaleAmount("litt", 4, 8), "litt");
   assert.equal(scaleAmount("2", 4, 4), "2");
-  assert.equal(scaleAmount("2 1/2", 4, 5), "3,25"); // Existing display rounds to quarters.
+  assert.equal(scaleAmount("2 1/2", 4, 5), "3"); // Counted quantities round to whole numbers above three.
   assert.equal(scaleAmount("2 1/2", 4, 4), "2 1/2");
   assert.equal(scaleAmount("2½", 4, 8), "5");
 }
@@ -135,3 +137,36 @@ assert.deepEqual(orderStoreCategories([...categories, { key: "new" }], ["other",
 assert.deepEqual(categories, original);
 
 console.log("shopping domain tests ok");
+const examples = [["500", "g", "625"], ["390", "g", "500"], ["1", "stk", "1,5"], ["3", "fedd", "4"],
+  ["3", "ss", "4"], ["4", "dl", "5"], ["1", "", "1,5"], ["10", "stk", "13"]];
+for (const [amount, unit, expected] of examples) assert.equal(scaleAmount(amount, 4, 5, unit), expected);
+for (const [value, unit, expected] of [[12.5,"g",13],[105,"g",110],[487.5,"g",500],[12.5,"ML",13],
+  [0.15,"kg",0.2],[0.15,"L",0.2],[1.25,"dl",1.5],[0.375,"ts",0.5],[1.25,"SS",1.5],[2.25,"plate",2.5],[3.5,"terning",4]]) {
+  assert.equal(roundScaledAmount(value, unit), expected);
+}
+for (const unit of ["g","ml","kg","l","dl","ts","ss","stk","fedd","plate","terning",""]) {
+  assert.ok(roundScaledAmount(0.00001, unit) > 0);
+  assert.equal(scaleAmount("2 1/2",4,4,unit),"2 1/2");
+}
+assert.equal(scaleAmount("390-500",4,5,"g"),"500–625");
+assert.equal(scaleAmount("½-1",4,5,"stk"),"0,5–1,5");
+assert.equal(scaleAmount("0,15",4,4,"kg"),"0,15");
+const contribution = (amount,unit,scaled=true) => ({id:"a",name:"Løk",amount:String(amount),unit,_rawAmount:amount,_scaled:scaled});
+assert.equal(roundRecipeShoppingItems([contribution(0.625,"stk"),contribution(0.625,"stk")],{weekly:true})[0].amount,"2");
+assert.equal(roundRecipeShoppingItems([contribution(1.25,"stk")])[0].amount,"1,5");
+assert.equal(roundRecipeShoppingItems([contribution(487.5,"g")],{weekly:true})[0].amount,"500");
+assert.equal(roundRecipeShoppingItems([contribution(0.075,"kg"),contribution(0.075,"kg")],{weekly:true})[0].amount,"0,2");
+assert.doesNotMatch(JSON.stringify(roundRecipeShoppingItems([contribution(2,"stk")],{weekly:true})), /_rawAmount|_scaled/);
+// Unpublished v106 correction: finer steps for small mass and volume, also in weekly totals.
+for (const unit of ["g", "ml", "G", "ML"]) {
+  for (const [amount, target, expected] of [["2",5,"2,5"],["12",6,"18"],["7",5,"9"],["18",5,"25"]]) {
+    assert.equal(scaleAmount(amount,4,target,unit),expected);
+  }
+  for (const [value, expected] of [[0.0001,0.5],[0.75,1],[2.25,2.5],[9.75,10],[10,10],[12.5,13],
+    [19.5,20],[20,20],[22.5,25],[99.5,100],[100,100],[105,110],[249.5,250],[250,250]]) {
+    assert.equal(roundScaledAmount(value,unit),expected);
+  }
+  assert.equal(scaleAmount("2",4,4,unit),"2");
+  assert.equal(scaleAmount("2-7",4,5,unit),"2,5–9");
+  assert.equal(roundRecipeShoppingItems([contribution(1.25,unit),contribution(1.25,unit)],{weekly:true})[0].amount,"2,5");
+}

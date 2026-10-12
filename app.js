@@ -22,8 +22,11 @@ import {
   normalizeShoppingList,
   orderStoreCategories,
   parseAmount,
+  parseAmountRange,
   shoppingAmountValue,
   scaleAmount,
+  roundScaledAmount,
+  roundRecipeShoppingItems,
   shoppingMergeKey,
 } from "./src/domain/shopping.js";
 import { backupFileName, buildBackup } from "./src/domain/backup.js";
@@ -41,6 +44,7 @@ import {
   emptyWeekLocks,
   emptyWeekPlan,
   emptyWeekServings,
+  servingsForDay as resolveServingsForDay,
   getDayIndexForDate,
   getWeekDatesForOffset,
   getWeekKeyForDate,
@@ -69,6 +73,7 @@ import { initFirebaseClient } from "./src/sync/firebase.js";
 import { createShoppingSync, diffShoppingItems } from "./src/sync/shopping.js";
 import { createMealsSync, diffMeals } from "./src/sync/meals.js";
 import { createWeeksSync, diffWeeks } from "./src/sync/weeks.js";
+import { createServingsDefaultsTransition } from "./src/sync/servings-defaults.js";
 import { buildRemoteWrites } from "./src/sync/writes.js";
 import {
   renderCalendarView,
@@ -211,8 +216,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v105";
-const APP_VERSION_NUMBER = 105;
+const APP_VERSION = "v106";
+const APP_VERSION_NUMBER = 106;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -228,6 +233,8 @@ let mealPickerScrollY = 0;
 let shoppingSyncStatus = null;
 let mealsSyncStatus = null;
 let weeksSyncStatus = null;
+let servingsTransition = null, weeksServerReady = false, profileServerReady = false;
+let recipeServingsView = { key: null, value: null };
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
 let currentAuthUser = null;
@@ -251,15 +258,21 @@ let shoppingSync = makeShoppingSync();
 let mealsSync = makeMealsSync();
 let weeksSync = makeWeeksSync();
 
+function maybeTransitionServings() {
+  void servingsTransition?.run({ role: accessState.role, offline: accessState.offline,
+    weeksReady: weeksServerReady, profileReady: profileServerReady });
+}
+
 function makeWeeksSync() { return createWeeksSync({
-  getFamilySize: () => state.family.familySize,
   setTimer: setTimeout, clearTimer: clearTimeout,
-  onWeeks: (incoming) => {
-    if (WEEK_SYNC_FIELDS.every(field => JSON.stringify(state[field] || {}) === JSON.stringify(incoming[field] || {}))) return;
+  onWeeks: (incoming, info) => {
+    if (info?.authoritative) weeksServerReady = true;
+    if (WEEK_SYNC_FIELDS.every(field => JSON.stringify(state[field] || {}) === JSON.stringify(incoming[field] || {}))) { maybeTransitionServings(); return; }
     // Only replace domain maps; selected week, editor and pending import stay intact.
     for (const field of WEEK_SYNC_FIELDS) state[field] = incoming[field];
     saveState();
     render();
+    maybeTransitionServings();
   },
   onStatus: (status) => {
     if (weeksSyncStatus === status) return;
@@ -386,7 +399,7 @@ function normalizeState(nextState) {
     nextState.dayTypesByWeek[currentWeekKey] = emptyWeekDayTypes();
   }
   if (!nextState.servingsByWeek[currentWeekKey]) {
-    nextState.servingsByWeek[currentWeekKey] = emptyWeekServings(nextState.family.familySize);
+    nextState.servingsByWeek[currentWeekKey] = emptyWeekServings();
   }
   if (!nextState.dayModesByWeek[currentWeekKey]) {
     nextState.dayModesByWeek[currentWeekKey] = emptyWeekDayModes();
@@ -846,7 +859,7 @@ function currentDayNotes() {
 }
 
 function currentServings() {
-  return { ...emptyWeekServings(state.family.familySize), ...(state.servingsByWeek?.[getWeekKey()] || {}) };
+  return { ...emptyWeekServings(), ...(state.servingsByWeek?.[getWeekKey()] || {}) };
 }
 
 function weekRangeLabel() {
@@ -877,11 +890,6 @@ function setCurrentDayModes(dayModes) {
 function setCurrentDayNotes(dayNotes) {
   const weekKey = getWeekKey();
   setState({ dayNotesByWeek: { ...(state.dayNotesByWeek || {}), [weekKey]: dayNotes } });
-}
-
-function setCurrentServings(servings) {
-  const weekKey = getWeekKey();
-  setState({ servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: servings } });
 }
 
 function formatDate(date) {
@@ -918,11 +926,19 @@ function leftoversLabel(value) {
   }[value] || "Ikke satt";
 }
 
+function servingsForDay(weekKey, dayIndex) { return resolveServingsForDay(state, weekKey, dayIndex); }
+
 function recipeTargetServings() {
   const context = state.selectedRecipeContext;
-  if (!context) return null;
-  const value = Number(state.servingsByWeek?.[context.weekKey]?.[context.dayIndex]);
-  return value > 0 ? value : null;
+  if (context) return servingsForDay(context.weekKey, context.dayIndex);
+  if (recipeServingsView.key !== state.selectedMealId) recipeServingsView = { key: state.selectedMealId, value: null };
+  return recipeServingsView.value ?? state.family.familySize;
+}
+
+function changeRecipeServings(delta) {
+  const value = Math.max(1, Math.min(30, recipeTargetServings() + delta)), context = state.selectedRecipeContext;
+  if (context) updateDayServings(context.dayIndex, value, context.weekKey);
+  else { recipeServingsView.value = value === state.family.familySize ? null : value; render(); }
 }
 
 // ── Handleliste ──────────────────────────────────────────────
@@ -990,7 +1006,10 @@ function createShoppingItemFromIngredient(ingredient, ratio = 1, custom = false)
   return {
     id: Math.random().toString(36).slice(2),
     name,
-    amount: isNaN(scaled) ? (ingredient.amount || "") : formatShoppingAmount(scaled),
+    amount: isNaN(scaled) ? (ingredient.amount || "") : ratio === 1 ? (parseAmountRange(ingredient.amount) ? formatShoppingAmount(scaled) : ingredient.amount || "")
+      : formatShoppingAmount(roundScaledAmount(scaled, ingredient.unit || "")),
+    _rawAmount: isNaN(scaled) ? null : scaled,
+    _scaled: ratio !== 1,
     unit: ingredient.unit || "",
     category: categorizeIngredient(name),
     checked: false,
@@ -1000,7 +1019,7 @@ function createShoppingItemFromIngredient(ingredient, ratio = 1, custom = false)
 
 function createMealShoppingReview(meal) {
   if (!meal?.ingredients?.length) return null;
-  const targetServings = recipeTargetServings() || mealBaseServings(meal);
+  const targetServings = recipeTargetServings();
   const ratio = mealBaseServings(meal) > 0 ? targetServings / mealBaseServings(meal) : 1;
   const items = meal.ingredients
     .filter((ingredient) => ingredient.name?.trim())
@@ -1029,7 +1048,6 @@ function createWeekShoppingReview(selectedDays) {
     .filter(({ dayMode }) => dayPlansMeal(dayMode))
     .map(({ weekKey, dayIndex, date, meal }) => {
       const plan = state.plansByWeek?.[weekKey] || {};
-      const servings = state.servingsByWeek?.[weekKey] || {};
       const plannedMeal = meal || getMeal(plan[dayIndex]);
       if (!plannedMeal) return null;
       const ingredients = (plannedMeal.ingredients || []).filter((ingredient) => ingredient.name?.trim());
@@ -1039,7 +1057,7 @@ function createWeekShoppingReview(selectedDays) {
       }
 
       const base = mealBaseServings(plannedMeal);
-      const target = Math.max(1, Number(servings[dayIndex]) || state.family.familySize);
+      const target = servingsForDay(weekKey, dayIndex);
       const ratio = base > 0 ? target / base : 1;
       const items = ingredients
         .map((ingredient) => createShoppingItemFromIngredient(ingredient, ratio, false));
@@ -1069,7 +1087,7 @@ function createWeekShoppingReview(selectedDays) {
 function selectedShoppingReviewItems() {
   const review = state.shoppingReview || {};
   const selectedIds = new Set(review.selectedItemIds || []);
-  return (review.groups || []).flatMap((group) => group.items || []).filter((item) => selectedIds.has(item.id));
+  return roundRecipeShoppingItems((review.groups || []).flatMap((group) => group.items || []).filter((item) => selectedIds.has(item.id)), { weekly: review.mode === "week" });
 }
 
 function shoppingReviewItemCount(review = state.shoppingReview) {
@@ -1149,48 +1167,15 @@ function addShoppingItemByName(name) {
 }
 
 function generateShoppingListItems(selectedDays) {
-  const aggregated = {};
-
-  selectedDays.forEach(({ weekKey, dayIndex, dayMode }) => {
-    if (!dayPlansMeal(dayMode)) return;
-    const plan = state.plansByWeek?.[weekKey] || {};
-    const servings = state.servingsByWeek?.[weekKey] || {};
-    const meal = getMeal(plan[dayIndex]);
-    if (!meal?.ingredients?.length) return;
-
-    const base = mealBaseServings(meal);
-    const target = Math.max(1, Number(servings[dayIndex]) || state.family.familySize);
-    const ratio = base > 0 ? target / base : 1;
-
-    meal.ingredients.forEach(({ name, amount, unit }) => {
-      if (!name?.trim()) return;
-      const normName = ingredientBaseName(name);
-      const normUnit = (unit || "").trim().toLowerCase();
-      const key = `${normName.toLowerCase()}__${normUnit}`;
-      const parsedAmount = shoppingAmountValue(amount);
-      const scaled = parsedAmount === null ? NaN : parsedAmount * ratio;
-
-      if (aggregated[key]) {
-        if (!isNaN(scaled) && !isNaN(aggregated[key]._num)) {
-          aggregated[key]._num += scaled;
-          aggregated[key].amount = formatShoppingAmount(aggregated[key]._num);
-        }
-      } else {
-        aggregated[key] = {
-          id: Math.random().toString(36).slice(2),
-          name: normName,
-          amount: isNaN(scaled) ? (amount || "") : formatShoppingAmount(scaled),
-          _num: isNaN(scaled) ? NaN : scaled,
-          unit: unit || "",
-          category: categorizeIngredient(normName),
-          checked: false,
-          custom: false,
-        };
-      }
-    });
-  });
-
-  return Object.values(aggregated).map(({ _num, ...item }) => item);
+  const items = [];
+  for (const { weekKey, dayIndex, dayMode } of selectedDays) {
+    if (!dayPlansMeal(dayMode)) continue;
+    const meal = getMeal(state.plansByWeek?.[weekKey]?.[dayIndex]);
+    if (!meal?.ingredients?.length) continue;
+    const ratio = servingsForDay(weekKey, dayIndex) / mealBaseServings(meal);
+    for (const ingredient of meal.ingredients) if (ingredient.name?.trim()) items.push(createShoppingItemFromIngredient(ingredient, ratio));
+  }
+  return roundRecipeShoppingItems(items, { weekly: true });
 }
 
 function renderGenerateModal() {
@@ -1413,7 +1398,8 @@ function renderPlanner() {
     const meal = getMeal(mealId);
     const locked = Boolean(lockedPlan[index]);
     const dayType = dayTypes[index] || "weekday";
-    const dayServings = Math.max(1, Number(servings[index]) || 4);
+    const dayServings = servingsForDay(getWeekKey(), index);
+    const ownServings = typeof servings[index] === "number" && servings[index] >= 1;
     const dayMode = dayModes[index] || "home";
     const isPlannedMeal = dayPlansMeal(dayMode);
     const dayNote = dayNotes[index] || "";
@@ -1436,6 +1422,7 @@ function renderPlanner() {
       dayNote,
       dayType,
       dayServings,
+      ownServings,
       mealId,
       mealTitle: meal?.title || "",
       typeLabel,
@@ -1459,6 +1446,8 @@ function renderPlanner() {
         dayNote,
         dayType,
         dayServings,
+        ownServings,
+        standardServings: state.family.familySize,
         planModeEntries: planModeEntries(),
         suitabilityEntries: suitabilityEntries(),
         escapeHtml,
@@ -1591,12 +1580,13 @@ function renderMealDetail() {
   const leftoversText = leftoversLabel(meal.leftovers);
   const baseServings = mealBaseServings(meal);
   const targetServings = recipeTargetServings();
-  const displayServings = targetServings || baseServings;
-  const servingText = targetServings
-    ? targetServings === baseServings
-      ? `Oppskrift til ${displayServings} personer.`
-      : `Justert til ${displayServings} personer fra en oppskrift på ${baseServings}.`
-    : `Oppskriften er lagt inn for ${baseServings} personer.`;
+  const displayServings = targetServings;
+  const servingText = targetServings === baseServings
+    ? `Oppskrift til ${displayServings} porsjoner.`
+    : `Justert til ${displayServings} porsjoner fra en oppskrift på ${baseServings}.`;
+  const context = state.selectedRecipeContext;
+  const servingScope = context ? `Gjelder ${dayNames[context.dayIndex].toLowerCase()} ${formatDate(dateForWeekDay(context.weekKey, context.dayIndex)).replace(/\.$/, "")}.`
+    : targetServings !== state.family.familySize ? "Gjelder bare denne visningen." : "";
 
   return renderMealDetailView({
     meal,
@@ -1607,6 +1597,7 @@ function renderMealDetail() {
     wakeText,
     leftoversText,
     servingText,
+    servingScope,
     baseServings,
     targetServings,
     shoppingIconHtml: icon("shopping"),
@@ -2777,8 +2768,10 @@ function updateDayNote(dayIndex, note) {
   setCurrentDayNotes({ ...currentDayNotes(), [dayIndex]: String(note || "").trim() });
 }
 
-function updateDayServings(dayIndex, servings) {
-  setCurrentServings({ ...currentServings(), [dayIndex]: Math.max(1, Number(servings) || 1) });
+function updateDayServings(dayIndex, servings, weekKey = getWeekKey()) {
+  const value = servings === null ? null : Math.max(1, Math.min(30, Number(servings) || 1));
+  setState({ servingsByWeek: { ...state.servingsByWeek, [weekKey]: { ...emptyWeekServings(), ...state.servingsByWeek?.[weekKey],
+    [dayIndex]: value === state.family.familySize ? null : value } } });
 }
 
 function fillWeek() {
@@ -2850,6 +2843,8 @@ function bindMealResultActions(root = app) {
 }
 
 function bindEvents() {
+  app.querySelectorAll("[data-recipe-servings]").forEach(button => button.addEventListener("click", () => changeRecipeServings(Number(button.dataset.recipeServings))));
+  app.querySelectorAll("[data-use-standard-servings]").forEach(button => button.addEventListener("click", () => updateDayServings(Number(button.dataset.useStandardServings), null)));
   app.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => setState({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false }));
   });
@@ -3007,7 +3002,7 @@ function bindEvents() {
       plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: emptyWeekPlan() },
       lockedPlansByWeek: { ...(state.lockedPlansByWeek || {}), [weekKey]: emptyWeekLocks() },
       dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: emptyWeekDayTypes() },
-      servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings(state.family.familySize) },
+      servingsByWeek: { ...(state.servingsByWeek || {}), [weekKey]: emptyWeekServings() },
       dayModesByWeek: { ...(state.dayModesByWeek || {}), [weekKey]: emptyWeekDayModes() },
       dayNotesByWeek: { ...(state.dayNotesByWeek || {}), [weekKey]: emptyWeekDayNotes() },
       plannerDaySheet: { open: false, dayIndex: null },
@@ -3225,7 +3220,8 @@ function bindEvents() {
 
   app.querySelectorAll("[data-family]").forEach((field) => {
     field.addEventListener("change", () => {
-      const value = field.type === "number" ? Number(field.value) : field.value;
+      const value = field.dataset.family === "familySize" ? Math.max(1, Math.min(30, Number(field.value) || 1))
+        : field.type === "number" ? Number(field.value) : field.value;
       state.family = { ...state.family, [field.dataset.family]: value };
       setState({ family: state.family });
     });
@@ -3537,6 +3533,7 @@ function bindEvents() {
 }
 
 function render(preserveShoppingInput = true) {
+  if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
   syncAiKeyContext();
   if (!state.editingMealId) aiKeyEditorReturn = null;
   if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
@@ -3697,6 +3694,8 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  servingsTransition = null; weeksServerReady = false; profileServerReady = false;
+  recipeServingsView = { key: null, value: null };
   resetRecipeImport();
   syncEnabled = false;
   syncGeneration += 1;
@@ -3722,6 +3721,15 @@ function makeAccessSession(connection) {
       syncEnabled = true;
       syncStatus = "Kobler til synk";
       const token = syncGeneration;
+      servingsTransition = createServingsDefaultsTransition({
+        appVersion: APP_VERSION_NUMBER,
+        readMeta: async () => { const doc = await api.getDocFromServer(refs.meta); return doc.exists() ? doc.data() : null; },
+        getState: () => state, currentWeek: () => getWeekKeyForOffset(0),
+        enqueue: servingsByWeek => setState({ servingsByWeek }), waitForWrites: () => weeksSync.waitForWrites(),
+        markDone: () => valid() && token === syncGeneration ? api.updateDoc(refs.meta, { servingsDefaultsV106: true }) : Promise.reject(new Error("Avbrutt")),
+        valid: () => valid() && token === syncGeneration && syncEnabled,
+        onDone: ({ count, familySize }) => showToast(`Porsjonene for ${count} dager følger nå standarden (${familySize}).`),
+      });
       window.middagsplanDoc = api.doc;
       window.middagsplanGetDoc = api.getDoc;
       window.middagsplanGetDocs = api.getDocs;
@@ -3731,7 +3739,9 @@ function makeAccessSession(connection) {
       await Promise.all([shoppingSync.start({ api, refs, skipMigration: true }), mealsSync.start({ api, refs }), weeksSync.start({ api, refs })]);
       if (!valid() || token !== syncGeneration) return;
       startSplitSyncListeners((ref, next, error) => {
-        const unsubscribe = api.onSnapshot(ref, (snapshot) => { if (valid() && token === syncGeneration) next(snapshot); },
+        // A cache-identical profile still needs a server metadata notification
+        // before the one-time defaults transition may use its family value.
+        const unsubscribe = api.onSnapshot(ref, ...(ref === refs.profile ? [{ includeMetadataChanges: true }] : []), (snapshot) => { if (valid() && token === syncGeneration) next(snapshot); },
           (failure) => { if (valid() && token === syncGeneration) error(failure); });
         syncUnsubscribers.push(unsubscribe);
       });
@@ -3877,12 +3887,14 @@ function bindAccountEvents() {
 
 function startSplitSyncListeners(onSnapshot) {
   onSnapshot(remoteRefs.profile, (snapshot) => {
+    if (snapshot.exists() && !snapshot.metadata?.fromCache && !snapshot.metadata?.hasPendingWrites) profileServerReady = true;
     if (!snapshot.exists()) {
       if (state.pendingLocalSync) scheduleRemoteSave(0, ["profile"]);
       return;
     }
     applyRemoteDocument("profile", snapshot.data(), (data) => {
       applyRemoteStatePatch({ family: data.family, clientUpdatedAt: Number(data.clientUpdatedAt || 0), pendingLocalSync: false });
+      maybeTransitionServings();
     });
   }, markSyncFailed);
 

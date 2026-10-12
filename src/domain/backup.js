@@ -1,11 +1,19 @@
+import { emptyWeekServings } from "./weeks.js";
+
 export function buildBackup({ data, appVersion, familyId, now = new Date() }) {
+  const copy = structuredClone(data);
+  if (Number(String(appVersion).replace(/^v/, "")) >= 106) {
+    const weeks = new Set(["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servingsByWeek", "dayModesByWeek", "dayNotesByWeek"]
+      .flatMap(key => Object.keys(copy[key] || {})));
+    copy.servingsByWeek = Object.fromEntries([...weeks].map(week => [week, { ...emptyWeekServings(), ...copy.servingsByWeek?.[week] }]));
+  }
   return {
     app: "middagsapp",
     exportVersion: 1,
     appVersion,
     familyId,
     exportedAt: new Date(now).toISOString(),
-    data: structuredClone(data),
+    data: copy,
   };
 }
 

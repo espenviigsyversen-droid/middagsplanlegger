@@ -10,7 +10,7 @@ export function renderSetupView(options = {}) {
   const quickDayCount = Array.isArray(quickDays) ? quickDays.length : 0;
   const familySummary = [
     family.name || "Familie",
-    `${Math.max(1, Number(family.familySize) || 5)} personer`,
+    `${family.familySize} porsjoner til vanlig`,
     `${quickDayCount} raske ${quickDayCount === 1 ? "dag" : "dager"}`,
   ].join(" · ");
 
@@ -79,7 +79,7 @@ export function renderFamilySettingsView(options = {}) {
     <section class="view-header">
       <div>
         <h2 class="view-title">Familie</h2>
-        <p class="view-lead">Familienavn, personer, raske dager og forslagregler.</p>
+        <p class="view-lead">Familienavn, porsjoner, raske dager og forslagregler.</p>
       </div>
       <button class="button secondary" data-view="setup">Tilbake</button>
     </section>
@@ -90,8 +90,9 @@ export function renderFamilySettingsView(options = {}) {
           <input id="familyName" class="input" data-family="name" value="${escapeHtml(family.name)}">
         </div>
         <div class="setting">
-          <label for="familySize">Personer i familien</label>
-          <input id="familySize" class="input" type="number" min="1" max="30" data-family="familySize" value="${Math.max(1, Number(family.familySize) || 5)}">
+          <label for="familySize">Porsjoner til vanlig</label>
+          <input id="familySize" class="input" type="number" min="1" max="30" data-family="familySize" value="${family.familySize}" aria-describedby="familySizeHint">
+          <p id="familySizeHint" class="field-hint">Hvor mange porsjoner en vanlig middag skal gi. Barn spiser ofte mindre, så to voksne og tre barn klarer seg ofte med 4.</p>
         </div>
         <div class="setting">
           <label for="kidCount">Barnevennlige middager per uke</label>

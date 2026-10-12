@@ -8,6 +8,7 @@ import {
   emptyWeekLocks,
   emptyWeekPlan,
   emptyWeekServings,
+  servingsForDay,
   getDayIndexForDate,
   getWeekDatesForOffset,
   getWeekKeyForDate,
@@ -50,8 +51,8 @@ function testEmptyWeekObjects() {
   assert.deepEqual(emptyWeekDayTypes(), { 0: "weekday", 1: "weekday", 2: "weekday", 3: "weekday", 4: "weekday", 5: "weekend", 6: "weekend" });
   assert.deepEqual(emptyWeekDayModes(), { 0: "home", 1: "home", 2: "home", 3: "home", 4: "home", 5: "home", 6: "home" });
   assert.deepEqual(emptyWeekDayNotes(), { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" });
-  assert.deepEqual(emptyWeekServings(3), { 0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 });
-  assert.deepEqual(emptyWeekServings(0), { 0: 5, 1: 5, 2: 5, 3: 5, 4: 5, 5: 5, 6: 5 });
+  assert.deepEqual(emptyWeekServings(), { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null });
+  assert.deepEqual(emptyWeekServings(3), { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null });
 }
 
 function testWeekOffsetsAndDistances() {
@@ -67,6 +68,13 @@ testWeekKeysAndDates();
 testWeekKeyForDate();
 testDayIndexAndLocalKey();
 testEmptyWeekObjects();
+const portions = { family: { familySize: 4 }, servingsByWeek: { "2026-10-12": { 0: 6, 1: null } } };
+assert.equal(servingsForDay(portions, "2026-10-12", 0), 6);
+assert.equal(servingsForDay(portions, "2026-10-12", 1), 4);
+assert.equal(servingsForDay(portions, "2026-10-12", 2), 4);
+assert.equal(servingsForDay(portions, "2026-10-19", 0), 4);
+portions.family.familySize = 7;
+assert.equal(servingsForDay(portions, "2026-10-12", 1), 7);
 testWeekOffsetsAndDistances();
 
 console.log("weeks domain tests ok");

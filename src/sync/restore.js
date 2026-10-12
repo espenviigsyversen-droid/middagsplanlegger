@@ -66,12 +66,17 @@ export function validateBackup(backup) {
       for (const [day, value] of Object.entries(days)) {
         if (!/^[0-6]$/.test(day)) reject();
         if (field === "lockedPlansByWeek" ? typeof value !== "boolean"
-          : field === "servingsByWeek" ? !Number.isFinite(value) || value < 1
+          : field === "servingsByWeek" ? value !== null && (!Number.isFinite(value) || value < 1)
             : typeof value !== "string") reject();
       }
     }
   }
   const normalized = structuredClone(backup);
+  if (!(Number(backup.appVersion.replace(/^v/, "")) >= 106)) {
+    for (const days of Object.values(normalized.data.servingsByWeek)) {
+      for (const [day, value] of Object.entries(days)) if (value === normalized.data.family.familySize) days[day] = null;
+    }
+  }
   for (const meal of normalized.data.meals) for (const ingredient of meal.ingredients) {
     if (ingredient.group !== undefined) {
       const group = ingredient.group.trim();
@@ -104,7 +109,7 @@ export function buildRestoreDocuments(backup, { email } = {}) {
       plan: { ...emptyWeekPlan(), ...d.plansByWeek[key] },
       lockedPlan: { ...emptyWeekLocks(), ...d.lockedPlansByWeek[key] },
       dayTypes: { ...emptyWeekDayTypes(), ...d.dayTypesByWeek[key] },
-      servings: { ...emptyWeekServings(d.family.familySize), ...d.servingsByWeek[key] },
+      servings: { ...emptyWeekServings(), ...d.servingsByWeek[key] },
       dayModes: { ...emptyWeekDayModes(), ...d.dayModesByWeek[key] },
       dayNotes: { ...emptyWeekDayNotes(), ...d.dayNotesByWeek[key] },
       clientUpdatedAt: timestamp,
@@ -114,7 +119,7 @@ export function buildRestoreDocuments(backup, { email } = {}) {
       checked: item.checked, custom: item.custom, createdAt: index,
     } })),
     { path: ["app", "shopping"], data: {}, marker: "shopping" },
-    { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: REQUIRED_MIN_APP_VERSION }, marker: "meta" },
+    { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: REQUIRED_MIN_APP_VERSION, servingsDefaultsV106: true }, marker: "meta" },
   ];
   return documents;
 }

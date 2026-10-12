@@ -4,6 +4,8 @@ export function renderPlannerRowView(options = {}) {
     dateLabel = "",
     index = 0,
     locked = false,
+    ownServings = false,
+    dayServings,
     isPlannedMeal = true,
     summaryTitle = "",
     summaryText = "",
@@ -34,6 +36,7 @@ export function renderPlannerRowView(options = {}) {
       </div>
       <div class="planner-card-actions">
         ${locked ? '<span class="planner-lock-badge">Låst</span>' : ""}
+        ${ownServings ? `<span class="planner-lock-badge">${escapeHtml(dayServings)} porsj.</span>` : ""}
         ${hasMeal ? `<button class="icon-button planner-recipe-btn" type="button" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${index}" aria-label="Åpne oppskrift">□</button>` : ""}
         ${hasMeal ? `<button class="icon-button planner-refresh-btn" type="button" data-random-day="${index}" ${locked ? "disabled" : ""} aria-label="Foreslå ny middag">↻</button>` : ""}
         <button class="icon-button planner-change-btn" type="button" data-open-meal-picker="${index}" aria-label="${hasMeal ? "Bytt middag" : "Legg til middag"}">${hasMeal ? "⇄" : "+"}</button>
@@ -56,6 +59,8 @@ export function renderPlannerDaySheetView(options = {}) {
     dayNote = "",
     dayType = "weekday",
     dayServings = 1,
+    ownServings = false,
+    standardServings,
     planModeEntries = [],
     suitabilityEntries = [],
     escapeHtml = String,
@@ -101,9 +106,11 @@ export function renderPlannerDaySheetView(options = {}) {
                 </select>
               </label>
               <label class="planner-control persons">
-                <span>Personer</span>
+                <span>Porsjoner</span>
                 <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
               </label>
+              <div class="planner-control planner-servings-help"><span class="field-hint">${ownServings ? "Endret for denne dagen" : "Følger standarden"}</span>
+                ${ownServings ? `<button class="button secondary compact" type="button" data-use-standard-servings="${index}">Bruk standard (${escapeHtml(standardServings)})</button>` : ""}</div>
             </div>
           `}
         </div>

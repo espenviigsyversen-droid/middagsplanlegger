@@ -90,3 +90,9 @@ function testPlannerRender() {
 testPlannerRender();
 
 console.log("planner render tests ok");
+assert.match(renderPlannerRowView({ownServings:true,dayServings:6}),/6 porsj\./);
+assert.doesNotMatch(renderPlannerRowView({ownServings:false,dayServings:4}),/4 porsj\./);
+assert.match(renderPlannerDaySheetView({open:true,dayServings:4,ownServings:false,standardServings:4}),/Følger standarden/);
+const own=renderPlannerDaySheetView({open:true,dayServings:6,ownServings:true,standardServings:4});
+assert.match(own,/Endret for denne dagen/);assert.match(own,/Bruk standard \(4\)/);assert.match(own,/data-use-standard-servings="0"/);
+assert.match(own,/<span>Porsjoner<\/span>/);assert.doesNotMatch(own,/Personer/);

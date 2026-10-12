@@ -3226,3 +3226,7 @@ button {
 .recipe-import-choice { margin: 16px 0; padding: 16px; border: 2px solid var(--accent); border-radius: 12px; background: var(--accent-soft); scroll-margin-block: 16px; }
 .recipe-import-choice h4 { margin: 0 0 8px; font-size: 1.05rem; }
 .recipe-import-choice .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Recipe-only portion changes stay in memory; the controls also work on mobile. */
+.recipe-servings-control { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.recipe-servings-control .button { min-width: 44px; min-height: 44px; }
+.planner-sheet-grid .planner-servings-help { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

@@ -90,16 +90,16 @@ for (const path of ["../../app.js", "../../src/sync/firebase.js"]) {
   for (const forbidden of ["signInAnonymously", "writeBatch", "migrateLegacyStateIfNeeded", "remoteSplitStateExists", "legacyState", "home-tasks-app-18de3"]) assert.equal(source.includes(forbidden), false, forbidden);
 }
 console.log("access tests ok");
-const v101Admin = makeSession({ appVersion: 101 }); await v101Admin.session.start(user);
-assert.deepEqual(v101Admin.calls.filter(call => call[0] === "update"), [["update", "meta", { minAppVersion: 101 }]]);
-assert.equal(v101Admin.flag().minAppVersion, 101); assert.equal(v101Admin.screens.at(-1).kind, "ready");
-const currentAdmin = makeSession({ appVersion: 101, meta: { initializedAt: 1, minAppVersion: 101 } }); await currentAdmin.session.start(user);
+const v106Admin = makeSession({ appVersion: 106 }); await v106Admin.session.start(user);
+assert.deepEqual(v106Admin.calls.filter(call => call[0] === "update"), [["update", "meta", { minAppVersion: 106 }]]);
+assert.equal(v106Admin.flag().minAppVersion, 106); assert.equal(v106Admin.screens.at(-1).kind, "ready");
+const currentAdmin = makeSession({ appVersion: 106, meta: { initializedAt: 1, minAppVersion: 106 } }); await currentAdmin.session.start(user);
 assert.equal(currentAdmin.calls.some(call => call[0] === "update"), false);
-const v101Member = makeSession({ appVersion: 101, role: "member" }); await v101Member.session.start(user);
-assert.equal(v101Member.calls.some(call => call[0] === "update"), false);
-const oldClient = makeSession({ appVersion: 100, meta: { initializedAt: 1, minAppVersion: 101 } }); await oldClient.session.start(user);
+const v106Member = makeSession({ appVersion: 106, role: "member" }); await v106Member.session.start(user);
+assert.equal(v106Member.calls.some(call => call[0] === "update"), false);
+const oldClient = makeSession({ appVersion: 105, meta: { initializedAt: 1, minAppVersion: 106 } }); await oldClient.session.start(user);
 assert.equal(oldClient.screens.at(-1).kind, "update");
-const failedRaise = makeSession({ appVersion: 101, updateFailure: new Error("failed") });
+const failedRaise = makeSession({ appVersion: 106, updateFailure: new Error("failed") });
 await failedRaise.session.start(user); assert.equal(failedRaise.screens.at(-1).kind, "ready");
 assert.equal(failedRaise.screens.at(-1).message, undefined);
 await failedRaise.session.start(user); assert.equal(failedRaise.calls.filter(call => call[0] === "update").length, 2);

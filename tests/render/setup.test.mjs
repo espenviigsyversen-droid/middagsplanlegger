@@ -33,6 +33,9 @@ function testSetupRender() {
   });
   assert.match(familyPage, /Familienavn/);
   assert.match(familyPage, /data-family="name"/);
+  assert.match(familyPage,/Porsjoner til vanlig/);assert.match(familyPage,/Familienavn, porsjoner, raske dager og forslagregler\./);
+  assert.match(familyPage,/Hvor mange porsjoner en vanlig middag skal gi\. Barn spiser ofte mindre, så to voksne og tre barn klarer seg ofte med 4\./);
+  assert.match(renderSetupView({family:{name:"Familien",familySize:4}}),/4 porsjoner til vanlig/);
 
   const appPage = renderAppSettingsView({ appVersion: "v79", escapeHtml });
   assert.match(appPage, /Oppdater app/);

@@ -4,6 +4,11 @@ import { validateBackup, summarizeBackup, buildRestoreDocuments, checkRestoreCol
 import { WEEK_FIELDS, weeksFromDocs } from "../../src/sync/weeks.js";
 
 const backup = backupFixture();
+const native = backupFixture(); native.appVersion="v106"; native.data.servingsByWeek["2026-10-05"]={0:null,1:4,2:7};
+assert.deepEqual(validateBackup(native).data.servingsByWeek["2026-10-05"],{0:null,1:4,2:7});
+const oldPortions=backupFixture(); oldPortions.data.family.familySize=4; oldPortions.data.servingsByWeek["2026-10-05"]={0:4,1:7,2:null};
+assert.deepEqual(validateBackup(oldPortions).data.servingsByWeek["2026-10-05"],{0:null,1:7,2:null});
+for(const bad of [0,-1,"4"]){const b=backupFixture();b.data.servingsByWeek["2026-10-05"]={0:bad};assert.throws(()=>validateBackup(b),/Ugyldig/);}
 const clone = validateBackup(backup);
 clone.data.family.name = "changed";
 assert.equal(backup.data.family.name, "Testfamilien");
@@ -18,11 +23,11 @@ for (const mutation of [b => b.app = "other", b => b.exportVersion = 2, b => b.d
   const input = backupFixture(); mutation(input); assert.throws(() => validateBackup(input), /Ugyldig/);
 }
 const docs = buildRestoreDocuments(backup, { email: "admin@example.com" });
-assert.deepEqual(docs.at(-1), { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: "admin@example.com", minAppVersion: 101 }, marker: "meta" });
+assert.deepEqual(docs.at(-1), { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: "admin@example.com", minAppVersion: 106, servingsDefaultsV106: true }, marker: "meta" });
 assert.deepEqual(docs.filter(d => d.path[0] === "weeks").map(d => d.path[1]), ["2026-10-05", "2026-10-12"]);
 const restoredWeeks = weeksFromDocs(docs.filter(d => d.path[0] === "weeks").map(d => ({ id: d.path[1], data: () => d.data })), backup.data.family.familySize);
 for (const stateField of Object.keys(WEEK_FIELDS)) {
-  for (const [key, days] of Object.entries(backup.data[stateField])) {
+  for (const [key, days] of Object.entries(validateBackup(backup).data[stateField])) {
     for (const [day, value] of Object.entries(days)) assert.equal(restoredWeeks[stateField][key][day], value);
   }
 }
@@ -79,7 +84,7 @@ for (const key of ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servin
 const emptyDocs = buildRestoreDocuments(empty, { email: "admin@example.com" });
 const v96 = execution({ meta: { minAppVersion: 96 } });
 await executeRestore({ ...v96.args, appVersion: 96 });
-assert.equal(v96.calls.at(-1).data.minAppVersion, 101, "Restore requires clients with per-day/field week sync");
+assert.equal(v96.calls.at(-1).data.minAppVersion, 106, "Restore requires clients with per-day/field week sync");
 assert.equal(checkRestoreCollections(emptyDocs, {}), true);
 assert.throws(() => checkRestoreCollections(emptyDocs, { meals: ["meal-1"] }), /1 dokumenter/);
 assert.equal(emptyDocs.length, 5);

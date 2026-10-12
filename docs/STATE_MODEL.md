@@ -75,7 +75,7 @@ Appen synker ikke hele state som ett dokument lenger. Den bruker flere områder:
 Fra v95 finnes også:
 
 - `families/{FAMILY_ID}/members/{email}`: dokument-ID er e-post i små bokstaver; `{ role: "admin" | "member", addedAt, addedBy }`. Første manuelt opprettede administrator kan ha bare role.
-- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion }`. Gjeldende minimum er 101 fra v101. Bare administratorer skriver dette; alle medlemmer leser.
+- `families/{FAMILY_ID}/app/meta`: `{ schemaVersion: 1, initializedAt, initializedBy, minAppVersion }`. Gjeldende minimum er 106 fra v106. Bare administratorer skriver dette; alle medlemmer leser.
 
 Fra utvidet v96 finnes serverprivate dokumenter, uten endringer i domenemodellen eller klientreglene:
 
@@ -90,7 +90,7 @@ KEY_ENCRYPTION_SECRET er en serverhemmelighet og bindes bare til krypterende/dek
 
 Prosjektet er `middagsplanlegger-6db4e`. `app/state` og automatisk legacy-migrering brukes ikke lenger. Det gamle Firebase-prosjektet er arkiv. Stier og felter for profile, preferences, metadata, meals, weeks og shoppingItems er de samme.
 
-En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Tilgangsflyten gjør én egen best-effort updateDoc til REQUIRED_MIN_APP_VERSION ved online administratoroppstart når minimumet er lavere. Denne konstanten er 101 fra v101 og brukes også ved restore. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens numeriske versjon (105 fra v105), avsluttes synken og appen krever oppdatering. v100 får dermed oppdateringsskjerm når minimumet er 101. Nytt oppsett og gjenoppretting skriver 101.
+En database er satt opp bare når meta finnes med initializedAt. Før dette starter ingen domenelyttere eller vanlige writes. Meta opprettes sist i eksplisitt administratoroppsett og vanlig domenesynk skriver aldri til meta. Tilgangsflyten gjør én egen best-effort updateDoc til REQUIRED_MIN_APP_VERSION ved online administratoroppstart når minimumet er lavere. Denne konstanten er 106 fra v106 og brukes også ved restore. Vanlige medlemmer og offline-økter gjør ikke dette; feil er stille og neste oppstart prøver igjen. Hvis minAppVersion overstiger appens numeriske versjon (106 fra v106), avsluttes synken og appen krever oppdatering. v105 og eldre får dermed oppdateringsskjerm når minimumet er 106. Nytt oppsett og gjenoppretting skriver 106.
 
 Oppsett validerer JSON-eksportformat 1 og dokument-ID-er før første write. En union av alle seks ukekart bestemmer hvilke weeks-dokumenter som skrives. Handlevarer beholder ID, innhold og rekkefølge, med createdAt = 0 + indeks. Fremmede ID-er i meals/weeks/shoppingItems blokkerer innlesing; delvis innlest samme fil kan kjøres på nytt. Medlemslisten røres aldri. Tomt oppsett krever tomme samlinger. Ny innlesing krever manuell sletting av app/meta og tømming av de tre samlingene, mens members beholdes.
 
@@ -282,3 +282,13 @@ createLocalStore fanger både tilgangs-, lese-, JSON-, skrive- og slettefeil. Le
 localStoreFailed er runtime-tilstand, utenfor state, syncPayload og backup. Skrivefeil setter flagget, senere vellykket skriving nullstiller det. Varsellinjen finnes bare i Oppdatering og versjon. Synkstatusen påvirkes ikke av lagringsfeil. Ved neste offline-oppstart kan den tidligere lokale kopien være utdatert eller medlemsflagget mangle; nettinnlogging, synk og minnetilstand i inneværende økt fungerer fortsatt.
 
 Callback-feil i meals/weeks/shopping lagres separat som deliveryFailed, med Synk feilet og fortsatt lytter. Neste vellykkede levering nullstiller bare callback-feilen. Eksisterende Firestore-/skrivefeil beholdes. Ingen endring i lokale operasjoner, kvitteringer, snapshots, datakø eller konfliktvern.
+
+## Porsjoner og servingsDefaultsV106
+
+family.familySize betyr standard antall porsjoner, og beholder feltnavnet. servingsByWeek[weekKey][0–6] og weeks/<weekKey>.servings.<dag> lagrer eget tall, eller null/mangler for å følge standarden. emptyWeekServings gir syv nullverdier; snapshots og currentWeeks lagrer ikke familySize som default. serversnapshots med gamle eksplisitte tall leses som egne valg. servingsForDay avgjør porsjoner ved visning/beregning, så standardendring virker straks uten nytt ukebilde. Når brukeren setter dagen lik standarden, lagres null.
+
+recipeServingsView er separat minnetilstand for justering fra oppskriftslisten; den inngår ikke i state, lokal kopi, synk eller backup. Fra plandagkontekst lagres justering på uken/dagen gjennom setState, uten å endre global clientUpdatedAt/pendingLocalSync. Ingrediensavrunding er avledet visning/beregning og endrer ikke lagrede oppskrifter. Rå handlebidrag _rawAmount/_scaled tilhører bare gjennomgang/beregning og fjernes før lagring. Allerede lagrede handlevarer omavrundes ikke.
+
+Meta får servingsDefaultsV106:true etter én bekreftet adminovergang. Den skjer etter serverbekreftet minimum 106, initialisering, autoritativt ukebilde og familieprofil fra serveren. Bare nåværende og senere uker: 5 eller gjeldende familySize blir null. Andre tall og eldre uker beholdes. Alle writes er vanlige ukepatcher; waitForWrites venter på SDK-kvitteringer før meta leses igjen og merket settes. Ingen merke ved avbrudd/feil; neste oppstart kan gjenta operasjonen. Toasten «Porsjonene for N dager følger nå standarden (familySize).» vises én gang etter suksess. Runtime-beredskap/ventere/kø og forsøksstatus lagres ikke.
+
+Backup v106 lagrer null også for manglende standarddager. Restore validerer null/tall >=1. Bare eldre kopier konverterer tall lik kopiens familySize til null; egne tall i v106 eller nyere beholdes. Meta skrives helt sist med minAppVersion:106 og servingsDefaultsV106:true etter fullført restore. Overgangsmerket inngår ikke i backupens domenedata. Ingen ny Firestore-sti eller endring av recipes/shoppingItems/profilfeltnavn.

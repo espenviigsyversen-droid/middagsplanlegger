@@ -56,9 +56,13 @@ export function emptyWeekDayNotes() {
   return { 0: "", 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
 }
 
-export function emptyWeekServings(familySize = 5) {
-  const servings = Math.max(1, Number(familySize) || 5);
-  return { 0: servings, 1: servings, 2: servings, 3: servings, 4: servings, 5: servings, 6: servings };
+export function emptyWeekServings() {
+  return { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
+}
+
+export function servingsForDay(state, weekKey, dayIndex) {
+  const own = state.servingsByWeek?.[weekKey]?.[dayIndex];
+  return typeof own === "number" && Number.isFinite(own) && own >= 1 ? own : state.family.familySize;
 }
 
 export function dateForWeekDay(weekKey, dayIndex) {

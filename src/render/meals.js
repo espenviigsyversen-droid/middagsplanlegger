@@ -8,7 +8,7 @@ function renderIngredientList(ingredients, { scaleAmount, baseServings, targetSe
     previous = group;
     const comma = item.name.indexOf(",");
     const suffix = comma > 0 ? item.name.slice(comma) : "";
-    return `${heading}<div class="ingredient-row"><span>${escapeHtml([scaleAmount(item.amount, baseServings, targetServings), item.unit].filter(Boolean).join(" "))}</span>
+    return `${heading}<div class="ingredient-row"><span>${escapeHtml([scaleAmount(item.amount, baseServings, targetServings, item.unit), item.unit].filter(Boolean).join(" "))}</span>
       <div><strong>${escapeHtml(ingredientBaseName(item.name))}</strong>${escapeHtml(suffix)}</div></div>`;
   }).join("");
 }
@@ -170,6 +170,7 @@ export function renderMealDetailView(options = {}) {
     wakeText = "Hold skjermen på",
     leftoversText = "",
     servingText = "",
+    servingScope = "",
     baseServings = 4,
     targetServings = null,
     shoppingIconHtml = "",
@@ -185,6 +186,12 @@ export function renderMealDetailView(options = {}) {
           <h2>${escapeHtml(meal.title)}</h2>
           <p>${escapeHtml(meal.description || "Ingen beskrivelse er lagt inn ennå.")}</p>
           <p class="recipe-serving-note">${escapeHtml(servingText)}</p>
+          <div class="recipe-servings-control" aria-label="Juster porsjoner">
+            <button class="button secondary" type="button" data-recipe-servings="-1" aria-label="Færre porsjoner" ${(targetServings ?? baseServings) <= 1 ? "disabled" : ""}>−</button>
+            <span>${escapeHtml(targetServings ?? baseServings)} porsjoner</span>
+            <button class="button secondary" type="button" data-recipe-servings="1" aria-label="Flere porsjoner" ${(targetServings ?? baseServings) >= 30 ? "disabled" : ""}>+</button>
+          </div>
+          ${servingScope ? `<p class="field-hint">${escapeHtml(servingScope)}</p>` : ""}
         </div>
         <div class="recipe-actions">
           <button class="button ghost" data-close-meal>Tilbake</button>
@@ -343,7 +350,7 @@ export function renderMealEditorView(options = {}) {
           <div class="setting">
             <label for="mealBaseServings">Porsjoner i oppskriften</label>
             <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${baseServings}" aria-describedby="mealBaseServingsHint">
-            <p id="mealBaseServingsHint" class="field-hint">Antallet mengdene er beregnet for. Ukeplan og handleliste regner om til familiens størrelse.</p>
+            <p id="mealBaseServingsHint" class="field-hint">Antallet mengdene er beregnet for. Ukeplan og handleliste regner om til porsjonene for dagen.</p>
           </div>
         </div>
         <div class="form-row">

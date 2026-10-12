@@ -9,6 +9,7 @@ Kjør lokale kontroller:
 ```powershell
 node --check app.js
 node --check service-worker.js
+node tests/sync/servings-defaults.test.mjs
 node tests/sync/local-store.test.mjs
 node tests/app/local-store.test.mjs
 node tests/domain/meals.test.mjs
@@ -47,6 +48,19 @@ node functions/tests/index.test.cjs
 ```
 
 Hvis bare dokumentasjon er endret, er disse ikke strengt nødvendige, men de er trygge å kjøre.
+
+## Utrulling av v106
+
+v106 endrer betydningen av servings: null/mangler følger standarden, tall er dagsvalg. familySize betyr standard antall porsjoner. Minimum heves til 106 for å stenge ute eldre skrivinger. Ingen serverfunksjon, regelpublisering eller nettverk inngår i agentens leveranse.
+
+1. Før eiers apppublisering: la v105-enhetene vise Synket, og last ned en sikkerhetskopi på PC. Publiser appfilene samlet i GitHub Desktop, inkludert de endrede domene-/synk-/renderfilene og nye src/sync/servings-defaults.js i begge cachelistene.
+2. Åpne v106 først som administrator på nett. Minimumsheving skjer før overgangen. Etter serverprofil og autoritativt ukebilde omgjøres 5 eller gjeldende standard til null i inneværende/fremtidige uker. Andre tall og historiske uker beholdes. En toast viser antall dager og standarden når ukeskrivingene er kvittert og meta er merket.
+3. Merket families/familien/app/meta.servingsDefaultsV106:true viser at overgangen er fullført. Ved feil/avbrudd mangler merket, og neste oppstart prøver på nytt. Ikke slett merket for vanlig drift. En overgang som allerede er gjort, skal ikke kjøres igjen.
+4. Lukk/åpne alle øvrige enheter og kontroller v106. v105 og eldre får oppdateringsskjerm når minimumet er 106. Kontroller familieinnstillingen Porsjoner til vanlig, dager som følger standarden og eget dagsvalg med Bruk standard.
+5. Bytt standard fra 5 til 4 og kontroller oppskrift, dagsark og handleberegning uten å vente på nytt ukebilde. Prøv −/+ fra en plandag (lagres på dagen) og fra oppskriftslisten (bare minne). Legg i handleliste skal bruke det viste tallet. Kontroller avrunding og summering uten å endre oppskriften.
+6. Backup/restore støtter null. Eldre backup konverterer dagsverdier lik kopiens standard; andre tall beholdes. Ny backup bevarer egne valg. Fullført restore skriver minimum 106 og overgangsmerket til slutt.
+
+Alle 45 testskript og syntakskontroll av 39 kildefiler bestod lokalt uten nettverk. Filer, alle brukssteder, lokale testresultater og faktiske avrundingseksempler står i LEVERANSE_V106.md. Ekte PC/iPhone-kontroll og skyovergang utføres av eier etter publisering; agenten har ikke kontaktet skyen eller kjørt overgangen i databasen.
 
 ## Utrulling av v105
 

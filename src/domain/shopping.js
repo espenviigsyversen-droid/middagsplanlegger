@@ -37,13 +37,26 @@ export function shoppingAmountValue(value) {
   return parseAmountRange(value)?.max ?? parseAmount(value);
 }
 
-export function scaleAmount(amount, baseServings, targetServings) {
+export function roundScaledAmount(value, unit = "", { shoppingTotal = false } = {}) {
+  const key = unit.trim().toLowerCase();
+  let step;
+  if (["g", "ml"].includes(key)) step = value < 10 ? 0.5 : value < 20 ? 1 : value < 100 ? 5 : value < 250 ? 10 : 25;
+  else if (["kg", "l"].includes(key)) step = 0.1;
+  else if (key === "dl") step = 0.5;
+  else if (["ts", "ss"].includes(key)) step = value < 1 ? 0.25 : 0.5;
+  else if (shoppingTotal) return Math.max(1, Math.ceil(value - 1e-10));
+  else step = value < 3 ? 0.5 : 1;
+  return Number((Math.max(1, Math.floor(value / step + 0.5 + 1e-10)) * step).toFixed(2));
+}
+
+export function scaleAmount(amount, baseServings, targetServings, unit = "") {
   if (!targetServings || targetServings === baseServings) return amount;
+  const scaled = value => formatShoppingAmount(roundScaledAmount(value * targetServings / baseServings, unit));
   const range = parseAmountRange(amount);
-  if (range) return `${formatAmount(range.min * targetServings / baseServings)}–${formatAmount(range.max * targetServings / baseServings)}`;
+  if (range) return `${scaled(range.min)}–${scaled(range.max)}`;
   const parsed = parseAmount(amount);
   if (parsed === null) return amount;
-  return formatAmount((parsed * targetServings) / baseServings);
+  return scaled(parsed);
 }
 
 export function normalizeShoppingList(shoppingList = {}) {
@@ -105,6 +118,27 @@ export function mergeShoppingItems(existingItems, incomingItems) {
   });
 
   return merged;
+}
+
+// Aggregate recipe contributions before rounding. Runtime fields never reach
+// stored shopping items; existing/manual items are not passed through this step.
+export function roundRecipeShoppingItems(items, { weekly = false } = {}) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = shoppingMergeKey(item), num = item._rawAmount ?? shoppingAmountValue(item.amount);
+    const group = groups.get(key);
+    if (group) {
+      if (num !== null && group.num !== null) group.num += num;
+      group.count++; group.scaled ||= item._scaled;
+    } else groups.set(key, { item, num, count: 1, scaled: item._scaled });
+  }
+  return [...groups.values()].map(({ item, num, count, scaled }) => {
+    const { _rawAmount, _scaled, ...clean } = item;
+    const rounding = scaled || (weekly && count > 1);
+    return { ...clean, amount: num === null ? clean.amount
+      : rounding ? formatShoppingAmount(roundScaledAmount(num, clean.unit, { shoppingTotal: weekly && count > 1 }))
+        : count > 1 ? formatShoppingAmount(num) : clean.amount };
+  });
 }
 
 export function orderStoreCategories(categories, order = []) {

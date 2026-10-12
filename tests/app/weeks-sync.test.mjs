@@ -112,14 +112,15 @@ assert.equal(concurrent.run("syncStatusText()"), "Synket"); concurrent.stop();
 
 const missing = fixture(); await missing.start(); missing.run('state.pendingLocalSync=true; state.plansByWeek[getWeekKey()]={1:"meal-1"}');
 missing.server({}, { fromCache: true }); assert.equal(missing.run("currentPlan()[1]"), "meal-1"); missing.server();
-assert.equal(missing.run("currentPlan()[1]"), ""); assert.equal(missing.run("currentServings()[1]"), 4);
+assert.equal(missing.run("currentPlan()[1]"), ""); assert.equal(missing.run("currentServings()[1]"), null);
+assert.equal(missing.run("servingsForDay(getWeekKey(),1)"), 4);
 assert.equal(missing.run("Object.keys(state.plansByWeek).length"), 0);
 assert.equal(missing.calls.length, 0); assert.equal(missing.run("state.pendingLocalSync"), true); assert.equal(missing.run("state.clientUpdatedAt"), 1234); missing.stop();
 
 const cleared = fixture(); await cleared.start(); cleared.server({ [cleared.key]: { plan: { 1: "meal-1" }, lockedPlan: { 1: true }, servings: { 1: 2 } } });
 const button = { handlers: {}, addEventListener(name, callback) { this.handlers[name] = callback; } };
 cleared.selectors.set("[data-clear-week]", [button]); cleared.run("bindEvents()"); button.handlers.click(); cleared.tick();
-assert.deepEqual(cleared.calls[0]?.[2], { plan: { 1: "" }, lockedPlan: { 1: false }, servings: { 1: 4 }, updatedAt: "server" }); cleared.stop();
+assert.deepEqual(cleared.calls[0]?.[2], { plan: { 1: "" }, lockedPlan: { 1: false }, servings: { 1: null }, updatedAt: "server" }); cleared.stop();
 
 const exported = fixture(); await exported.start(); exported.server();
 exported.run('updatePlanDay(1,"meal-1"); togglePlanLock(1); updateDayType(1,"weekend"); updateDayServings(1,3); updateDayMode(4,"away"); updateDayNote(1,"Notat")');

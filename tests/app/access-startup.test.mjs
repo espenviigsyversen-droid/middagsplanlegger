@@ -69,7 +69,7 @@ for (const [config, kind, text] of [
   [{ role: null }, "denied", /Du har ikke tilgang ennå/],
   [{ meta: null }, "setup", /data-restore-file/],
   [{ meta: null, role: "member" }, "setup", /En administrator må gjøre det først/],
-  [{ meta: { initializedAt: 1, minAppVersion: 106 } }, "update", /Appen må oppdateres/],
+  [{ meta: { initializedAt: 1, minAppVersion: 107 } }, "update", /Appen må oppdateres/],
 ]) {
   const f = fixture(config); await f.run("initFirebaseSync()"); await f.auth(user);
   assert.equal(f.run("accessState.kind"), kind);
@@ -91,7 +91,7 @@ assert.equal(minimum96.run("accessState.kind"), "ready");
 assert.equal(ready.run("accessState.kind"), "ready");
 assert.equal(ready.watchers.length, 7); // meta, shoppingItems, meals, weeks, and three domain scopes
 assert.equal(ready.writes.length, 1, "Admin startup raises the minimum once, without uploading domain data");
-assert.equal(ready.writes[0][0], "meta"); assert.equal(ready.writes[0][1].minAppVersion, 101);
+assert.equal(ready.writes[0][0], "meta"); assert.equal(ready.writes[0][1].minAppVersion, 106);
 assert.match(ready.app.innerHTML, /data-shopping-input/);
 const regular = fixture({ role: "member" }); await regular.run("initFirebaseSync()"); await regular.auth(user);
 regular.run('state.pendingLocalSync = true; state.clientUpdatedAt = 100;');
@@ -113,7 +113,7 @@ assert.equal(ready.writes.length, 1, "Cancelled timers remain inert; only the in
 await ready.auth(user);
 assert.equal(ready.watchers.filter(w => !w.stopped).length, 7);
 ready.watchers.filter(w => !w.stopped).find(w => w.ref === "meta").callback({
-  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 106 }), metadata: { fromCache: false },
+  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 107 }), metadata: { fromCache: false },
 });
 assert.ok(ready.watchers.every(w => w.stopped));
 assert.match(ready.app.innerHTML, /Appen må oppdateres/);
@@ -155,3 +155,33 @@ for (const saved of [oldCache, { ...oldCache, projectId: undefined }]) {
   assert.equal(JSON.parse(f.storage.get("middagsapp-state")).projectId, projectId);
 }
 console.log("app access startup tests ok");
+// v106 transition: server profile and authoritative weeks are required; mark only after all SDK acknowledgements.
+const settle = async () => { for(let i=0;i<20;i++) await Promise.resolve(); };
+const transitionMeta={initializedAt:1,minAppVersion:101}, migrating=fixture({meta:transitionMeta});
+let acknowledge; const confirmation=new Promise(resolve=>{acknowledge=resolve;});
+migrating.api.setDoc=(...args)=>{migrating.writes.push(args);return confirmation;};
+migrating.api.updateDoc=async(ref,data)=>{migrating.writes.push([ref,data]);if(ref==="meta")Object.assign(transitionMeta,data);};
+await migrating.run("initFirebaseSync()");await migrating.auth(user);
+assert.equal(transitionMeta.minAppVersion,106);
+const week = migrating.run("getWeekKeyForOffset(0)"), oldWeek=migrating.run("weekKeyOffset(getWeekKeyForOffset(0),-1)"), futureWeek=migrating.run("weekKeyOffset(getWeekKeyForOffset(0),1)");
+const weekDocs=()=>[ [oldWeek,{servings:{0:5,1:4}}],[week,{servings:{0:5,1:4,2:7}}],[futureWeek,{servings:{0:5}}] ].map(([id,data])=>({id,data:()=>data}));
+const weeksWatch=migrating.watchers.find(w=>w.ref==="weeks");
+weeksWatch.callback({docs:weekDocs(),metadata:{fromCache:true}});await settle();
+assert.equal(migrating.writes.length,1);
+migrating.watchers.find(w=>w.ref==="profile").callback({exists:()=>true,data:()=>({family:{name:"Skyfamilie",familySize:4},clientUpdatedAt:100}),metadata:{fromCache:false}});
+await settle();assert.equal(migrating.writes.length,1,"Cache-only weeks cannot start the transition");
+weeksWatch.callback({docs:weekDocs(),metadata:{fromCache:false,hasPendingWrites:false}});await settle();
+assert.equal(migrating.run(`state.servingsByWeek["${week}"][0]`),null);assert.equal(migrating.run(`state.servingsByWeek["${week}"][1]`),null);
+assert.equal(migrating.run(`state.servingsByWeek["${week}"][2]`),7);assert.equal(migrating.run(`state.servingsByWeek["${oldWeek}"][0]`),5);
+assert.equal(transitionMeta.servingsDefaultsV106,undefined);
+for(const callback of [...migrating.timers.values()]) callback();await settle();
+assert.equal(migrating.writes.filter(([ref])=>ref.startsWith("weeks/")).length,2);
+assert.deepEqual(JSON.parse(JSON.stringify(migrating.writes.filter(([ref])=>ref.startsWith("weeks/")).map(([,data])=>data.servings))),[{0:null,1:null},{0:null}]);
+assert.equal(transitionMeta.servingsDefaultsV106,undefined,"Unacknowledged writes must not set meta");
+acknowledge();await settle();assert.equal(transitionMeta.servingsDefaultsV106,true);
+assert.equal(migrating.run("state.toast.message"),"Porsjonene for 3 dager følger nå standarden (4).");
+const markerIndex=migrating.writes.findIndex(([,data])=>data.servingsDefaultsV106===true);
+assert.equal(markerIndex,migrating.writes.length-1);
+weeksWatch.callback({docs:weekDocs(),metadata:{fromCache:false}});await settle();
+assert.equal(migrating.writes.filter(([,data])=>data.servingsDefaultsV106===true).length,1);
+migrating.run("stopAllSync()");

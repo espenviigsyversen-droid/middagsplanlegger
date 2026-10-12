@@ -141,3 +141,11 @@ Firebase CLI 15.18.0 og lokal Node v24.15.0 ble brukt med eksisterende innloggin
 functions:list bekreftet seks callable v2-funksjoner i europe-west1/nodejs22: importRecipe (512 MiB), aiKeyStatus, aiKeySave, aiKeyTest, aiKeyDelete og aiModelSave (256 MiB hver). Uinnlogget JSON-POST med {"data":{}} til aiKeyStatus og aiModelSave ga begge HTTP 401/UNAUTHENTICATED. Ingen innlogget aiModelSave, aiKeySave eller importRecipe-kall; ingen OpenAI-kall.
 
 KEY_ENCRYPTION_SECRET, regler og miljøvariabler er urørt. Ingen Git, secrets:set/access, --force, sletting, debuglogg eller midlertidig hemmelighetsfil. Appfilene publiseres av eier via GitHub Desktop; modellprøve og ekte import kontrolleres etterpå. Full filoversikt og alle lokale testresultater står i LEVERANSE_V104.md.
+
+## Porsjonsstandard og minimum v106
+
+Fra v106 brukes eksisterende family.familySize som standard antall porsjoner. Ukedokumentets servings-dager er null/mangler for standarden, eller tall for eget dagsvalg. Ingen regelendring eller functions-publisering trengs. Åpne appen først som online administrator, slik at minAppVersion heves til 106 og v105/eldre stoppes før den nye semantikken tas i bruk.
+
+Appen venter på serverprofil og autoritativt ukebilde, leser meta fra serveren og omgjør aktuelle/fremtidige dagsverdier lik 5 eller gjeldende standard til null. Vanlig ukesynk skriver bare berørte servings-celler. Først etter SDK-kvitteringer skrives servingsDefaultsV106:true til app/meta, med ikke-blokkerende melding i appen. Historiske uker og andre tall beholdes. Ved avbrudd mangler merket og neste oppstart prøver igjen. Ikke opprett/slett merket manuelt i vanlig drift.
+
+Nytt oppsett og fullført restore skriver minAppVersion:106 og servingsDefaultsV106:true helt til slutt. Eldre kopier konverteres fra kopiens familySize; ny kopi bevarer egne tall og null. Tidligere regler om manuell åpning av restore og å beholde members gjelder fortsatt. Agenten kjører ingen Firebase-kommandoer eller skyovergang i v106-leveransen.

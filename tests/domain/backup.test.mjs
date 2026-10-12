@@ -10,6 +10,8 @@ const data = {
   shoppingList: { items: [{ name: "Melk" }] },
 };
 const backup = buildBackup({ data, appVersion: "v91", familyId: "familien", now });
+const current=buildBackup({data:{...data,servingsByWeek:{"2026-01-05":{1:7}}},appVersion:"v106",familyId:"familien",now});
+assert.deepEqual(current.data.servingsByWeek["2026-01-05"],{0:null,1:7,2:null,3:null,4:null,5:null,6:null});
 assert.deepEqual(backup, {
   app: "middagsapp", exportVersion: 1, appVersion: "v91", familyId: "familien",
   exportedAt: now.toISOString(), data,

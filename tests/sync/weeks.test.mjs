@@ -11,11 +11,14 @@ assert.deepEqual(diffWeeks(state(), state({ plan: { 1: "taco" }, lockedPlan: { 1
 assert.deepEqual(diffWeeks({}, { plansByWeek: { [w]: { 1: "a" }, [other]: { 4: "b" } } }),
   { [w]: { plan: { 1: "a" } }, [other]: { plan: { 4: "b" } } });
 assert.deepEqual(diffWeeks(state({ plan: { 1: "a" }, lockedPlan: { 1: true }, dayTypes: { 2: "weekend" }, servings: { 3: 2 }, dayModes: { 4: "away" }, dayNotes: { 5: "Note" } }), state(), 4),
-  { [w]: { plan: { 1: "" }, lockedPlan: { 1: false }, dayTypes: { 2: "weekday" }, servings: { 3: 4 }, dayModes: { 4: "home" }, dayNotes: { 5: "" } } });
+  { [w]: { plan: { 1: "" }, lockedPlan: { 1: false }, dayTypes: { 2: "weekday" }, servings: { 3: null }, dayModes: { 4: "home" }, dayNotes: { 5: "" } } });
 assert.deepEqual(diffWeeks(state(), {} ,4), {});
 assert.deepEqual(diffWeeks({}, state(), 4), {});
 assert.deepEqual(diffWeeks(state(), state(), 4), {});
 const read = state({ plan: { 1: "a" }, clientUpdatedAt: 999, updatedAt: 888 });
+assert.equal(state({servings:{0:5,1:null}}).servingsByWeek[w][0],5);
+assert.equal(state({servings:{0:5,1:null}}).servingsByWeek[w][1],null);
+assert.deepEqual(diffWeeks(state({servings:{0:5}}),state({servings:{0:null}})),{[w]:{servings:{0:null}}});
 assert.deepEqual(Object.keys(read), ["plansByWeek", "lockedPlansByWeek", "dayTypesByWeek", "servingsByWeek", "dayModesByWeek", "dayNotesByWeek"]);
 assert.deepEqual(read.plansByWeek[w], { ...emptyWeekPlan(), 1: "a" });
 assert.deepEqual(read.lockedPlansByWeek[w], emptyWeekLocks());
@@ -53,7 +56,7 @@ function fixture(write = () => Promise.resolve(), onWeeks) {
       const listener = { next, error, stopped: false }; listeners.push(listener); return () => { listener.stopped = true; };
     },
   } };
-  const sync = createWeeksSync({ onWeeks: weeks => { onWeeks?.(weeks); received.push(weeks); }, onStatus: status => statuses.push(status), getFamilySize: () => 4 });
+  const sync = createWeeksSync({ onWeeks: weeks => { onWeeks?.(weeks); received.push(weeks); }, onStatus: status => statuses.push(status) });
   return { sync, calls, received, statuses, listeners, start: () => sync.start(connection),
     snapshot: (data = {}, metadata = {}, index = listeners.length - 1) => listeners[index].next({ docs: Object.entries(data).map(([id, data]) => doc(id, data)), metadata: { fromCache: false, hasPendingWrites: false, ...metadata } }) };
 }
@@ -157,6 +160,14 @@ try {
     assert.equal(f.received.length, count + 1); assert.equal(f.statuses.at(-1), "Synket"); f.sync.stop();
   }
   assert.equal(timers.size, 0);
+  const confirmed=deferred(), waiting=fixture(()=>confirmed.promise);await waiting.start();waiting.snapshot({});
+  waiting.sync.enqueue({[w]:{servings:{1:null,2:7}}});
+  let settled=false;const idle=waiting.sync.waitForWrites().then(()=>{settled=true;});await settle();assert.equal(settled,false);
+  advance(500);await settle();assert.equal(settled,false);confirmed.resolve();await idle;assert.equal(settled,true);waiting.sync.stop();
+  const interrupted=fixture();await interrupted.start();interrupted.sync.enqueue({[w]:{servings:{1:null}}});
+  const cancelled=interrupted.sync.waitForWrites();interrupted.sync.stop();await assert.rejects(cancelled,/stoppet/);
+  const failedWait=fixture(()=>Promise.reject(new Error("Rejected")));await failedWait.start();failedWait.sync.enqueue({[w]:{servings:{1:null}}});
+  const failedWriteExpectation=assert.rejects(failedWait.sync.waitForWrites(),/feilet/);advance(500);await failedWriteExpectation;failedWait.sync.stop();
 } finally {
   globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear;
 }

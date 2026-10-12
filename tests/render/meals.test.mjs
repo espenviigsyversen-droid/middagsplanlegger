@@ -106,13 +106,13 @@ function testMealDetailRender() {
     steps: ["Kok pasta"],
     ingredients: [{ amount: "2", unit: "stk", name: "Tomat" }],
     wakeSupported: false,
-    servingText: "Oppskrift til 4 personer.",
+    servingText: "Oppskrift til 4 porsjoner.",
     leftoversText: "Gir rester",
     shoppingIconHtml: "<svg></svg>",
     scaleAmount: (amount) => amount,
     escapeHtml,
   });
-  assert.match(html, /Oppskrift til 4 personer/);
+  assert.match(html, /Oppskrift til 4 porsjoner/);
   assert.match(html, /Tomat/);
   assert.match(html, /Kok pasta/);
   assert.match(html, /Åpne lenke/);
@@ -155,7 +155,7 @@ function testMealEditorRender() {
   assert.match(html, /data-step-row="0"/);
   assert.match(html, /Slett/);
   assert.match(html, /Porsjoner i oppskriften/);
-  assert.match(html, /Antallet mengdene er beregnet for\. Ukeplan og handleliste regner om til familiens størrelse\./);
+  assert.match(html, /Antallet mengdene er beregnet for\. Ukeplan og handleliste regner om til porsjonene for dagen\./);
   assert.match(html, /aria-describedby="mealBaseServingsHint"/);
   const quickEditor = renderMealEditorView({ meal: { id: "ny", title: "Ny", prepTime: "" }, prepTimeEntries: [["quick", "Rask"]] });
   assert.match(quickEditor, /value="" selected>Ikke angitt/);
@@ -211,6 +211,11 @@ for (const [busy, preparing, available] of [[false, false, true], [true, false, 
   if (preparing) assert.match(html, /Klargjør bilder/);
 }
 console.log("meals render tests ok");
+const portionsHtml=renderMealDetailView({meal:{id:"a",title:"Test"},targetServings:5,baseServings:4,servingScope:"Gjelder mandag 12. okt."});
+assert.match(portionsHtml,/data-recipe-servings="-1"/);assert.match(portionsHtml,/data-recipe-servings="1"/);
+assert.match(portionsHtml,/5 porsjoner/);assert.match(portionsHtml,/Gjelder mandag 12\. okt\./);
+assert.match(renderMealDetailView({meal:{title:"Test"},targetServings:1}),/aria-label="Færre porsjoner" disabled/);
+assert.match(renderMealDetailView({meal:{title:"Test"},targetServings:30}),/aria-label="Flere porsjoner" disabled/);
 for (const remainingToday of [0, 1, 30, 31, 150, null, -1, 2.5]) {
   const html = renderMealEditorView({ meal: { title: "Test" }, importAvailable: true,
     aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { remainingToday }, escapeHtml });
