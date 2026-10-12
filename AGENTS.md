@@ -142,6 +142,15 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Serveren publiseres før klienten, med numerisk baseServings og additive group-felter for v97-kompatibilitet. Funksjonell kontroll krever at administrator først åpner v98 på nett, slik at eldre klienter stoppes før de kan fjerne grupper ved lagring.
 - Etter endringer: kjør alle eksisterende tester under tests/ og functions/tests/. Gruppene dekkes i meals/render/app/backup/restore-testene; versjonshevingen i access/access-startup; navn/intervaller i shopping/workflows; import og S3-uttrekk i functions-testene.
 
+## Radvalg i oppskriftseditoren fra v107
+
+- Ingrediens- og stegrader har én ⋯-knapp med radvalg i appen. Overskriftsrader beholder ↑/↓/×; begge flytteknapper skal være deaktivert ved sin listegrense. Ingrediensflytting forbi en overskrift endrer gruppen etter samme regel som før.
+- ingredientEditorGroups og ingredientEditorGroupIndex identifiserer grupper etter radindeks, også ved like eller tomme overskrifter. moveIngredientToGroup legger raden nederst før neste overskrift; insertIngredientInGroup legger en tom ingrediens på samme sted. Uten overskrift tilbys bare når det finnes rader før første overskrift. Nåværende gruppe utelates fra Flytt til.
+- Kjør syncMealEditorDraftFromDom før åpning/lukking av radmenyen og før hver flytting, fjerning og innsetting. Alle skjemaområder skal bevares, også tekst skrevet siden forrige render. Etter flytting fokuseres og rulles radens ⋯-knapp inn; gruppeinnsetting fokuserer mengdefeltet.
+- editorRowMenu er separat runtime-tilstand og lagres aldri i lokal kopi, domenestate, synk eller backup. Bare én meny er åpen; valg, trykk på bakgrunnen og Escape lukker den. Lukket/byttet editor, visningsbytte og konto-/tilgangsbytte forkaster menyen. Ingen dra-og-slipp eller datamodellendring.
+- På mobil er ⋯ minst 44×44 px. Mengde-/enhetskolonnene gir plass til knappen uten å redusere navnefeltet. Radmenyen vises som et rullbart ark nederst med én handling per linje. Stegnummerering avledes fortsatt fra rekkefølgen.
+- Kjør node tests/app/editor-rows.test.mjs, node tests/domain/meals.test.mjs og node tests/render/meals.test.mjs, samt alle øvrige testskript og syntakskontroller. APP_VERSION/APP_VERSION_NUMBER/cache er v107/107, REQUIRED_MIN_APP_VERSION forblir 106. Ingen endring i functions eller firestore.rules; ingen nettverk, installasjon, publisering eller Git i leveransen.
+
 ## Importvalg og blandede tall fra v99
 
 - Ikke bruk window.confirm etter asynkron oppskriftsimport. Vis Erstatt/Behold i importpanelet; fyll tomme deler straks og behold konfliktdeler til valget. Les dagens skjema før erstatning og erstatt bare konfliktområdene. Andre confirm-kall, utløst direkte av klikk, beholdes.

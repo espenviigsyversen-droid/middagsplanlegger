@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { ingredientBaseName, ingredientsToEditorRows, editorRowsToIngredients, moveIngredientEditorRow } from "../../src/domain/meals.js";
+import { ingredientBaseName, ingredientsToEditorRows, editorRowsToIngredients, moveIngredientEditorRow,
+  ingredientEditorGroups, ingredientEditorGroupIndex, moveIngredientToGroup, insertIngredientInGroup,
+  moveStepEditorRow, removeStepEditorRow } from "../../src/domain/meals.js";
 
 assert.equal(ingredientBaseName(" hvitløk, finhakket "), "hvitløk");
 assert.equal(ingredientBaseName(", pynt"), ", pynt");
@@ -101,3 +103,34 @@ otherQuickMeal.categories.push("kjott");
 assert.deepEqual(quickMeal.categories, []);
 
 console.log("meals domain tests ok");
+
+const heading = title => ({ type: "heading", title });
+const ingredient = name => ({ name, amount: "1", unit: "stk" });
+const ownerRows = [heading("Mat"), ...["fiskepinner", "kapteinens fylte", "ris"].map(ingredient),
+  heading("Chilimajones"), ...["majones", "gulrot", "soyasaus"].map(ingredient)];
+const originalRows = structuredClone(ownerRows);
+const withCarrot = moveIngredientToGroup(ownerRows, 6, 0);
+const corrected = moveIngredientToGroup(withCarrot, 7, 0);
+assert.deepEqual(editorRowsToIngredients(corrected).filter(item => item.group === "Mat").map(item => item.name),
+  ["fiskepinner", "kapteinens fylte", "ris", "gulrot", "soyasaus"]);
+assert.deepEqual(ownerRows, originalRows, "Moving must not mutate the draft passed in");
+assert.deepEqual(moveIngredientToGroup(ownerRows, 2, 0), ownerRows, "Own group is unchanged");
+assert.equal(editorRowsToIngredients(moveIngredientEditorRow(ownerRows, 3, 1)).find(item => item.name === "ris").group, "Chilimajones");
+assert.equal(editorRowsToIngredients(moveIngredientEditorRow(ownerRows, 5, -1)).find(item => item.name === "majones").group, "Mat");
+assert.deepEqual(moveIngredientEditorRow(ownerRows, 0, -1), ownerRows);
+assert.deepEqual(moveIngredientEditorRow(ownerRows, 7, 1), ownerRows);
+const unnamed = [ingredient("salt"), heading(""), ingredient("mel"), heading("Saus"), ingredient("vann")];
+assert.deepEqual(ingredientEditorGroups(unnamed).map(g => g.label), ["Uten overskrift", "Overskrift uten navn", "Saus"]);
+assert.equal(ingredientEditorGroupIndex(unnamed, 0), -1);
+assert.equal(ingredientEditorGroupIndex(unnamed, 2), 1);
+assert.deepEqual(moveIngredientToGroup(unnamed, 2, -1).map(r => r.name || r.title), ["salt", "mel", "", "Saus", "vann"]);
+assert.deepEqual(moveIngredientToGroup(unnamed, 0, 3).map(r => r.name || r.title), ["", "mel", "Saus", "vann", "salt"]);
+assert.equal(moveIngredientToGroup(unnamed, 4, 1)[3].name, "vann");
+const inserted = insertIngredientInGroup(ownerRows, 0);
+assert.deepEqual(inserted[4], { name: "", amount: "", unit: "" });
+assert.equal(inserted[5].title, "Chilimajones");
+assert.deepEqual(insertIngredientInGroup([heading("Tom")], 0), [heading("Tom"), { name: "", amount: "", unit: "" }]);
+assert.deepEqual(moveStepEditorRow(["En", "To", "Tre"], 1, -1), ["To", "En", "Tre"]);
+assert.deepEqual(moveStepEditorRow(["En", "To", "Tre"], 1, 1), ["En", "Tre", "To"]);
+assert.deepEqual(removeStepEditorRow(["En", "To"], 0), ["To"]);
+assert.deepEqual(removeStepEditorRow(["En"], 0), [""]);

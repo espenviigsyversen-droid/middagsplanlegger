@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v107 – radvalg i oppskriftsredigeringen
+
+v107 flytter ingredienser og steg i editorens utkast uten nytt dataformat eller endret synk. REQUIRED_MIN_APP_VERSION forblir 106. Ingen serverpublisering er nødvendig. Eier tar med filene i docs/LEVERANSE_V107.md i GitHub Desktop og publiserer klienten som vanlig.
+
+Etter publisering: kontroller v107 på PC og telefon. Ved 375 px bredde skal ⋯ åpne et ark nederst med Flytt opp/ned, andre grupper og Fjern, uten at ingrediensnavnet blir smalere. Flytt gulrot og soyasaus fra Chilimajones til Mat, og kontroller rekkefølge/grupper etter lagring. Prøv + Ingrediens i begge grupper og flytting av steg. Skriv i flere felt før hver handling og kontroller at teksten beholdes. Menyen skal lukkes ved valg, trykk utenfor og Escape; flyttet rad skal få fokus og rulles inn.
+
 Kjør lokale kontroller:
 
 ```powershell
@@ -21,6 +27,7 @@ node tests/domain/suggestions.test.mjs
 node tests/domain/weeks.test.mjs
 node tests/render/calendar.test.mjs
 node tests/render/meals.test.mjs
+node tests/app/editor-rows.test.mjs
 node tests/render/planner.test.mjs
 node tests/render/setup.test.mjs
 node tests/render/shopping.test.mjs

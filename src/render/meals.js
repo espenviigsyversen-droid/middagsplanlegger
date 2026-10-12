@@ -1,4 +1,4 @@
-import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows } from "../domain/meals.js";
+import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex } from "../domain/meals.js";
 
 function renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml }) {
   let previous = "";
@@ -238,6 +238,7 @@ export function renderIngredientEditorRowView(options = {}) {
   const {
     item = { amount: "", unit: "", name: "" },
     index = 0,
+    totalRows = 1,
     unitOptions = [],
     escapeHtml = String,
   } = options;
@@ -247,7 +248,7 @@ export function renderIngredientEditorRowView(options = {}) {
       <input class="input" data-ingredient-field="group" maxlength="60" value="${escapeHtml(item.title || "")}" placeholder="Overskrift, for eksempel Saus" aria-label="Ingrediensoverskrift">
       <div class="ingredient-heading-actions">
         <button class="icon-button" type="button" data-move-ingredient-heading="${index}" data-direction="-1" aria-label="Flytt overskrift opp" ${index === 0 ? "disabled" : ""}>↑</button>
-        <button class="icon-button" type="button" data-move-ingredient-heading="${index}" data-direction="1" aria-label="Flytt overskrift ned">↓</button>
+        <button class="icon-button" type="button" data-move-ingredient-heading="${index}" data-direction="1" aria-label="Flytt overskrift ned" ${index === totalRows - 1 ? "disabled" : ""}>↓</button>
         <button class="icon-button" type="button" data-remove-ingredient="${index}" aria-label="Fjern overskrift">×</button>
       </div>
     </div>`;
@@ -259,7 +260,7 @@ export function renderIngredientEditorRowView(options = {}) {
         ${unitOptions.map((unit) => `<option value="${escapeHtml(unit)}" ${item.unit === unit ? "selected" : ""}>${unit ? escapeHtml(unit) : "Enhet"}</option>`).join("")}
       </select>
       <input class="input" data-ingredient-field="name" data-ingredient-index="${index}" value="${escapeHtml(item.name)}" placeholder="Ingrediensnavn">
-      <button class="icon-button" type="button" data-remove-ingredient="${index}" title="Fjern ingrediens">×</button>
+      <button class="icon-button editor-row-menu-button" type="button" data-editor-row-menu="ingredient" data-row-index="${index}" aria-label="Valg for ${escapeHtml(item.name?.trim() || "ingrediens")}" aria-haspopup="dialog">⋯</button>
     </div>
   `;
 }
@@ -275,9 +276,29 @@ export function renderStepEditorRowView(options = {}) {
     <div class="step-editor-row" data-step-row="${index}">
       <div class="step-editor-number">${index + 1}</div>
       <textarea class="textarea" data-step-field data-step-index="${index}" placeholder="Beskriv dette steget">${escapeHtml(step)}</textarea>
-      <button class="icon-button" type="button" data-remove-step="${index}" title="Fjern steg">×</button>
+      <button class="icon-button editor-row-menu-button" type="button" data-editor-row-menu="step" data-row-index="${index}" aria-label="Valg for steg ${index + 1}" aria-haspopup="dialog">⋯</button>
     </div>
   `;
+}
+
+export function renderEditorRowMenuView({ kind, index, ingredients = [], steps = [], escapeHtml = String } = {}) {
+  const isIngredient = kind === "ingredient", rows = isIngredient ? ingredients : steps;
+  if (!Number.isInteger(index) || index < 0 || index >= rows.length || (isIngredient && rows[index].type === "heading")) return "";
+  const title = isIngredient ? `Valg for ${rows[index].name?.trim() || "ingrediens"}` : `Valg for steg ${index + 1}`;
+  const groups = isIngredient ? ingredientEditorGroups(rows) : [], current = isIngredient ? ingredientEditorGroupIndex(rows, index) : null;
+  const targets = groups.filter(group => group.headingIndex !== current);
+  return `<div class="modal-backdrop editor-row-menu-backdrop active" data-editor-menu-close>
+    <section class="modal editor-row-menu active" data-editor-menu role="dialog" aria-modal="true" aria-labelledby="editorRowMenuTitle">
+      <div class="modal-header"><h3 id="editorRowMenuTitle">${escapeHtml(title)}</h3>
+        <button class="modal-close" type="button" data-editor-menu-close aria-label="Lukk radmeny">×</button></div>
+      <div class="editor-row-menu-actions">
+        <button class="button secondary" type="button" data-editor-menu-action="up" ${index === 0 ? "disabled" : ""}>Flytt opp</button>
+        <button class="button secondary" type="button" data-editor-menu-action="down" ${index === rows.length - 1 ? "disabled" : ""}>Flytt ned</button>
+        ${groups.some(group => group.headingIndex >= 0) ? `<h4>Flytt til</h4>
+          ${targets.map(group => `<button class="button secondary" type="button" data-editor-menu-action="group" data-group-index="${group.headingIndex}">${escapeHtml(group.label)}</button>`).join("") || '<p class="field-hint">Ingen andre grupper.</p>'}` : ""}
+        <button class="button ghost danger" type="button" data-editor-menu-action="remove">Fjern</button>
+      </div>
+    </section></div>`;
 }
 
 export function renderMealEditorView(options = {}) {
@@ -292,6 +313,7 @@ export function renderMealEditorView(options = {}) {
     prepTimeEntries = [],
     unitOptions = [],
     recipeImport = {},
+    rowMenu = null,
     aiKeyStatus = null,
     aiKeyMessage = "",
     isAdmin = false,
@@ -301,6 +323,7 @@ export function renderMealEditorView(options = {}) {
 
   if (!meal) return "";
   const ingredientRows = ingredients.some(item => item.type === "heading") ? ingredients : ingredientsToEditorRows(ingredients);
+  let headingIndex = -1;
 
   return `
     <section class="panel meal-editor">
@@ -425,7 +448,12 @@ export function renderMealEditorView(options = {}) {
               <span>Ingrediens</span>
               <span></span>
             </div>
-            ${ingredientRows.map((item, index) => renderIngredientEditorRowView({ item, index, unitOptions, escapeHtml })).join("")}
+            ${ingredientRows.map((item, index) => {
+              if (item.type === "heading") headingIndex = index;
+              const row = renderIngredientEditorRowView({ item, index, totalRows: ingredientRows.length, unitOptions, escapeHtml });
+              return row + (headingIndex >= 0 && (index === ingredientRows.length - 1 || ingredientRows[index + 1].type === "heading")
+                ? `<button class="text-action ingredient-group-add" type="button" data-add-ingredient-group="${headingIndex}">+ Ingrediens</button>` : "");
+            }).join("")}
           </div>
           <div class="ingredient-editor-add-actions"><button class="button secondary compact" type="button" data-add-ingredient>Legg til ingrediens</button>
             <button class="button secondary compact" type="button" data-add-ingredient-heading>Legg til overskrift</button></div>
@@ -444,6 +472,7 @@ export function renderMealEditorView(options = {}) {
           <button class="button" type="submit">Lagre middag</button>
         </div>
       </form>
+      ${rowMenu ? renderEditorRowMenuView({ ...rowMenu, ingredients: ingredientRows, steps, escapeHtml }) : ""}
     </section>
   `;
 }

@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   renderMealCardView,
   renderMealDetailView,
   renderMealEditorView,
   renderMealSearchSuggestionsView,
   renderMealsView,
+  renderEditorRowMenuView,
+  renderIngredientEditorRowView,
+  renderStepEditorRowView,
 } from "../../src/render/meals.js";
 
 const escapeHtml = (value) => String(value ?? "")
@@ -222,3 +226,34 @@ for (const remainingToday of [0, 1, 30, 31, 150, null, -1, 2.5]) {
   if (Number.isInteger(remainingToday) && remainingToday >= 0 && remainingToday <= 30) assert.ok(html.includes(`${remainingToday} importer igjen i dag.`));
   else assert.doesNotMatch(html, /importer igjen i dag/);
 }
+
+// v107: row menus and insertion at each group boundary.
+const menuRows = [{name:'salt'}, {type:'heading',title:'Mat'}, {name:'gulrot'}, {type:'heading',title:''}, {name:'mel'}];
+const rowMenu = index => renderEditorRowMenuView({kind:'ingredient', index, ingredients:menuRows, escapeHtml});
+assert.match(rowMenu(0), /action="up" disabled/);
+assert.match(rowMenu(4), /action="down" disabled/);
+assert.match(rowMenu(2), /Uten overskrift/); assert.match(rowMenu(2), /Overskrift uten navn/);
+assert.ok(!rowMenu(2).includes('>Mat</button>'));
+assert.match(rowMenu(2), /Flytt opp/); assert.match(rowMenu(2), /Flytt ned/); assert.match(rowMenu(2), /Fjern/);
+assert.doesNotMatch(renderEditorRowMenuView({kind:'ingredient',index:0,ingredients:[{name:'Salt'}]}), /Flytt til/);
+assert.doesNotMatch(renderEditorRowMenuView({kind:'step',index:0,steps:['Kok']}), /Flytt til/);
+assert.match(renderEditorRowMenuView({kind:'step',index:0,steps:['Kok']}), /Valg for steg 1/);
+const menuIngredient = renderIngredientEditorRowView({item:{name:'<gulrot>',amount:'1',unit:'stk'},escapeHtml});
+assert.match(menuIngredient, /aria-label="Valg for &lt;gulrot&gt;"/); assert.ok(menuIngredient.includes('>⋯</button>'));
+assert.doesNotMatch(menuIngredient, /data-remove-ingredient/);
+assert.match(renderIngredientEditorRowView({item:{name:'',amount:'',unit:''}}), /Valg for ingrediens/);
+assert.match(renderIngredientEditorRowView({item:{type:'heading',title:'Mat'},index:1,totalRows:2}), /data-direction="1" aria-label="Flytt overskrift ned" disabled/);
+assert.ok(renderStepEditorRowView({step:'Stek',index:2}).includes('step-editor-number">3</div>'));
+assert.ok(renderStepEditorRowView({step:'Stek'}).includes('>⋯</button>'));
+const groupEditor = renderMealEditorView({meal:{title:'Test'},ingredients:menuRows,steps:['Kok'],rowMenu:{kind:'ingredient',index:2},escapeHtml});
+assert.equal((groupEditor.match(/data-add-ingredient-group=/g)||[]).length,2);
+assert.match(groupEditor, /role="dialog" aria-modal="true"/);
+assert.ok(groupEditor.indexOf('</form>') < groupEditor.indexOf('editor-row-menu-backdrop'));
+const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+assert.match(css, /grid-template-columns: 64px 72px minmax\(0, 1fr\) 44px/);
+assert.match(css, /\.ingredient-editor-row \.icon-button\s*\{\s*width: 44px;\s*height: 44px;/);
+assert.match(css, /\.editor-row-menu-actions \.button\s*\{ min-height: 44px;/);
+assert.match(css, /\.editor-row-menu-actions \{[^}]*overflow-y: auto/);
+// At 375 px the grid reserves the same width as v106, so the name field does not shrink.
+assert.equal(64 + 72 + 44 + 3 * 6, 70 + 78 + 32 + 3 * 6);
+assert.equal(20 + 44 + 2 * 6, 32 + 32 + 2 * 6);

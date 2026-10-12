@@ -10,6 +10,12 @@ import {
   ingredientsToEditorRows,
   editorRowsToIngredients,
   moveIngredientEditorRow,
+  ingredientEditorGroups,
+  ingredientEditorGroupIndex,
+  moveIngredientToGroup,
+  insertIngredientInGroup,
+  moveStepEditorRow,
+  removeStepEditorRow,
   normalizedRecipeUrl,
   quickMealTitleForQuery,
   splitLines,
@@ -216,8 +222,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v106";
-const APP_VERSION_NUMBER = 106;
+const APP_VERSION = "v107";
+const APP_VERSION_NUMBER = 107;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -235,6 +241,7 @@ let mealsSyncStatus = null;
 let weeksSyncStatus = null;
 let servingsTransition = null, weeksServerReady = false, profileServerReady = false;
 let recipeServingsView = { key: null, value: null };
+let editorRowMenu = null;
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
 let currentAuthUser = null;
@@ -1646,6 +1653,7 @@ function renderMealEditor() {
     prepTimeEntries: prepTimeEntries(),
     unitOptions: getUnitOptions(),
     recipeImport: recipeImportState,
+    rowMenu: editorRowMenu,
     aiKeyStatus: aiKeyUi.status,
     aiKeyMessage: aiKeyUi.message,
     isAdmin: accessState.role === "admin",
@@ -1746,12 +1754,77 @@ function syncDraftIngredientsFromDom() {
 
 function changeIngredientEditorRows(action, index = -1, delta = 0) {
   syncMealEditorDraftFromDom();
+  editorRowMenu = null;
   let rows = state.draftIngredients || [];
+  let focusIndex = null, focusField = "menu";
   if (action === "heading") rows = [...rows, { type: "heading", title: "" }];
-  else if (action === "move") rows = moveIngredientEditorRow(rows, index, delta);
+  else if (action === "move") { focusIndex = Math.max(0, Math.min(rows.length - 1, index + delta)); rows = moveIngredientEditorRow(rows, index, delta); }
+  else if (action === "group") {
+    const group = ingredientEditorGroups(rows).find(group => group.headingIndex === delta);
+    if (group && ingredientEditorGroupIndex(rows, index) !== delta) {
+      focusIndex = group.end - (index < group.end ? 1 : 0); rows = moveIngredientToGroup(rows, index, delta);
+    }
+  } else if (action === "add-group") {
+    focusIndex = ingredientEditorGroups(rows).find(group => group.headingIndex === index)?.end ?? null;
+    rows = insertIngredientInGroup(rows, index); focusField = "amount";
+  }
   else if (action === "remove") rows = rows.filter((_, rowIndex) => rowIndex !== index);
+  if (!rows.length) rows = [{ amount: "", unit: "", name: "" }];
   setState({ draftMeal: state.draftMeal, draftIngredients: rows, draftSteps: state.draftSteps });
+  if (focusIndex !== null) focusEditorRow("ingredient", focusIndex, focusField);
 }
+
+function focusEditorRow(kind, index, field = "menu") {
+  const selector = field === "amount" ? `[data-ingredient-row="${index}"] [data-ingredient-field="amount"]`
+    : kind === "ingredient" && state.draftIngredients?.[index]?.type === "heading" ? `[data-move-ingredient-heading="${index}"]`
+      : `[data-editor-row-menu="${kind}"][data-row-index="${index}"]`;
+  const element = app.querySelector(selector);
+  element?.focus?.(); element?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+}
+
+function openEditorRowMenu(kind, index) {
+  if (!state.editingMealId) return;
+  syncMealEditorDraftFromDom();
+  const rows = kind === "ingredient" ? state.draftIngredients : state.draftSteps;
+  if (!rows?.[index] && rows?.[index] !== "") return;
+  editorRowMenu = { editorId: state.editingMealId, kind, index };
+  render();
+  app.querySelector("[data-editor-menu-action]:not([disabled])")?.focus?.();
+}
+
+function closeEditorRowMenu() {
+  if (!editorRowMenu) return;
+  const { kind, index } = editorRowMenu;
+  syncMealEditorDraftFromDom(); editorRowMenu = null; render(); focusEditorRow(kind, index);
+}
+
+function changeStepEditorRows(action, index, delta = 0) {
+  syncMealEditorDraftFromDom(); editorRowMenu = null;
+  const steps = state.draftSteps || [""];
+  const next = action === "remove" ? removeStepEditorRow(steps, index) : moveStepEditorRow(steps, index, delta);
+  setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps: next });
+  focusEditorRow("step", action === "remove" ? Math.min(index, next.length - 1) : Math.max(0, Math.min(next.length - 1, index + delta)));
+}
+
+function chooseEditorRowAction(action, groupIndex) {
+  if (!editorRowMenu || editorRowMenu.editorId !== state.editingMealId) return;
+  const { kind, index } = editorRowMenu;
+  const delta = action === "up" ? -1 : action === "down" ? 1 : Number(groupIndex);
+  if (kind === "ingredient") changeIngredientEditorRows(action === "up" || action === "down" ? "move" : action, index, delta);
+  else changeStepEditorRows(action === "remove" ? "remove" : "move", index, delta);
+}
+
+document.addEventListener("keydown", event => {
+  if (!editorRowMenu) return;
+  if (event.key === "Escape") { event.preventDefault(); closeEditorRowMenu(); }
+  if (event.key === "Tab") {
+    const buttons = [...app.querySelectorAll("[data-editor-menu] button:not([disabled])")];
+    const first = buttons[0], last = buttons.at(-1);
+    if (first && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+      event.preventDefault(); (event.shiftKey ? last : first).focus();
+    }
+  }
+});
 
 function syncDraftMealFromDom() {
   const form = app.querySelector("[data-meal-form]");
@@ -2843,6 +2916,12 @@ function bindMealResultActions(root = app) {
 }
 
 function bindEvents() {
+  app.querySelectorAll("[data-editor-row-menu]").forEach(button => button.addEventListener("click", () => openEditorRowMenu(button.dataset.editorRowMenu, Number(button.dataset.rowIndex))));
+  app.querySelectorAll("[data-editor-menu-action]").forEach(button => button.addEventListener("click", () => chooseEditorRowAction(button.dataset.editorMenuAction, button.dataset.groupIndex)));
+  app.querySelectorAll("[data-editor-menu-close]").forEach(element => element.addEventListener("click", event => {
+    if (event.target === event.currentTarget) closeEditorRowMenu();
+  }));
+  app.querySelectorAll("[data-add-ingredient-group]").forEach(button => button.addEventListener("click", () => changeIngredientEditorRows("add-group", Number(button.dataset.addIngredientGroup))));
   app.querySelectorAll("[data-recipe-servings]").forEach(button => button.addEventListener("click", () => changeRecipeServings(Number(button.dataset.recipeServings))));
   app.querySelectorAll("[data-use-standard-servings]").forEach(button => button.addEventListener("click", () => updateDayServings(Number(button.dataset.useStandardServings), null)));
   app.querySelectorAll("[data-view]").forEach((button) => {
@@ -3195,27 +3274,13 @@ function bindEvents() {
   });
 
   app.querySelectorAll("[data-remove-ingredient]").forEach((button) => {
-    button.addEventListener("click", () => {
-      syncMealEditorDraftFromDom();
-      const index = Number(button.dataset.removeIngredient);
-      const draftIngredients = (state.draftIngredients || []).filter((_, itemIndex) => itemIndex !== index);
-      setState({ draftMeal: state.draftMeal, draftIngredients: draftIngredients.length ? draftIngredients : [{ amount: "", unit: "", name: "" }], draftSteps: state.draftSteps });
-    });
+    button.addEventListener("click", () => changeIngredientEditorRows("remove", Number(button.dataset.removeIngredient)));
   });
 
   app.querySelector("[data-add-step]")?.addEventListener("click", () => {
     syncMealEditorDraftFromDom();
     const draftSteps = [...(state.draftSteps || []), ""];
     setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps });
-  });
-
-  app.querySelectorAll("[data-remove-step]").forEach((button) => {
-    button.addEventListener("click", () => {
-      syncMealEditorDraftFromDom();
-      const index = Number(button.dataset.removeStep);
-      const draftSteps = (state.draftSteps || []).filter((_, itemIndex) => itemIndex !== index);
-      setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps: draftSteps.length ? draftSteps : [""] });
-    });
   });
 
   app.querySelectorAll("[data-family]").forEach((field) => {
@@ -3533,6 +3598,7 @@ function bindEvents() {
 }
 
 function render(preserveShoppingInput = true) {
+  if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
   syncAiKeyContext();
   if (!state.editingMealId) aiKeyEditorReturn = null;
@@ -3694,6 +3760,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  editorRowMenu = null;
   servingsTransition = null; weeksServerReady = false; profileServerReady = false;
   recipeServingsView = { key: null, value: null };
   resetRecipeImport();

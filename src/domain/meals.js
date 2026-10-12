@@ -59,6 +59,44 @@ export function moveIngredientEditorRow(rows, index, delta) {
   return next;
 }
 
+export function ingredientEditorGroups(rows = []) {
+  const headings = rows.flatMap((row, index) => row.type === "heading" ? [index] : []);
+  const groups = headings.map((headingIndex, index) => ({ headingIndex,
+    label: String(rows[headingIndex].title || "").trim() || "Overskrift uten navn",
+    end: headings[index + 1] ?? rows.length }));
+  if ((headings[0] ?? rows.length) > 0) groups.unshift({ headingIndex: -1, label: "Uten overskrift", end: headings[0] ?? rows.length });
+  return groups;
+}
+
+export function ingredientEditorGroupIndex(rows, index) {
+  let heading = -1;
+  for (let i = 0; i <= index && i < rows.length; i++) if (rows[i].type === "heading") heading = i;
+  return heading;
+}
+
+export function moveIngredientToGroup(rows, index, headingIndex) {
+  const next = structuredClone(rows), group = ingredientEditorGroups(rows).find(group => group.headingIndex === headingIndex);
+  if (!next[index] || next[index].type === "heading" || !group || ingredientEditorGroupIndex(rows, index) === headingIndex) return next;
+  const [row] = next.splice(index, 1);
+  next.splice(group.end - (index < group.end ? 1 : 0), 0, row);
+  return next;
+}
+
+export function insertIngredientInGroup(rows, headingIndex) {
+  const next = structuredClone(rows), group = ingredientEditorGroups(rows).find(group => group.headingIndex === headingIndex);
+  if (group) next.splice(group.end, 0, { name: "", amount: "", unit: "" });
+  return next;
+}
+
+export function moveStepEditorRow(steps, index, delta) {
+  return moveIngredientEditorRow(steps, index, delta);
+}
+
+export function removeStepEditorRow(steps, index) {
+  const next = steps.filter((_, i) => i !== index);
+  return next.length ? next : [""];
+}
+
 export function normalizedRecipeUrl(value) {
   const text = String(value || "").trim();
   if (!text) return "";
