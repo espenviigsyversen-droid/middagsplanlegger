@@ -4,6 +4,13 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v114 – ukevalg, forslag og velgerfiltre
+
+Bare klienten publiseres av eier. Filoversikt, testresultater og lørdagssimulering står i docs/LEVERANSE_V114.md. Minsteversjonen forblir 106.
+
+Etter publisering: kontroller v114 på PC/iPhone. Ny økt starter på Handle og denne uka. Etter mer enn 30 minutter i bakgrunnen eller ukeskifte skal ukevalget være 0, mens et åpent planvindu fortsatt viser og endrer sin opprinnelige uke. Prøv planpanelets overskrift/valg/Avbryt, filterkombinasjoner og søk, nullstilling ved lukking og vannrett rulling uten at fokus/tastatur hopper. Kontroller forslagene og historikketikettene; øvrige Foreslå-knapper bruker bare poengrangering. Ekte systembakgrunn, ukegrense og touch-rulling krever kontroll på telefon.
+
+
 ### v113 – middagsvelger på telefon og anonyme eksempler
 
 Bare klienten publiseres av eier. Filoversikt og resultater står i docs/LEVERANSE_V113.md. Minsteversjonen er fortsatt 106. Alle 49 testskript og 41 kildefilers syntakskontroller består lokalt.

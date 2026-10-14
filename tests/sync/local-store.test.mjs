@@ -39,9 +39,9 @@ const state = { ...domain, weekOffset: 3, filters: { query: "fisk", sort: "title
   generateModal: { open: true }, mealPicker: { open: true }, plannerDaySheet: { open: true },
   shoppingReview: { groups: ["PRIVATE_REVIEW"] }, toast: "PRIVATE_TOAST", keepScreenAwake: true, localStoreFailed: true };
 const local = localStateForStorage(state, "project");
-assert.deepEqual(Object.keys(local).sort(), [...PROJECT_DOMAIN_KEYS, "weekOffset", "filters", "projectId"].sort());
+assert.deepEqual(Object.keys(local).sort(), [...PROJECT_DOMAIN_KEYS, "filters", "projectId"].sort());
 for (const key of PROJECT_DOMAIN_KEYS) assert.deepEqual(local[key], domain[key]);
-assert.equal(local.weekOffset, 3); assert.deepEqual(local.filters, state.filters); assert.equal(local.projectId, "project");
+assert.equal(Object.hasOwn(local, "weekOffset"), false); assert.deepEqual(local.filters, state.filters); assert.equal(local.projectId, "project");
 assert.doesNotMatch(JSON.stringify(local), /PRIVATE_|draft|Modal|Picker|Sheet|toast|activeView|localStoreFailed/);
 assert.equal(state.draftMeal.title, "PRIVATE_DRAFT", "Compact serialization does not mutate the live draft");
 console.log("local storage tests ok (quota, blocked access, malformed JSON, compact state)");

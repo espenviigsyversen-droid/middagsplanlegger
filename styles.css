@@ -2626,3 +2626,14 @@ button {
  .editor-row-menu .modal-header { padding: 12px 14px; }
  .editor-row-menu-actions { padding-left: 14px; padding-right: 14px; }
 }
+
+/* v114: filters and non-home plans stay inside the picker. */
+.picker-filters { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; flex-shrink: 0; margin: 0 16px 10px; scrollbar-width: none; }
+.picker-filters::-webkit-scrollbar { display: none; }
+.picker-filter { flex-shrink: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.picker-filter[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: white; }
+.picker-filter:focus-visible, .picker-plan-option:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; }
+.picker-plan-choices .meal-picker-category-title { margin: 0 0 4px; }
+.picker-plan-option { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: var(--surface-strong); border: 1px solid var(--brand); border-radius: 12px; color: var(--brand-dark); font-weight: 700; font-size: 14px; text-align: left; }
+.picker-plan-cancel { min-height: 44px; justify-self: center; padding: 0 16px; }
+.meal-picker-list > [data-clear-picker-filters] { min-height: 44px; }

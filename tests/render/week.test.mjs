@@ -50,4 +50,9 @@ function checkAnonymous(dir){for(const entry of readdirSync(dir,{withFileTypes:t
 checkAnonymous(new URL('../../src/',import.meta.url));
 for(const path of ['../../app.js','../../index.html'])assert.doesNotMatch(readFileSync(new URL(path,import.meta.url),'utf8'),namePattern,path);
 
+
+assert.match(css,/\.picker-filters\s*\{[^}]*flex-wrap:\s*nowrap[^}]*overflow-x:\s*auto[^}]*scrollbar-width:\s*none/);
+assert.match(css,/\.picker-filter\s*\{[^}]*min-height:\s*44px/);
+assert.match(css,/\.picker-filter\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--brand\)[^}]*color:\s*white/);
+assert.match(css,/\.picker-plan-option\s*\{[^}]*background:\s*var\(--surface-strong\)[^}]*border:\s*1px solid var\(--brand\)[^}]*color:\s*var\(--brand-dark\)/);
 console.log("week render tests ok");

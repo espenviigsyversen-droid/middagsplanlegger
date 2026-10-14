@@ -105,4 +105,49 @@ const selectionHtml=run('renderMealPickerListItems("",0)');
 const selectedIds=[...selectionHtml.matchAll(/class="meal-picker-item selected"[^>]*data-select-meal="([^"]+)"/g)].map(match=>match[1]);
 assert.deepEqual(selectedIds,['fish-b']);
 
+
+// v114: returning from background is UI-only and does not add history.
+run('closeMealPicker(); state.plannerDaySheet={open:false}; state.plannerActionsOpen=false; weekClearConfirmation=null; state.weekOffset=1; render(); backgroundAt=null; lastVisibleWeekKey=getWeekKeyForOffset(0)');
+const historyBefore=pushes;const now=Date.now();context.resumeNow=now;
+context.document.visibilityState='hidden';run('handleVisibilityChange(resumeNow)');
+context.document.visibilityState='visible';run('handleVisibilityChange(resumeNow+5*60000)');assert.equal(run('state.weekOffset'),1);
+context.document.visibilityState='hidden';run('handleVisibilityChange(resumeNow+10*60000)');context.document.visibilityState='visible';run('handleVisibilityChange(resumeNow+41*60000)');assert.equal(run('state.weekOffset'),0);
+run('state.weekOffset=2; lastVisibleWeekKey="2000-01-03"');run('handleVisibilityChange(resumeNow+42*60000)');assert.equal(run('state.weekOffset'),0);
+assert.equal(pushes,historyBefore);
+// All plans, also future and distant ones, are used for recency.
+run('state.plansByWeek={"2026-10-05":{6:"recent"},"2026-10-12":{5:"future"},"2026-05-25":{0:"old"}}');
+assert.equal(run('recentMealDistanceDays("recent",new Date(2026,9,14,12))'),3);
+assert.equal(run('recentMealDistanceDays("future",new Date(2026,9,14,12))'),3);
+assert.ok(run('recentMealDistanceDays("old",new Date(2026,9,14,12))')>100);
+run('state.meals=normalizeMeals(Array.from({length:30},(_,i)=>({...emptyMeal(),id:"fixture-"+i,title:"Middag "+i,minDaysBetween:1})));state.plansByWeek={};');
+assert.equal(run('JSON.stringify(rankedSuggestions(5))'),run('JSON.stringify(rankedSuggestions(5))'));
+assert.notEqual(run('JSON.stringify(rankedSuggestions(5).map(x=>x.meal.id))'),run('JSON.stringify(rankedSuggestions(6).map(x=>x.meal.id))'));
+const topId=run('pickSuggestion(5)');context.topId=topId;assert.notEqual(run('pickSuggestion(5,currentPlan(),[topId])'),topId);
+run('state.plansByWeek[getWeekKey()]={...emptyWeekPlan(),6:topId}; state.meals.find(m=>m.id===topId).minDaysBetween=4;');
+assert.equal(run('plannedTooClose(getMeal(topId),5,currentPlan())'),true);
+assert.ok(!json('rankedSuggestions(5).map(x=>x.meal.id)').includes(topId));
+
+
+// The discovery slot is picker-only and honors the same filters as the category list.
+run('state.meals=normalizeMeals([...Array.from({length:3},(_,i)=>({...emptyMeal(),id:"old-"+(i+1),title:"Merket middag "+(i+1),suitability:["weekend"],favorite:true,kidFriendly:true})),...Array.from({length:5},(_,i)=>({...emptyMeal(),id:"weekday-"+(i+1),title:"Hverdagsmiddag "+(i+1),suitability:["weekday"]})),...Array.from({length:22},(_,i)=>({...emptyMeal(),id:"new-"+(i+1),title:"Ny middag "+(i+1)}))]); state.family.quickDays=[];state.family.leftovers=false;state.plansByWeek={[weekKeyOffset(getWeekKey(),-5)]:{0:"old-1",2:"old-2",5:"old-3"}};pickerFilters=emptyPickerFilters();');
+const pickerRank=json('selectPickerSuggestions(rankedSuggestions(5)).map(x=>x.meal.id)');
+assert.ok(pickerRank.some(id=>id.startsWith('new-')));
+const slotHtml=run('renderMealPickerListItems("",5)');assert.match(slotHtml,/Aldri i planen/);
+assert.deepEqual([...slotHtml.matchAll(/class="meal-picker-item picker-suggestion"[^>]*data-select-meal="([^"]+)"/g)].map(match=>match[1]),pickerRank);
+assert.equal(run('pickSuggestion(5)'),run('rankedSuggestions(5)[0].meal.id'));
+run('pickerFilters.favorite=true');
+const onlyFavorites=run('renderMealPickerListItems("",5)');assert.doesNotMatch(onlyFavorites,/Aldri i planen|data-select-meal="new-/);
+assert.equal([...onlyFavorites.matchAll(/class="meal-picker-item picker-suggestion"/g)].length,3);
+
+// Pre-release fix: the renderer labels the first two and discovers an unplanned meal
+// even when all favorites are also eligible as long absent.
+run('pickerFilters=emptyPickerFilters(); state.plansByWeek={[weekKeyOffset(getWeekKey(),-12)]:{0:"old-1",2:"old-2",5:"old-3"}};');
+const twelveWeekChoice=json('selectPickerSuggestions(rankedSuggestions(5))');
+assert.ok(twelveWeekChoice.some(e=>e.meal.id.startsWith('new-')));
+assert.ok(twelveWeekChoice.filter(e=>e.meal.id.startsWith('old-')).every(e=>e.planningLabel==='Ikke i planen på lenge'));
+const twelveWeekHtml=run('renderMealPickerListItems("",5)');assert.match(twelveWeekHtml,/Aldri i planen/);assert.match(twelveWeekHtml,/Ikke i planen på lenge/);
+run('pickerFilters.favorite=true');
+const filteredLongAbsent=run('renderMealPickerListItems("",5)');
+assert.doesNotMatch(filteredLongAbsent,/Aldri i planen|data-select-meal="new-/);assert.match(filteredLongAbsent,/Ikke i planen på lenge/);
+
 console.log('week app tests ok');

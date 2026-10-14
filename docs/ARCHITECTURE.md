@@ -364,7 +364,7 @@ importRecipe og aiModelSave kan logge model bare i gyldig modellformat uten ekst
 
 src/sync/local-store.js eier trygg lesing, JSON-skriving og eksplisitt sletting. Alle appens kall for middagsapp-state og middagsapp-membership bruker denne modulen, med lazy tilgang til localStorage slik at også en blokkert getter håndteres. Lesefeil, ugyldig JSON og verdier som ikke er objekter behandles som tom lagring. Feil under domenenormalisering gir tom prosjektmerket lokal kopi. Ingen lagringsfeil fører til tømming av nøkler eller andre appers lagring.
 
-Den lokale kopien bygges med en eksplisitt liste: PROJECT_DOMAIN_KEYS (familie, preferanser, metadata, oppskrifter, seks ukekart, handleliste og synkmarkører), projectId, weekOffset og filters. Åpne editorer/dialoger, utkast, toast, valgt oppskrift, handlelistegjennomgang og skjermvåkeflagg serialiseres ikke. loadState støtter eldre kopier og rekonstruerer UI-standardverdier; Handleliste er fortsatt startside. Backup og skyformatet er uendret.
+Den lokale kopien bygges med en eksplisitt liste: PROJECT_DOMAIN_KEYS (familie, preferanser, metadata, oppskrifter, seks ukekart, handleliste og synkmarkører), projectId og filters. Åpne editorer/dialoger, utkast, toast, valgt oppskrift, handlelistegjennomgang og skjermvåkeflagg serialiseres ikke. loadState støtter eldre kopier og rekonstruerer UI-standardverdier; Handleliste er fortsatt startside. Backup og skyformatet er uendret.
 
 En feilet skriving lar state leve i minnet og setter localStoreFailed. En senere vellykket skriving nullstiller flagget. saveState stopper aldri setState, onMeals/onWeeks/onItems, applyRemoteStatePatch eller tilgangsflyten. Medlemsflagget kan ikke blokkere ferdig nettinnlogging ved lagringsfeil. Varsellinjen vises bare under Innstillinger → Oppdatering og versjon; synkstatusen gjelder fortsatt skyen, uten lagringsfeil i toppfeltet. Den tidligere kopien kan være utdatert, og en ny offline-økt kan mangle oppdaterte data eller medlemsflagg når lokal skriving feiler. Ingen varig kø bygges.
 
@@ -388,7 +388,7 @@ Backup v106 fyller null for manglende dager i ukekartene. Restore godtar null el
 
 ## Samlet Uke-visning fra v112
 
-Handle, Uke og Oppskrifter er de tre fanene. Uke har activeView="week"; canonicalView tolker calendar/planner som week ved normalisering, brukerens navigasjon og oppskriftsretur. normalizeStateForStartup starter fremdeles på shopping. Valgt uke og filtre overlever som før, mens UI-navn ikke inngår i domenepayload eller den kompakte lokale kopien. De gamle renderCalendar/renderPlanner-funksjonene og deres CSS/moduler er fjernet.
+Handle, Uke og Oppskrifter er de tre fanene. Uke har activeView="week"; canonicalView tolker calendar/planner som week ved normalisering, brukerens navigasjon og oppskriftsretur. normalizeStateForStartup starter fremdeles på shopping. Fra v114 nullstilles ukevalget, mens oppskriftsfiltre overlever som før, mens UI-navn ikke inngår i domenepayload eller den kompakte lokale kopien. De gamle renderCalendar/renderPlanner-funksjonene og deres CSS/moduler er fjernet.
 
 renderWeek samler én liste med primærhandling per dag og en egen blyant. Planlagt middag åpner oppskrift med uke-/dagkontekst; tom hjemmedag åpner velgeren direkte; annen plan og blyant åpner dagsarket. Egne porsjoner og notat vises på én linje. Dagens markering bruker faktisk dato, bare i inneværende uke, og er uavhengig av låsen. weekHeading gir ISO-ukenummer også ved årsskifte; midtknappen og I dag vender tilbake til denne uka. Begge pilene står i faste kolonner.
 
@@ -409,3 +409,34 @@ openMealPicker ber om fokus i søket bare når matchMedia("(pointer: fine)") ste
 Middagskortene har eksplisitt --text, inkludert strong-titlene i forslagene. Den tidligere ubetingede hover-regelen kunne gi grønn ramme på et uvalgt kort; hover endrer nå bare bakgrunn og bare ved hover + fin peker. Valgt ramme tilhører bare .selected for dagens middag. :focus-visible gir egen tastaturkontur, og :focus:not(:focus-visible) fjerner kontur ved annen fokus. Knappene i dagsark/ukemeny beholder sine eksplisitte tekst-, merke-, hvite og dempede farger.
 
 Notatfeltet bruker anonym plassholder. Eksempeltekster, plassholdere og testdata som vises i appen skal aldri inneholde ekte navn på familiemedlemmer. Familiens eget navn fra data er uendret. Klient/cache er v113/113, minsteversjonen fortsatt 106. Ingen endring i domenedata, historikk, synk eller service worker-strategi.
+
+## Poeng, ukevalg og velgerfiltre fra v114
+
+Nye økter starter på Handle med weekOffset 0. localStateForStorage lagrer ikke ukevalget, og startup-normalisering ignorerer eldre kopiers verdi. handleVisibilityChange nullstiller offset etter mer enn 30 minutter i bakgrunnen eller skifte av kalenderuke, direkte med saveState/render uten nye historikknivåer. Åpne planvinduer bindes til planningWindowWeekKey, kun i minnet. Root-render leser den nye uka eksplisitt; datoer og handlinger i dagsark/velger/ukemeny/bekreftelse bruker opprinnelig uke til de lukkes. Det hindrer at et sent middagsvalg skrives på feil uke.
+
+Poengmodellen i domain/suggestions.js:
+
+| Del | Poeng |
+|---|---|
+| Dagstype | +22 for samsvar, +10 uten merker, −20 når merker ikke passer |
+| Favoritt / barnevennlig | +10 / +6 |
+| Rask på raske dager / ønskede rester | +25 / +6, uendret |
+| Nærmeste planavstand 0–7 / 8–14 / 15–21 / 22–28 dager | −95 / −58 / −30 / −14, uendret |
+| Planavstand over 28 dager | +2 per hel uke siden planlagt, maksimalt +30 |
+| Ingen planhistorikk | +25 |
+| Variasjon | Stabil FNV-hash av uke + dag + meal-id, modulo 16: 0–15 |
+| Kategorimål og nylig kategoribruk | Tidligere regler beholdes |
+
+recentMealDistanceDays søker alle plansByWeek, også framtidige planer, og bruker nærmeste absolutte kalenderdagsavstand. Datoer normaliseres til kl. 12 før differansen, slik at tidligere og framtidige dager får samme behandling. Gjeldende plancelle utelates som før ved rangering av et bytte. plannedTooClose og scoreCategoryPreference er uendret. suggestionScoreBreakdown gir rene delpoeng for dagstype, merker, raske dager/rester, recency, kategori og variasjon; den brukes bare i tester, ikke som appvisning.
+
+rankedSuggestions er felles poengrangering for alle forslagkommandoene. Bare velgeren bruker selectPickerSuggestions etter filtrering. De to beste beholdes; blant de øvrige velges først den beste aldri planlagte, ellers den beste med nærmeste plan minst 56 dager unna, ellers nummer tre etter poeng. Kvalifiserte kandidater blant de to første beholder også linjen Aldri i planen/Ikke i planen på lenge, men hindrer ikke utvelgelse blant de øvrige. En fallback med nyere historikk får ingen egen linje. Nærmeste-avstandsregelen inkluderer også framtidige planer. Ingen ny lagret merking av oppskriften, og ingen endring i poengrangering eller filtre.
+
+Filterraden har tre kombinerbare merker og én kategori, aria-pressed og vannrett rulling uten synlig rullefelt. Filtrene og søket brukes sammen for både forslag og kategoriresultater. Tom filtrert liste gir Fjern filtre; ingen raske nyopprettinger tilbys mens filtre skjuler resultater. Oppskriftslistens egne lagrede filtre er uendret. pickerFilters nullstilles ved åpning/lukking/tilgang. picker-filters bevarer scrollLeft synkront i eksisterende v108-funksjoner; øvrige vinduer bevarer scrollTop som før.
+
+Planpanelet i footer erstatter knappen med overskriften IKKE MIDDAG HJEMME, kontrasterende planvalg med pil og Avbryt. Det bruker samme picker-plans-scrollnøkkel. Keyboard-click med detail 0 fokuserer første valg; vanlig touch ber ikke om søkefokus. Planvalg bruker eksisterende updateDayMode og lukker velgeren som før. Footer og vindushistorikk er beholdt.
+
+Simuleringen bruker 52 lørdager, tre gamle helg/favoritt/barnevennlige middager med planavstand fem uker, fem med bare Hverdag og 22 nye uten merker/historikk. Velgeren har en ny middag 52/52 ganger; ren poengrangering har en ny blant topp tre 17/52 og minst én gammel favoritt 52/52. Dette er den avtalte syntetiske testen, ikke en garanti for enhver familiemiks.
+
+Versjon/cache er v114/114; minsteversjonen er 106. Ingen functions, Firestore-regler, skysynk eller datamodell er endret.
+
+Retting før v114-publisering: aldri planlagte prioriteres foran gamle favoritter i den faste plassen. Med tre favoritter sist planlagt for henholdsvis 12, 5 og 2 uker siden, pluss 22 aldri planlagte middager, har velgeren en ny middag 52/52 lørdager i alle tre simuleringene. Uten aldri planlagte får en kandidat borte i 10 uker den faste plassen og riktig linje. Første/to beste beholdes, filtrene testes også gjennom appens rendering. Versjonen og øvrige v114-flyter er uendret.

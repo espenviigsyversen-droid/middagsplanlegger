@@ -3,7 +3,7 @@ import { PROJECT_DOMAIN_KEYS } from "./access.js";
 // Only values used after startup belong in the device cache. Editor/UI state
 // remains in memory; the startup view and transient defaults are reconstructed.
 export function localStateForStorage(state, projectId) {
-  const keys = [...PROJECT_DOMAIN_KEYS, "weekOffset", "filters"];
+  const keys = [...PROJECT_DOMAIN_KEYS, "filters"];
   return { ...Object.fromEntries(keys.filter(key => Object.hasOwn(state, key)).map(key => [key, state[key]])), projectId };
 }
 

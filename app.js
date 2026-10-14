@@ -63,6 +63,9 @@ import {
   weekKeyOffset,
 } from "./src/domain/weeks.js";
 import {
+  selectPickerSuggestions,
+  scoreVariation,
+  mealMatchesPickerFilters,
   scoreCategoryPreference,
   scoreMealFit,
   scoreMealRecency,
@@ -153,7 +156,6 @@ const firebaseConfig = {
 
 const FIREBASE_SDK_VERSION = "12.13.0";
 const FAMILY_ID = "familien";
-const VARIATION_LOOKBACK_WEEKS = 4;
 const defaultMeals = [];
 
 const defaultState = {
@@ -215,8 +217,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v113";
-const APP_VERSION_NUMBER = 113;
+const APP_VERSION = "v114";
+const APP_VERSION_NUMBER = 114;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -231,6 +233,9 @@ let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
 let mealPickerReturn = null;
 let pickerOtherPlans = false, weekClearConfirmation = null;
+const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, category: "all" });
+let pickerFilters = emptyPickerFilters(), planningWindowWeekKey = null;
+let backgroundAt = null, lastVisibleWeekKey = getWeekKeyForOffset(0);
 let shoppingSyncStatus = null;
 let mealsSyncStatus = null;
 let weeksSyncStatus = null;
@@ -320,6 +325,7 @@ function closeRecipeMenu() {
 
 function openMealPicker(dayIndex, fromDaySheet = false) {
   if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex > 6) return;
+  planningWindowWeekKey = getWeekKey(); pickerFilters = emptyPickerFilters();
   pickerOtherPlans = false; weekClearConfirmation = null;
   const returnsToSheet = fromDaySheet && canonicalView(state.activeView) === "week" && state.plannerDaySheet?.open
     && state.plannerDaySheet.dayIndex === dayIndex;
@@ -337,7 +343,7 @@ function openMealPicker(dayIndex, fromDaySheet = false) {
 
 function closeMealPicker(patch = {}) {
   if (!state.mealPicker?.open) return;
-  pickerOtherPlans = false;
+  pickerOtherPlans = false; pickerFilters = emptyPickerFilters();
   const returnTo = mealPickerReturn;
   mealPickerReturn = null;
   navigate({ ...patch, mealPicker: { open: false, dayIndex: null, query: "" },
@@ -346,12 +352,14 @@ function closeMealPicker(patch = {}) {
 }
 
 function openDaySheet(index) {
+  planningWindowWeekKey = getWeekKey();
   weekClearConfirmation = null; pickerOtherPlans = false; mealPickerReturn = null;
   navigate({ activeView: "week", plannerDaySheet: { open: true, dayIndex: index }, plannerActionsOpen: false,
     mealPicker: { open: false, dayIndex: null, query: "" } });
 }
 
 function openWeekMenu() {
+  planningWindowWeekKey = getWeekKey();
   weekClearConfirmation = null; mealPickerReturn = null;
   navigate({ plannerActionsOpen: true, plannerDaySheet: { open: false, dayIndex: null }, mealPicker: { open: false, dayIndex: null, query: "" } });
 }
@@ -371,8 +379,8 @@ function cancelWeekClear() {
 
 function confirmWeekClear() {
   if (!weekClearConfirmation) return;
-  weekClearConfirmation = null;
   const weekKey = getWeekKey();
+  weekClearConfirmation = null;
   navigate({ plansByWeek: { ...state.plansByWeek, [weekKey]: emptyWeekPlan() },
     lockedPlansByWeek: { ...state.lockedPlansByWeek, [weekKey]: emptyWeekLocks() },
     dayTypesByWeek: { ...state.dayTypesByWeek, [weekKey]: emptyWeekDayTypes() },
@@ -382,6 +390,7 @@ function confirmWeekClear() {
 }
 
 function changeWeek(value) {
+  planningWindowWeekKey = null;
   weekClearConfirmation = null; mealPickerReturn = null; pickerOtherPlans = false;
   navigate({ weekOffset: value === 0 ? 0 : state.weekOffset + value, plannerDaySheet: { open: false, dayIndex: null },
     plannerActionsOpen: false, mealPicker: { open: false, dayIndex: null, query: "" } });
@@ -477,7 +486,7 @@ function loadState() {
 }
 
 function normalizeStateForStartup(nextState) {
-  const normalized = normalizeState(nextState);
+  const normalized = normalizeState({ ...nextState, weekOffset: 0 });
   return {
     ...normalized,
     activeView: "shopping",
@@ -843,20 +852,46 @@ function renderMealPickerModal() {
             />
             <button class="search-clear-btn" type="button" data-focus-key="picker-clear" aria-label="Tøm søk" data-clear-search-input style="${query ? '' : 'display: none;'}">×</button>
           </div>
+          ${renderPickerFilters()}
           <div class="meal-picker-list" data-scroll-key="meal-picker">
             ${renderMealPickerListItems(query, dayIndex)}
           </div>
         </div>
-        <div class="picker-footer">${pickerOtherPlans ? `<div class="picker-plan-choices" data-scroll-key="picker-plans">${planModeEntries().filter(([key])=>!dayPlansMeal(key)).map(([key,option])=>`<button class="week-outline" type="button" data-focus-key="picker-plan:${escapeHtml(key)}" data-picker-plan="${escapeHtml(key)}">${escapeHtml(option.label)}</button>`).join("")}</div>` : ""}<button class="week-outline" type="button" data-focus-key="picker-other-plans" data-picker-other-plans>Ikke middag hjemme (rester, spise borte …)</button></div>
+        <div class="picker-footer">${renderPickerPlans()}</div>
       </div>
     </div>
   `;
+}
+
+function pickerFiltersActive() { return pickerFilters.quick || pickerFilters.kidFriendly || pickerFilters.favorite || pickerFilters.category !== "all"; }
+
+function renderPickerFilters() {
+  const entries = [["quick","Rask"],["kidFriendly","Barnevennlig"],["favorite","Favoritter"], ...Object.entries(getCategoryLabels()).map(([key,label])=>["category:"+key,label])];
+  return '<div class="picker-filters" data-scroll-key="picker-filters" aria-label="Filtrer middager">' + entries.map(([key,label])=>{
+    const category = key.startsWith("category:"), value = category ? key.slice(9) : key;
+    const selected = category ? pickerFilters.category === value : pickerFilters[value];
+    return '<button class="picker-filter" type="button" data-focus-key="picker-filter:'+escapeHtml(key)+'" data-picker-filter="'+escapeHtml(key)+'" aria-pressed="'+Boolean(selected)+'">'+escapeHtml(label)+'</button>';
+  }).join("")+'</div>';
+}
+
+function renderPickerPlans() {
+  if (!pickerOtherPlans) return '<button class="week-outline" type="button" data-focus-key="picker-other-plans" data-picker-other-plans>Ikke middag hjemme (rester, spise borte …)</button>';
+  return '<div class="picker-plan-choices" data-scroll-key="picker-plans"><h4 class="meal-picker-category-title">IKKE MIDDAG HJEMME</h4>'
+    + planModeEntries().filter(([key])=>!dayPlansMeal(key)).map(([key,option])=>'<button class="picker-plan-option" type="button" data-focus-key="picker-plan:'+escapeHtml(key)+'" data-picker-plan="'+escapeHtml(key)+'"><span>'+escapeHtml(option.label)+'</span><span aria-hidden="true">›</span></button>').join("")
+    + '<button class="text-action quiet picker-plan-cancel" type="button" data-focus-key="picker-plan-cancel" data-picker-plans-cancel>Avbryt</button></div>';
+}
+
+function togglePickerFilter(key) {
+  if (key.startsWith("category:")) { const category = key.slice(9); pickerFilters.category = pickerFilters.category === category ? "all" : category; }
+  else if (["quick","kidFriendly","favorite"].includes(key)) pickerFilters[key] = !pickerFilters[key];
+  render();
 }
 
 function mealsMatchingPickerQuery(query = "") {
   const labels = getCategoryLabels();
   const normalizedQuery = query.toLowerCase().trim();
   return sortedMeals().filter((meal) => {
+    if (!mealMatchesPickerFilters(meal, pickerFilters)) return false;
     if (!normalizedQuery) return true;
     const titleMatch = meal.title.toLowerCase().includes(normalizedQuery);
     const descMatch = (meal.description || "").toLowerCase().includes(normalizedQuery);
@@ -870,7 +905,7 @@ function renderMealPickerListItems(query = "", dayIndex) {
   const labels = getCategoryLabels();
   const selectedMealId = currentPlan()[dayIndex] || "";
   const filteredMeals = mealsMatchingPickerQuery(query);
-  const quickTitle = quickMealTitleForQuery(query, state.meals);
+  const quickTitle = pickerFiltersActive() ? "" : quickMealTitleForQuery(query, state.meals);
 
   let html = quickTitle ? `
     <button class="meal-picker-item quick-meal-item" type="button" data-focus-key="picker-quick-meal" data-create-quick-meal>
@@ -882,11 +917,12 @@ function renderMealPickerListItems(query = "", dayIndex) {
   ` : "";
 
   if (!query.trim()) {
-    const suggestions = rankedSuggestions(dayIndex, currentPlan(), [selectedMealId]).slice(0,3);
+    const suggestions = selectPickerSuggestions(rankedSuggestions(dayIndex, currentPlan(), [selectedMealId]).filter(({meal})=>mealMatchesPickerFilters(meal,pickerFilters)));
     if (suggestions.length) html += `<h4 class="meal-picker-category-title">FORSLAG TIL ${escapeHtml(dayNames[dayIndex].toUpperCase())}</h4>`
-      + suggestions.map(({meal}) => renderPickerSuggestion(meal,dayIndex)).join("");
+      + suggestions.map(({meal,planningLabel}) => renderPickerSuggestion(meal,dayIndex,planningLabel)).join("");
   }
 
+  if (filteredMeals.length === 0 && pickerFiltersActive()) return `<div class="meal-picker-empty">Ingen middager passer filtrene.</div><button class="text-action" type="button" data-focus-key="picker-clear-filters" data-clear-picker-filters>Fjern filtre</button>`;
   if (filteredMeals.length === 0) {
     return html + `<div class="meal-picker-empty">Ingen oppskrifter matcher søket ditt.</div>`;
   }
@@ -947,15 +983,15 @@ function renderMealPickerListItems(query = "", dayIndex) {
   return html;
 }
 
-function renderPickerSuggestion(meal, dayIndex) {
-  const history = lastPlannedLabel(state.plansByWeek, meal.id, getWeekDates()[dayIndex]);
+function renderPickerSuggestion(meal, dayIndex, planningLabel = "") {
+  const history = planningLabel || lastPlannedLabel(state.plansByWeek, meal.id, getWeekDates()[dayIndex]);
   const info = [getSuitabilityLabels()[currentDayTypes()[dayIndex]], getPrepTimeLabels()[meal.prepTime], history].filter(Boolean).join(" · ");
   return `<button class="meal-picker-item picker-suggestion" type="button" data-select-meal="${escapeHtml(meal.id)}" data-focus-key="picker-suggestion:${escapeHtml(meal.id)}"><span class="meal-picker-item-details"><strong>${escapeHtml(meal.title)}</strong><small>${escapeHtml(info)}</small></span><span class="picker-add" aria-hidden="true">+</span></button>`;
 }
 
 function addQuickMealForPicker() {
   const picker = state.mealPicker;
-  if (!picker?.open || picker.dayIndex === null) return;
+  if (!picker?.open || picker.dayIndex === null || pickerFiltersActive()) return;
   const title = quickMealTitleForQuery(picker.query, state.meals);
   if (!title) return;
   const meal = createQuickMeal(title, makeMealId(title));
@@ -969,12 +1005,16 @@ function addQuickMealForPicker() {
 }
 
 
-function getWeekDates(offset = state.weekOffset) {
-  return getWeekDatesForOffset(offset);
+function planningWindowOpen() { return state.activeView === "week" && Boolean(state.mealPicker?.open || state.plannerDaySheet?.open || state.plannerActionsOpen || weekClearConfirmation); }
+
+function getWeekDates(offset) {
+  if (offset === undefined && planningWindowWeekKey && planningWindowOpen()) return dayNames.map((_, index) => dateForWeekDay(planningWindowWeekKey, index));
+  return getWeekDatesForOffset(offset ?? state.weekOffset);
 }
 
-function getWeekKey(offset = state.weekOffset) {
-  return getWeekKeyForOffset(offset);
+function getWeekKey(offset) {
+  if (offset === undefined && planningWindowWeekKey && planningWindowOpen()) return planningWindowWeekKey;
+  return getWeekKeyForOffset(offset ?? state.weekOffset);
 }
 
 function getUpcomingDays(n = 9) {
@@ -995,28 +1035,28 @@ function getUpcomingDays(n = 9) {
   return days;
 }
 
-function currentPlan() {
-  return { ...emptyWeekPlan(), ...(state.plansByWeek?.[getWeekKey()] || {}) };
+function currentPlan(weekKey = getWeekKey()) {
+  return { ...emptyWeekPlan(), ...(state.plansByWeek?.[weekKey] || {}) };
 }
 
-function currentLocks() {
-  return { ...emptyWeekLocks(), ...(state.lockedPlansByWeek?.[getWeekKey()] || {}) };
+function currentLocks(weekKey = getWeekKey()) {
+  return { ...emptyWeekLocks(), ...(state.lockedPlansByWeek?.[weekKey] || {}) };
 }
 
-function currentDayTypes() {
-  return { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[getWeekKey()] || {}) };
+function currentDayTypes(weekKey = getWeekKey()) {
+  return { ...emptyWeekDayTypes(), ...(state.dayTypesByWeek?.[weekKey] || {}) };
 }
 
-function currentDayModes() {
-  return { ...emptyWeekDayModes(), ...(state.dayModesByWeek?.[getWeekKey()] || {}) };
+function currentDayModes(weekKey = getWeekKey()) {
+  return { ...emptyWeekDayModes(), ...(state.dayModesByWeek?.[weekKey] || {}) };
 }
 
-function currentDayNotes() {
-  return { ...emptyWeekDayNotes(), ...(state.dayNotesByWeek?.[getWeekKey()] || {}) };
+function currentDayNotes(weekKey = getWeekKey()) {
+  return { ...emptyWeekDayNotes(), ...(state.dayNotesByWeek?.[weekKey] || {}) };
 }
 
-function currentServings() {
-  return { ...emptyWeekServings(), ...(state.servingsByWeek?.[getWeekKey()] || {}) };
+function currentServings(weekKey = getWeekKey()) {
+  return { ...emptyWeekServings(), ...(state.servingsByWeek?.[weekKey] || {}) };
 }
 
 function weekRangeLabel() {
@@ -1477,30 +1517,31 @@ function getTodayIndexInCurrentWeek() {
   return getWeekDates().findIndex(date => localDateKey(date) === todayKey);
 }
 
-function eligibleWeekDays() { return weekEligibleDays(currentPlan(), currentLocks(), currentDayModes(), dayPlansMeal); }
-function emptyWeekDays() { return eligibleWeekDays().filter(index => !currentPlan()[index]); }
+function eligibleWeekDays(weekKey = getWeekKey()) { return weekEligibleDays(currentPlan(weekKey), currentLocks(weekKey), currentDayModes(weekKey), dayPlansMeal); }
+function emptyWeekDays(weekKey = getWeekKey()) { return eligibleWeekDays(weekKey).filter(index => !currentPlan(weekKey)[index]); }
 
 function renderWeek() {
-  const dates = getWeekDates(), heading = weekHeading(dates, state.weekOffset), plan = currentPlan(), locks = currentLocks();
-  const modes = currentDayModes(), notes = currentDayNotes(), types = currentDayTypes(), servings = currentServings();
-  const todayIndex = getTodayIndexInCurrentWeek();
+  const rootKey = getWeekKey(state.weekOffset), dates = getWeekDates(state.weekOffset), heading = weekHeading(dates, state.weekOffset);
+  const plan = currentPlan(rootKey), locks = currentLocks(rootKey), modes = currentDayModes(rootKey), notes = currentDayNotes(rootKey), servings = currentServings(rootKey);
+  const todayIndex = dates.findIndex(date => localDateKey(date) === localDateKey(new Date()));
   const rowsHtml = dayNames.map((day,index) => {
     const home = dayPlansMeal(modes[index]), meal = getMeal(plan[index]);
     return renderWeekRow({ day, index, dateLabel: formatDate(dates[index]), home,
       title: home ? meal?.title || "" : planModeLabel(modes[index]), mealId: meal?.id || "",
       locked: Boolean(locks[index]), isToday: index === todayIndex, ownServings: servings[index], note: notes[index], escapeHtml });
   }).join("");
+  const windowDates = getWeekDates(), windowHeading = weekHeading(windowDates, state.weekOffset);
   let windowsHtml = "";
-  if (weekClearConfirmation) windowsHtml = renderWeekClear({ heading, escapeHtml });
-  else if (state.plannerActionsOpen) windowsHtml = renderWeekMenu({ heading, emptyDays: emptyWeekDays().map(index=>dayNames[index]), replaceCount: eligibleWeekDays().length, escapeHtml });
+  if (weekClearConfirmation) windowsHtml = renderWeekClear({ heading: windowHeading, escapeHtml });
+  else if (state.plannerActionsOpen) windowsHtml = renderWeekMenu({ heading: windowHeading, emptyDays: emptyWeekDays().map(index=>dayNames[index]), replaceCount: eligibleWeekDays().length, escapeHtml });
   else if (state.plannerDaySheet?.open) {
-    const index = state.plannerDaySheet.dayIndex;
-    windowsHtml = renderDaySheet({ day: dayNames[index], dateLabel: dates[index].toLocaleDateString("nb-NO", {day:"numeric",month:"long"}), index,
-      locked: Boolean(locks[index]), home: dayPlansMeal(modes[index]), meal: getMeal(plan[index]), planLabel: planModeLabel(modes[index]),
-      dayMode: modes[index], dayType: types[index], dayNote: notes[index], servings: servingsForDay(getWeekKey(),index), ownServings: servings[index],
+    const index = state.plannerDaySheet.dayIndex, mode = currentDayModes()[index];
+    windowsHtml = renderDaySheet({ day: dayNames[index], dateLabel: windowDates[index].toLocaleDateString("nb-NO", {day:"numeric",month:"long"}), index,
+      locked: Boolean(currentLocks()[index]), home: dayPlansMeal(mode), meal: getMeal(currentPlan()[index]), planLabel: planModeLabel(mode),
+      dayMode: mode, dayType: currentDayTypes()[index], dayNote: currentDayNotes()[index], servings: servingsForDay(getWeekKey(),index), ownServings: currentServings()[index],
       standard: state.family.familySize, modes: planModeEntries(), types: suitabilityEntries(), escapeHtml });
   }
-  return renderWeekView({ heading, offset: state.weekOffset, emptyCount: emptyWeekDays().length, rowsHtml, windowsHtml, escapeHtml });
+  return renderWeekView({ heading, offset: state.weekOffset, emptyCount: emptyWeekDays(rootKey).length, rowsHtml, windowsHtml, escapeHtml });
 }
 
 function advisorSummary() {
@@ -1513,7 +1554,7 @@ function advisorSummary() {
   const lockedCount = Object.values(lockedPlan).filter(Boolean).length;
   const activeTypes = [...new Set(Object.values(dayTypes).map((type) => getSuitabilityLabels()[type] || type))].join(", ");
   const categoryStatus = categoryPreferenceStatus(plan);
-  return `Rådgiveren fyller bare åpne dager og lar låste dager stå. Den matcher dagstype mot "Passer til", prioriterer raske middager på ${quickDays}, unngår duplikater i samme uke og prøver å variere mot de siste ${VARIATION_LOOKBACK_WEEKS} ukene. Dagstyper denne uken: ${activeTypes}. Barnevennlige middager: ${kidCount}/${state.family.kidFriendlyPerWeek}. Låste dager: ${lockedCount}.${categoryStatus ? ` Middagspreferanser: ${categoryStatus}.` : ""}`;
+  return `Rådgiveren fyller bare åpne dager og lar låste dager stå. Den matcher dagstype mot "Passer til", prioriterer raske middager på ${quickDays}, unngår duplikater i samme uke og varierer med alle tidligere og framtidige planer. Dagstyper denne uken: ${activeTypes}. Barnevennlige middager: ${kidCount}/${state.family.kidFriendlyPerWeek}. Låste dager: ${lockedCount}.${categoryStatus ? ` Middagspreferanser: ${categoryStatus}.` : ""}`;
 }
 
 function categoryPreferenceStatus(plan) {
@@ -2769,18 +2810,20 @@ function categoryPreferenceScore(meal, plan, dayIndex) {
   return scoreCategoryPreference(meal.categories || [], { counts, goalsByCategory, dueCategories });
 }
 
-function recentMealDistanceDays(mealId, targetDate, lookbackWeeks = VARIATION_LOOKBACK_WEEKS) {
-  const currentWeekKey = getWeekKey();
-  let closestDays = null;
-  for (let offset = 1; offset <= lookbackWeeks; offset += 1) {
-    const weekKey = weekKeyOffset(currentWeekKey, -offset);
-    Object.entries(state.plansByWeek?.[weekKey] || {}).forEach(([plannedDayIndex, plannedMealId]) => {
-      if (plannedMealId !== mealId) return;
-      const distance = daysBetweenDates(targetDate, dateForWeekDay(weekKey, plannedDayIndex));
-      closestDays = closestDays === null ? distance : Math.min(closestDays, distance);
-    });
+function recentMealDistanceDays(mealId, targetDate) {
+  const target = new Date(targetDate); target.setHours(12, 0, 0, 0);
+  let closest = null;
+  for (const [weekKey, plan] of Object.entries(state.plansByWeek || {})) {
+    for (const [day, id] of Object.entries(plan || {})) {
+      if (id !== mealId || !/^[0-6]$/.test(day)) continue;
+      const plannedDate = dateForWeekDay(weekKey, Number(day));
+      if (localDateKey(plannedDate) === localDateKey(targetDate)) continue;
+      plannedDate.setHours(12, 0, 0, 0);
+      const distance = daysBetweenDates(target, plannedDate);
+      closest = closest === null ? distance : Math.min(closest, distance);
+    }
   }
-  return closestDays;
+  return closest;
 }
 
 function recentCategoryCount(categories, lookbackWeeks = 2) {
@@ -2798,9 +2841,7 @@ function recentCategoryCount(categories, lookbackWeeks = 2) {
   return count;
 }
 
-function rotationScore(meal, dayIndex) {
-  const targetDate = dateForWeekDay(getWeekKey(), dayIndex);
-  const daysSince = recentMealDistanceDays(meal.id, targetDate);
+function rotationScore(meal, dayIndex, daysSince = recentMealDistanceDays(meal.id, dateForWeekDay(getWeekKey(), dayIndex))) {
   const recentCategoryUses = recentCategoryCount(meal.categories || []);
   return scoreMealRecency(daysSince) + scoreRecentCategoryUse(recentCategoryUses);
 }
@@ -2829,10 +2870,12 @@ function rankedSuggestions(dayIndex, planOverride = currentPlan(), excludeMealId
     .filter((meal) => !used.has(meal.id))
     .filter((meal) => !plannedTooClose(meal, dayIndex, plan))
     .map((meal) => {
+      const daysSince = recentMealDistanceDays(meal.id, dateForWeekDay(getWeekKey(), dayIndex));
       let score = scoreMealFit(meal, { wantsQuick, dayType, preferLeftovers: state.family.leftovers });
       score += categoryPreferenceScore(meal, plan, dayIndex);
-      score += rotationScore(meal, dayIndex);
-      return { meal, score };
+      score += rotationScore(meal, dayIndex, daysSince);
+      score += scoreVariation(getWeekKey(), dayIndex, meal.id);
+      return { meal, score, daysSince };
     })
     .sort((a, b) => b.score - a.score);
   return candidates;
@@ -2981,7 +3024,15 @@ function bindEvents() {
     });
   });
 
-  app.querySelector("[data-picker-other-plans]")?.addEventListener("click",()=>{ pickerOtherPlans=!pickerOtherPlans; render(); });
+  app.querySelector("[data-picker-other-plans]")?.addEventListener("click",event=>{
+    pickerOtherPlans=true; render();
+    if (event?.detail === 0) app.querySelector("[data-picker-plan]")?.focus({preventScroll:true});
+  });
+  app.querySelector("[data-picker-plans-cancel]")?.addEventListener("click",event=>{
+    pickerOtherPlans=false; render();
+    if (event?.detail === 0) app.querySelector("[data-picker-other-plans]")?.focus({preventScroll:true});
+  });
+  app.querySelectorAll("[data-picker-filter]").forEach(button=>button.addEventListener("click",()=>togglePickerFilter(button.dataset.pickerFilter)));
   app.querySelectorAll("[data-picker-plan]").forEach(button=>button.addEventListener("click",()=>{
     const index=state.mealPicker.dayIndex; updateDayMode(index,button.dataset.pickerPlan); closeMealPicker();
   }));
@@ -3005,7 +3056,7 @@ function bindEvents() {
     });
 
     searchInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.isComposing && !mealsMatchingPickerQuery(searchInput.value).length) {
+      if (event.key === "Enter" && !event.isComposing && !pickerFiltersActive() && !mealsMatchingPickerQuery(searchInput.value).length) {
         event.preventDefault();
         state.mealPicker.query = searchInput.value;
         addQuickMealForPicker();
@@ -3039,6 +3090,7 @@ function bindEvents() {
         addQuickMealForPicker();
         return;
       }
+      if (e.target.closest("[data-clear-picker-filters]")) { pickerFilters = emptyPickerFilters(); render(); return; }
       const item = e.target.closest("[data-select-meal]");
       if (item) {
         const mealId = item.dataset.selectMeal;
@@ -3584,7 +3636,7 @@ function captureWindowPositions() {
   return [...app.querySelectorAll("[data-scroll-key]")].map(element => {
     const windowRoot = element.closest(".modal-backdrop") || element;
     return { key: element.dataset.scrollKey, scrollTop: element.scrollTop,
-      focusKey: windowRoot.contains(active) ? active?.dataset?.focusKey : null };
+      scrollLeft: element.scrollLeft, focusKey: windowRoot.contains(active) ? active?.dataset?.focusKey : null };
   });
 }
 
@@ -3598,11 +3650,14 @@ function restoreWindowPositions(positions) {
       .find(control => control.dataset.focusKey === position.focusKey) : null;
     focused?.focus({ preventScroll: true });
     element.scrollTop = position.scrollTop;
+    if (position.scrollLeft !== undefined) element.scrollLeft = position.scrollLeft;
   }
 }
 
 function render(preserveShoppingInput = true) {
   state.activeView = canonicalView(state.activeView); state.previousView = canonicalView(state.previousView);
+  if (!planningWindowOpen() || accessState.kind !== "ready") planningWindowWeekKey = null;
+  if (!state.mealPicker?.open || accessState.kind !== "ready") { pickerFilters = emptyPickerFilters(); pickerOtherPlans = false; }
   if (state.activeView !== "week" || accessState.kind !== "ready") weekClearConfirmation = null;
   if (!state.mealPicker?.open || canonicalView(state.activeView) !== "week" || accessState.kind !== "ready") mealPickerReturn = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeMenuOpen = false;
@@ -3727,11 +3782,17 @@ function syncWakeLock() {
   }
 }
 
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    syncWakeLock();
+function handleVisibilityChange(now = Date.now()) {
+  if (document.visibilityState !== "visible") { if (backgroundAt === null) backgroundAt = now; return; }
+  const currentWeek = getWeekKeyForOffset(0, new Date(now));
+  if ((backgroundAt !== null && now - backgroundAt > 30 * 60000) || currentWeek !== lastVisibleWeekKey) {
+    state.weekOffset = 0; saveState(); render();
   }
-});
+  backgroundAt = null; lastVisibleWeekKey = currentWeek;
+  syncWakeLock();
+}
+
+document.addEventListener("visibilitychange", () => handleVisibilityChange());
 
 async function initFirebaseSync() {
   if (navigator.onLine === false) { showOfflineStartup(); return; }
@@ -3769,6 +3830,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  planningWindowWeekKey = null; pickerFilters = emptyPickerFilters();
   pickerOtherPlans = false; weekClearConfirmation = null;
   mealPickerReturn = null;
   recipeMenuOpen = false;

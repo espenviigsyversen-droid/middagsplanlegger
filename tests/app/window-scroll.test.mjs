@@ -230,8 +230,14 @@ document.activeElement=null; focusCalls.length=0; finePointer=true;
 run('openMealPicker(0)'); expectFocus('picker-search');
 assert.equal(focusCalls.length,1,'Fine pointer opening focuses the search once');
 // Rebinding/rendering must not steal focus from footer buttons, even on desktop.
-activate('picker-other-plans'); expectFocus('picker-other-plans');
-assert.equal(document.activeElement,control('picker-other-plans'));
+activate('picker-other-plans');
+assert.equal(control('picker-other-plans'),null);
+assert.ok(control('picker-plan:away'));
+control('picker-plan:away').focus({preventScroll:true});
+run('render()'); expectFocus('picker-plan:away');
+activate('picker-plan-cancel');
+assert.ok(control('picker-other-plans'));
+control('picker-other-plans').focus({preventScroll:true});
 run('render()'); expectFocus('picker-other-plans');
 assert.ok(pointerQueries.every(query=>query==='(pointer: fine)'));
 run('closeMealPicker()');
@@ -242,5 +248,47 @@ const beforeTouchReopen=focusCalls.length;
 run('openMealPicker(0,true)');
 assert.equal(focusCalls.length,beforeTouchReopen,'A focused note in the old day sheet must not focus the new picker');
 assert.equal(document.activeElement,null);
+
+
+// v114: filters affect both ranking cards and category results, preserving horizontal scroll.
+run('closeMealPicker(); state.meals=normalizeMeals([{...emptyMeal(),id:"fast-kid",title:"Rask fisk",categories:["fisk"],prepTime:"quick",kidFriendly:true},{...emptyMeal(),id:"fast-veg",title:"Rask vegetar",categories:["vegetar"],prepTime:"quick"},{...emptyMeal(),id:"slow-kid",title:"Langsom fisk",categories:["fisk"],prepTime:"long",kidFriendly:true}]); state.plansByWeek[getWeekKey()]={...emptyWeekPlan()}; openMealPicker(0)');
+scroller('picker-filters').scrollLeft=140;
+activate('picker-filter:quick');
+assert.equal(scroller('picker-filters').scrollLeft,140);expectFocus('picker-filter:quick');
+assert.equal(control('picker-filter:quick').attrs['aria-pressed'],'true');
+activate('picker-filter:kidFriendly');
+assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("").map(m=>m.id))')),['fast-kid']);
+assert.doesNotMatch(run('renderMealPickerListItems("",0)'),/data-select-meal="fast-veg"|data-select-meal="slow-kid"/);
+activate('picker-filter:category:vegetar');assert.match(app.innerHTML,/Ingen middager passer filtrene/);assert.doesNotMatch(app.innerHTML,/FORSLAG TIL/);
+activate('picker-filter:category:fisk');assert.equal(run('pickerFilters.category'),'fisk');
+assert.equal(control('picker-filter:category:vegetar').attrs['aria-pressed'],'false');
+assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("rask").map(m=>m.id))')),['fast-kid']);
+assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("vegetar").map(m=>m.id))')),[]);
+activate('picker-filter:favorite');assert.match(app.innerHTML,/Fjern filtre/);
+scroller('meal-picker').handlers.click({target:control('picker-clear-filters')});
+assert.equal(run('pickerFiltersActive()'),false);assert.doesNotMatch(app.innerHTML,/Ingen middager passer filtrene/);
+activate('picker-filter:quick');run('closeMealPicker(); openMealPicker(0)');assert.equal(run('pickerFiltersActive()'),false);
+// Keyboard activation shows a heading instead of the trigger, and focuses the first choice.
+const trigger=control('picker-other-plans');trigger.focus({preventScroll:true});trigger.handlers.click({detail:0});
+assert.equal(control('picker-other-plans'),null);assert.match(app.innerHTML,/IKKE MIDDAG HJEMME/);
+assert.ok(control('picker-plan:away').attrs.class.includes('picker-plan-option'));expectFocus('picker-plan:away');
+control('picker-plan-cancel').handlers.click({detail:0});assert.ok(control('picker-other-plans'));expectFocus('picker-other-plans');
+// Long background resets the underlying week, never the open picker's target week.
+run('closeMealPicker(); state.weekOffset=1; openDaySheet(0); openMealPicker(0,true);');
+const originalWindowWeek=run('getWeekKey()');const visibleLevels=run('JSON.stringify(navigationLevels())');
+scroller('meal-picker').scrollTop=245;
+document.visibilityState='hidden';const hiddenNow=Date.now();context.hiddenNow=hiddenNow;
+run('handleVisibilityChange(hiddenNow)');document.visibilityState='visible';run('handleVisibilityChange(hiddenNow+31*60000)');
+assert.equal(run('state.weekOffset'),0);assert.equal(run('getWeekKey()'),originalWindowWeek);assert.equal(scroller('meal-picker').scrollTop,245);
+assert.equal(run('JSON.stringify(navigationLevels())'),visibleLevels);assert.equal(run('state.mealPicker.open'),true);
+run('updatePlanDay(0,"fast-kid")');assert.equal(run('state.plansByWeek[getWeekKey()][0]'),'fast-kid');
+run('closeMealPicker()');assert.equal(run('state.plannerDaySheet.open'),true);assert.equal(run('getWeekKey()'),originalWindowWeek);
+run('navigate({plannerDaySheet:{open:false,dayIndex:null}})');assert.equal(run('planningWindowWeekKey'),null);
+assert.equal(run('getWeekKey()'),run('getWeekKeyForOffset(0)'));
+run('state.weekOffset=1; openWeekMenu(); startWeekClear()');const clearTarget=run('getWeekKey()');
+document.visibilityState='hidden';run('handleVisibilityChange(hiddenNow+40*60000)');document.visibilityState='visible';run('handleVisibilityChange(hiddenNow+80*60000)');
+assert.equal(run('getWeekKey()'),clearTarget);assert.ok(run('weekClearConfirmation'));
+run('cancelWeekClear()');assert.equal(run('getWeekKey()'),clearTarget);run('navigate({plannerActionsOpen:false})');
+run('saveState()');assert.doesNotMatch(storage.get('middagsapp-state'),/pickerFilters|planningWindowWeekKey|weekOffset/);
 
 console.log("window scroll/focus app tests ok");

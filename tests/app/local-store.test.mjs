@@ -112,8 +112,8 @@ assert.equal(f.run("localStoreFailed"), false); assert.equal(f.app.innerHTML.inc
 f.run('state.weekOffset=2; state.filters={query:"Ris",category:"all",flag:"all",sort:"title"}; state.draftMeal={title:"PRIVATE_DRAFT"}; state.draftIngredients=[{name:"PRIVATE_DRAFT"}]; state.draftSteps=["PRIVATE_DRAFT"]; state.mealPicker={open:true}; state.generateModal={open:true}; state.plannerDaySheet={open:true}; state.shoppingReview={groups:["PRIVATE_REVIEW"]}; state.toast="PRIVATE_TOAST"; saveState();');
 const saved = JSON.parse(f.storage.get("middagsapp-state"));
 assert.doesNotMatch(JSON.stringify(saved), /PRIVATE_|draft|toast|Modal|Sheet|Picker|editing|activeView/);
-assert.equal(saved.weekOffset, 2); assert.equal(saved.filters.query, "Ris"); assert.equal(saved.meals[0].title, "Ny middag fra skyen");
-assert.equal(f.run("loadState().activeView"), "shopping"); assert.equal(f.run("loadState().weekOffset"), 2);
+assert.equal(Object.hasOwn(saved, "weekOffset"), false); assert.equal(saved.filters.query, "Ris"); assert.equal(saved.meals[0].title, "Ny middag fra skyen");
+assert.equal(f.run("loadState().activeView"), "shopping"); assert.equal(f.run("loadState().weekOffset"), 0);
 assert.equal(f.run("loadState().filters.query"), "Ris"); assert.equal(f.run("loadState().draftMeal"), null);
 f.run("stopAllSync()");
 
@@ -131,9 +131,11 @@ const legacy = fixture({ writesFail: false, rawState: JSON.stringify({ projectId
   filters: { query: "Ris", category: "all", flag: "all", sort: "title" }, activeView: "meals", editingMealId: "a",
   draftMeal: { title: "OLD_DRAFT" }, draftIngredients: [{ name: "OLD_DRAFT" }], draftSteps: ["OLD_DRAFT"],
   mealPicker: { open: true }, plannerDaySheet: { open: true }, generateModal: { open: true }, toast: { message: "OLD_TOAST" } }) });
-assert.equal(legacy.run("state.meals[0].title"), meal.title); assert.equal(legacy.run("state.weekOffset"), 2);
+assert.equal(legacy.run("state.meals[0].title"), meal.title); assert.equal(legacy.run("state.weekOffset"), 0);
 assert.equal(legacy.run("state.filters.query"), "Ris"); assert.equal(legacy.run("state.activeView"), "shopping");
 for (const field of ["draftMeal", "draftIngredients", "draftSteps", "editingMealId", "toast"]) assert.equal(legacy.run(`state.${field}`), null);
 for (const field of ["mealPicker", "plannerDaySheet", "generateModal"]) assert.equal(legacy.run(`state.${field}.open`), false);
 legacy.run("saveState()"); assert.doesNotMatch(legacy.storage.get("middagsapp-state"), /OLD_DRAFT|OLD_TOAST/);
+const previousWeekChoice = fixture({writesFail:false,rawState:JSON.stringify({projectId,weekOffset:1,meals:[meal]})});
+assert.equal(previousWeekChoice.run("state.weekOffset"),0);
 console.log("app local storage tests ok (full quota, login, clicks, writes, snapshots, recovery and compact copy)");
