@@ -170,7 +170,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v109");
+assert.equal(exported.appVersion, "v110");
 const { servingsByWeek: exportedServings, ...exportedDomain } = exported.data;
 const { servingsByWeek: localServings, ...localDomain } = snapshot("syncPayload()");
 assert.deepEqual(exportedDomain, localDomain);

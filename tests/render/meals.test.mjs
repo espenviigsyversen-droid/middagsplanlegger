@@ -274,3 +274,23 @@ assert.match(css, /\.editor-row-menu-actions \{[^}]*overflow-y: auto/);
 // At 375 px the grid reserves the same width as v106, so the name field does not shrink.
 assert.equal(64 + 72 + 44 + 3 * 6, 70 + 78 + 32 + 3 * 6);
 assert.equal(20 + 44 + 2 * 6, 32 + 32 + 2 * 6);
+
+// v110: intrinsic SVG size must not expand with a full-width recipe button.
+const buttonRule = /\.button\s*\{([^}]+)\}/.exec(css)?.[1] || "";
+assert.match(buttonRule, /display:\s*inline-flex/);
+assert.match(buttonRule, /align-items:\s*center/);
+assert.match(buttonRule, /justify-content:\s*center/);
+assert.match(buttonRule, /gap:\s*8px/);
+const svgRule = /\.button svg\s*\{([^}]+)\}/.exec(css)?.[1] || "";
+assert.match(svgRule, /width:\s*1\.25em/);
+assert.match(svgRule, /height:\s*1\.25em/);
+assert.match(svgRule, /flex-shrink:\s*0/);
+assert.doesNotMatch(css, /\.recipe-primary[^{}]*svg\s*\{/);
+assert.match(css, /\.button\.recipe-primary\s*\{[^}]*min-height:\s*48px;[^}]*white-space:\s*nowrap/);
+assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.recipe-primary\s*\{\s*width:\s*100%/);
+for (const [selector, size] of [[".nav-button svg", 20], [".topbar-settings-button svg", 19], [".planner-fab svg", 20]]) {
+  const rule = css.slice(css.indexOf(selector)).split("}", 1)[0];
+  assert.match(rule, new RegExp(`width:\\s*${size}px`)); assert.match(rule, new RegExp(`height:\\s*${size}px`));
+}
+const compactGenerate = css.slice(css.indexOf(".shopping-view-header .button svg")).split("}", 1)[0];
+assert.match(compactGenerate, /width:\s*18px/); assert.match(compactGenerate, /height:\s*18px/);

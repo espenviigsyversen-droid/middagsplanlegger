@@ -262,6 +262,12 @@ button {
   box-shadow: 0 6px 14px rgba(31, 122, 92, 0.12);
 }
 
+.button svg {
+  width: 1.25em;
+  height: 1.25em;
+  flex-shrink: 0;
+}
+
 .button.secondary {
   background: var(--surface);
   color: var(--text);
@@ -1887,7 +1893,7 @@ button {
   border: none; padding: 0 10px 0 0; min-width: 44px; min-height: 44px; color: var(--brand-dark); font: inherit; font-weight: 750; }
 .subpage-back > span { font-size: 2rem; line-height: 1; }
 .subpage-action .icon-button { width: 44px; height: 44px; font-size: 1.6rem; }
-.recipe-primary { justify-self: start; min-height: 44px; }
+.button.recipe-primary { justify-self: start; min-height: 48px; white-space: nowrap; }
 .wake-switch { display: inline-flex; align-items: center; gap: 10px; justify-self: start;
   min-width: 44px; min-height: 44px; padding: 0; background: transparent; border: none; color: var(--text); font: inherit; }
 .wake-switch:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -2996,7 +3002,7 @@ button {
     padding: 0 9px;
     font-size: 0.8rem;
     white-space: nowrap;
-    gap: 6px;
+    gap: 8px;
   }
 
   .shopping-view-header .button svg {
