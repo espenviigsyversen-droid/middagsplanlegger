@@ -189,9 +189,16 @@ for (const entry of ["editor", "link", "replace"]) {
   f.context.importCall = async input => { f.calls.push(input); return { ok: true, recipe: { ...recipe, baseServings: 4, servingsKnown: true } }; };
   if (entry === "link") {
     f.run('state.meals[0].recipeUrl = "https://example.com/recipe"; state.selectedMealId = "own"; state.activeView = "recipe"; state.editingMealId = null; loadAiKeyStatus = async () => {};');
+    f.run("renderWithDom()");
     let click;
-    f.selectors.set("[data-import-from-link]", [{ dataset: { importFromLink: "own" }, addEventListener: (_event, callback) => { click = callback; } }]);
-    f.run("bindRecipeImportEvents()"); await click();
+    f.selectors.set("[data-edit-meal]", [{ dataset: { editMeal: "own" }, addEventListener: (_event, callback) => { click = callback; } }]);
+    f.run("bindEvents()"); click({stopPropagation(){}});
+    f.run("renderWithDom()");
+    assert.equal(f.run("recipeImportState.expanded"),true);
+    assert.equal(f.run("recipeImportState.url"),"https://example.com/recipe");
+    assert.equal(f.calls.length,0,"Opening Edit does not fetch automatically");
+    f.run('aiKeyUi.status={configured:true,status:"connected"}');
+    await f.run('startRecipeImport("url")');
   } else await f.run('startRecipeImport("url")');
   if (entry === "replace") f.choose(true);
   assert.equal(f.calls.length, 1); assert.equal(f.run("state.draftMeal.baseServings"), 4);

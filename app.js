@@ -219,8 +219,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v117";
-const APP_VERSION_NUMBER = 117;
+const APP_VERSION = "v118";
+const APP_VERSION_NUMBER = 118;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -245,7 +245,6 @@ let weeksSyncStatus = null;
 let servingsTransition = null, weeksServerReady = false, profileServerReady = false;
 let recipeServingsView = { key: null, value: null };
 let editorRowMenu = null;
-let recipeMenuOpen = false;
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
 let currentAuthUser = null;
@@ -291,7 +290,6 @@ function navigationLevels() {
   if (state.generateModal?.open && state.activeView === "shopping") levels.push("generate-days");
   if (state.shoppingReview?.open) levels.push("shopping-review");
   if (editorRowMenu) levels.push(`row-menu:${editorRowMenu.kind}:${editorRowMenu.index}`);
-  if (recipeMenuOpen) levels.push("recipe-menu");
   if (editorDiscardOpen) levels.push("editor-discard");
   return levels;
 }
@@ -302,7 +300,6 @@ function backInApp() {
   if (accessState.kind !== "ready") return false;
   if (editorDiscardOpen) { continueMealEditing(); return true; }
   if (weekClearConfirmation) { cancelWeekClear(); return true; }
-  if (recipeMenuOpen) { closeRecipeMenu(); return true; }
   if (editorRowMenu) { closeEditorRowMenu(); return true; }
   if (state.shoppingReview?.open) { closeShoppingReview(); return true; }
   if (state.generateModal?.open && state.activeView === "shopping") { setState({ generateModal: { open: false, selectedDays: [] } }); return true; }
@@ -322,11 +319,6 @@ function backInApp() {
 }
 
 function navigateBack() { backInApp(); uiHistory.sync(); }
-
-function closeRecipeMenu() {
-  recipeMenuOpen = false; render(); uiHistory.sync();
-  app.querySelector("[data-open-recipe-menu]")?.focus?.({ preventScroll: true });
-}
 
 function openMealPicker(dayIndex, fromDaySheet = false) {
   if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex > 6) return;
@@ -1690,8 +1682,6 @@ function renderMealDetail() {
     targetServings,
     shoppingIconHtml: icon("shopping"),
     scaleAmount,
-    menuOpen: recipeMenuOpen,
-    importAvailable: accessState.kind === "ready" && !accessState.offline && navigator.onLine !== false,
     escapeHtml,
   });
 }
@@ -1937,11 +1927,10 @@ document.addEventListener("keydown", event => {
     if (event.key === "Tab") {const first=app.querySelector("[data-editor-continue]"),last=app.querySelector("[data-editor-discard]");if(first&&last&&(event.shiftKey?document.activeElement===first:document.activeElement===last)){event.preventDefault();(event.shiftKey?last:first).focus({preventScroll:true});}}
     return;
   }
-  if (!editorRowMenu && !recipeMenuOpen) return;
-  if (event.key === "Escape") { event.preventDefault(); recipeMenuOpen ? closeRecipeMenu() : closeEditorRowMenu(); return; }
+  if (!editorRowMenu) return;
+  if (event.key === "Escape") { event.preventDefault(); closeEditorRowMenu(); return; }
   if (event.key === "Tab") {
-    const buttons = recipeMenuOpen ? [...(app.querySelector("[data-recipe-menu]")?.querySelectorAll("[data-focus-key]") || [])].filter(element => !element.disabled)
-      : [...app.querySelectorAll("[data-editor-menu] button:not([disabled])")];
+    const buttons = [...app.querySelectorAll("[data-editor-menu] button:not([disabled])")];
     const first = buttons[0], last = buttons.at(-1);
     if (first && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
       event.preventDefault(); (event.shiftKey ? last : first).focus();
@@ -2228,15 +2217,6 @@ function bindRecipeImportEvents() {
   app.querySelector("[data-import-interpret]")?.addEventListener("click", () => startRecipeImport("text"));
   app.querySelector("[data-import-replace]")?.addEventListener("click", () => resolveRecipeImport(true));
   app.querySelector("[data-import-keep]")?.addEventListener("click", () => resolveRecipeImport(false));
-  app.querySelectorAll("[data-import-from-link]").forEach(button => button.addEventListener("click", async () => {
-    if (accessState.kind !== "ready" || accessState.offline || navigator.onLine === false) return;
-    const meal = getMeal(button.dataset.importFromLink);
-    if (!mealCanImportFromLink(meal)) return;
-    navigate({ activeView: "meals", previousView: "meals", editingMealId: meal.id, draftMeal: null,
-      draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
-    await loadAiKeyStatus();
-    if (state.editingMealId === meal.id && state.activeView === "meals") await startRecipeImport("url");
-  }));
 }
 
 function aiKeyAvailable() {
@@ -3084,14 +3064,6 @@ function bindMealResultActions(root = app) {
 
 function bindEvents() {
   app.querySelectorAll("[data-subpage-back]").forEach(button => button.addEventListener("click", navigateBack));
-  app.querySelector("[data-open-recipe-menu]")?.addEventListener("click", () => {
-    recipeMenuOpen = true; render(); uiHistory.sync();
-    app.querySelector('[data-focus-key="recipe-menu-edit"]')?.focus?.({ preventScroll: true });
-  });
-  app.querySelectorAll("[data-close-recipe-menu]").forEach(element => element.addEventListener("click", event => {
-    if (event.target === element) closeRecipeMenu();
-  }));
-  app.querySelector("[data-recipe-menu-link]")?.addEventListener("click", closeRecipeMenu);
   app.querySelectorAll("[data-calendar-day]").forEach(button => button.addEventListener("click", () => openDaySheet(Number(button.dataset.calendarDay))));
   app.querySelectorAll("[data-editor-row-menu]").forEach(button => button.addEventListener("click", () => openEditorRowMenu(button.dataset.editorRowMenu, Number(button.dataset.rowIndex))));
   app.querySelectorAll("[data-editor-menu-action]").forEach(button => button.addEventListener("click", () => chooseEditorRowAction(button.dataset.editorMenuAction, button.dataset.groupIndex)));
@@ -3758,7 +3730,6 @@ function render(preserveShoppingInput = true) {
   if (!state.mealPicker?.open || accessState.kind !== "ready") { pickerFilters = emptyPickerFilters(); pickerOtherPlans = false; }
   if (state.activeView !== "week" || accessState.kind !== "ready") weekClearConfirmation = null;
   if (!state.mealPicker?.open || canonicalView(state.activeView) !== "week" || accessState.kind !== "ready") mealPickerReturn = null;
-  if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeMenuOpen = false;
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
@@ -3933,7 +3904,6 @@ function stopAllSync() {
   planningWindowWeekKey = null; pickerFilters = emptyPickerFilters();
   pickerOtherPlans = false; weekClearConfirmation = null;
   mealPickerReturn = null;
-  recipeMenuOpen = false;
   uiHistory.reset();
   editorRowMenu = null;
   servingsTransition = null; weeksServerReady = false; profileServerReady = false;

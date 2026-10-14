@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { descriptionRepeatsTitle } from "../../src/domain/meals.js";
+import { descriptionRepeatsTitle, recipeSourceUrl } from "../../src/domain/meals.js";
+assert.equal(recipeSourceUrl("https://example.com/recipe").href, "https://example.com/recipe");
+assert.equal(recipeSourceUrl(" HTTP://EXAMPLE.COM:80 ").href, "http://example.com/");
+assert.equal(recipeSourceUrl("https://example.com/oppskrift med mellomrom").href, "https://example.com/oppskrift%20med%20mellomrom");
+for (const value of ["javascript:alert(1)", "data:text/html,<h1>Test</h1>", "ftp://example.com/recipe", "file:///recipe", "", "   ", "ugyldig adresse", "example.com/recipe", "https://", null]) {
+  assert.equal(recipeSourceUrl(value), null);
+}
 assert.equal(descriptionRepeatsTitle("Alfredo pasta", " ALFREDO-PASTA 🍝!!! "), true);
 assert.equal(descriptionRepeatsTitle("Alfredo pasta", "Kremet pasta"), false);
 assert.equal(descriptionRepeatsTitle("", ""), false);

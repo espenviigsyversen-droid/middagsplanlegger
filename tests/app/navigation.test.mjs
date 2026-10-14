@@ -40,8 +40,8 @@ assert.equal(index,1);assert.equal(run("state.previousView"),"week");
 assert.deepEqual(json("state.selectedRecipeContext"),{weekKey:run("getWeekKey()"),dayIndex:2});
 const noRenderPush=pushes;run("render(); render(); applyRemoteStatePatch({family:{...state.family,name:'Sky'}})");
 assert.equal(pushes,noRenderPush,"Rendering/sky updates never add entries");
-click("[data-open-recipe-menu]"); assert.equal(run("recipeMenuOpen"),true);assert.equal(index,2);
-history.go(-1);flush();assert.equal(run("recipeMenuOpen"),false);assert.equal(run("state.activeView"),"recipe");
+assert.match(app.innerHTML,/class="recipe-edit"[^>]*data-edit-meal="wok">Rediger/);
+assert.doesNotMatch(app.innerHTML,/data-open-recipe-menu|data-scroll-key="recipe-menu"|⋯/);
 click("[data-add-to-shopping]",{addToShopping:"wok"});assert.equal(index,2);
 history.go(-1);flush();assert.equal(run("state.shoppingReview.open"),false);assert.equal(run("state.activeView"),"recipe");
 history.go(-1);flush();assert.equal(run("state.activeView"),"week");assert.equal(index,0);
@@ -50,7 +50,8 @@ for(let turn=0;turn<8;turn++) {
   assert.equal(index,0);assert.equal(entries.length,2,"Back + new entry reuses the forward slot");
 }
 history.go(1);flush();assert.equal(index,0);assert.equal(run("state.activeView"),"week","Forward does not resurrect an old recipe");
-run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"week"}); recipeMenuOpen=true; render(); uiHistory.sync()');
+run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"week"})');
+click("[data-add-to-shopping]",{addToShopping:"wok"});
 const beforePop=pushes;history.go(-2);flush();assert.equal(run("state.activeView"),"week");assert.equal(pushes,beforePop);
 // A new action while the browser is consuming a closed entry uses the latest target.
 run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"week"}); navigateBack(); navigate({activeView:"family-settings"})');
@@ -122,8 +123,8 @@ openAi.handlers.click();flush();history.go(-1);flush();assert.equal(run("state.a
 click("[data-cancel-edit]");assert.equal(index,2);click("[data-editor-discard]");assert.equal(index,0);
 selectors.delete("[data-meal-form]");selectors.delete("[data-ingredient-row]");selectors.delete("[data-step-row]");
 
-// Menu-to-editor transition waits for browser traversal before pushing the editor guard.
-click("[data-view-meal]",{viewMeal:"wok"});click("[data-open-recipe-menu]");
+// Direct Edit replaces the recipe history level with the editor guard.
+click("[data-view-meal]",{viewMeal:"wok"});
 const edit=button({editMeal:"wok"});selectors.set("[data-edit-meal]",[edit]);run("bindEvents()");edit.handlers.click({stopPropagation(){}});
 assert.equal(queue.length,1);assert.equal(run("state.editingMealId"),"wok");flush();assert.equal(index,1);
 selectors.delete("[data-edit-meal]");click("[data-cancel-edit]");
@@ -138,7 +139,8 @@ assert.equal(run("state.plannerDaySheet.dayIndex"),3);history.go(-1);flush();
 click("[data-view-meal]",{viewMeal:"wok",recipeDay:"2"});assert.equal(run("state.selectedRecipeContext.dayIndex"),2);
 click("[data-toggle-wake]");assert.equal(run("state.keepScreenAwake"),true);click("[data-toggle-wake]");assert.equal(run("state.keepScreenAwake"),false);
 assert.doesNotMatch(JSON.stringify(entries),/Ulagret|Kylling|ingredients/);
-assert.doesNotMatch(storage.get("middagsapp-state"),/middagsappNavigation|recipeMenuOpen/);
+assert.doesNotMatch(storage.get("middagsapp-state"),/middagsappNavigation/);
+assert.doesNotMatch(source,/recipeMenuOpen|recipe-menu|closeRecipeMenu/);
 const beforeAccessStop=pushes;run('stopAllSync(); accessState={kind:"login"}; render()');
 assert.equal(pushes,beforeAccessStop,"Account/sync stop never pushes history");
 console.log("navigation app tests ok");

@@ -4,6 +4,16 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v118 – kildelenke, direkte Rediger og jevne PC-rader
+
+Eier publiserer klientfilene i docs/LEVERANSE_V118.md. App/cache er v118, minimum fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 52 testskript og 44 kildefilers syntakskontroller består lokalt.
+
+Kontroller etter publisering på PC/iPhone: kildelenken under beskrivelsen åpner ny fane og viser riktig verts-/plattformnavn. Uten kilde skal den være borte. Rediger er direkte i toppstripen; ingen oppskriftsmeny eller automatisk import. Manglende ingredienser gir fortsatt Legg inn oppskrift. Prøv tilbake fra oppskrift/editor og forkastingsarket fra v117.
+
+Retting før v118-publisering: bare kilder som kan tolkes som http:/https: vises som lenker, med href fra url.href. javascript:, data: og ugyldige adresser skal være skjult i visningen, men fortsatt synlige som lagret tekst under Kilde (lenke) i editoren. Versjonen forblir v118.
+
+Ved 1280 px: kontroller Navn/Porsjoner, Tilberedningstid, Kategorier/Merking og Rester/Minimum dager mellom, særlig hjelpetekst og ulike antall kategori-/merkebokser. Ved 375 px skal skjemaet fortsatt være én kolonne. Bildevalgets × skal være en liten 26 px sirkel med 44×44 px trykkflate. Lokal Chrome-kontroll har målt disse dimensjonene med nettverk blokkert; ekte Safari/touch, safe-area og åpning av ekstern lenke gjenstår på enhet.
+
 ### v117 – oppskriftsskjema med fast stripe og nytt importkort
 
 Eier publiserer klientfilene i docs/LEVERANSE_V117.md, inkludert src/domain/meal-editor.js og src/render/recipe-import.js i begge asset-listene. App/cache er v117, minsteversjonen fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 52 testskript og 44 kildefilers syntakskontroller består lokalt.

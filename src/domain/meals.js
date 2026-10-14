@@ -111,6 +111,17 @@ export function normalizedRecipeUrl(value) {
   return `https://${text}`;
 }
 
+// Validate a link for display without rewriting the stored source field.
+export function recipeSourceUrl(value) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 export function mealBaseServings(meal) {
   return Math.max(1, Number(meal?.baseServings) || 4);
 }

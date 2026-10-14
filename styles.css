@@ -2687,7 +2687,8 @@ button {
 .import-source-confirmation svg { width: 18px; height: 18px; flex-shrink: 0; }
 .import-image-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 12px 0; }
 .import-image-tile, .import-image-add { aspect-ratio: 3 / 4; border-radius: 10px; position: relative; display: grid; place-items: center; background: var(--surface-strong); color: var(--muted); font-size: 12px; }
-.import-image-tile button { position: absolute; top: 0; right: 0; width: 44px; height: 44px; border-radius: 50%; background: rgba(36,34,29,.72); color: white; font-size: 22px; }
+.import-image-tile button { position: absolute; top: -5px; right: -5px; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; background: transparent; color: white; }
+.import-image-tile button span { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(36,34,29,.72); font-size: 14px; line-height: 1; }
 .import-image-add { border: 1px dashed var(--muted); color: var(--brand); background: #fffaf3; font-size: 26px; }
 .import-image-picker { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; }
 .import-image-picker svg { width: 20px; height: 20px; }
@@ -2702,3 +2703,14 @@ button {
 @media (max-width: 640px) { .meal-editor-bar { margin-left: -14px; margin-right: -14px; padding-left: 14px; padding-right: 14px; } }
 
 .recipe-import-panel .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* v118: source link and direct editing; desktop fields keep their natural height. */
+.recipe-edit { min-height: 44px; padding: 0 8px; background: transparent; color: var(--brand); font-size: 16px; font-weight: 700; }
+.recipe-source { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--brand); font-size: 14px; font-weight: 600; line-height: 20px; text-decoration: none; }
+.recipe-source:hover, .recipe-source:focus { text-decoration: underline; }
+.recipe-source svg { width: 16px; height: 16px; flex-shrink: 0; }
+.recipe-source .recipe-source-external { width: 12px; height: 12px; }
+@media (min-width: 861px) {
+  .meal-editor .form-row { align-items: start; }
+  .meal-editor .form-row > .setting { align-content: start; }
+}

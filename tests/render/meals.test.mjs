@@ -51,12 +51,10 @@ function testMealCardRender() {
 
 function testRecipeImportRender() {
   const meal = { id: "linked", title: "Lenke", description: "", recipeUrl: "https://example.com/recipe", ingredients: [], steps: [] };
-  const linked = renderMealDetailView({ meal, menuOpen: true, importAvailable: true, escapeHtml });
-  assert.match(linked, /data-import-from-link="linked"/);
-  assert.match(linked, /Hent fra lenke/);
-  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, ingredients: [{ name: "Fisk" }] }, menuOpen:true, escapeHtml }), /data-import-from-link/);
-  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, recipeUrl: "" }, menuOpen:true, escapeHtml }), /data-import-from-link/);
-  assert.match(renderMealDetailView({ meal, menuOpen:true, importAvailable:false }), /data-import-from-link="linked" disabled/);
+  const linked = renderMealDetailView({ meal, escapeHtml });
+  assert.match(linked, /class="recipe-edit"[^>]*data-edit-meal="linked">Rediger/);
+  assert.doesNotMatch(linked, /data-import-from-link|recipe-menu|Flere valg|⋯/);
+  assert.match(renderMealEditorView({meal,escapeHtml}), /recipe-import-panel/);
   for (const isNew of [true, false]) {
     const html = renderMealEditorView({ meal, isNew, importAvailable: true, aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { url: meal.recipeUrl, showText: true, text: "<script>bad</script>" }, escapeHtml });
     assert.match(html, /Fyll ut automatisk/); assert.doesNotMatch(html, /data-import-fetch/); assert.match(html, /data-import-interpret/);
@@ -122,14 +120,48 @@ function testMealDetailRender() {
   assert.match(html, /Oppskrift til 4 porsjoner/);
   assert.match(html, /Tomat/);
   assert.match(html, /Kok pasta/);
-  assert.match(html, /aria-label="Flere valg"/);
-  assert.doesNotMatch(html, /Åpne lenke/);
-  assert.match(renderMealDetailView({meal:{id:"a",title:"A",recipeUrl:"https://example.com"},menuOpen:true}), /target="_blank" rel="noopener">Åpne lenke/);
+  assert.match(html, /class="recipe-edit"[^>]*data-edit-meal="pasta">Rediger/);
+  assert.doesNotMatch(html, /recipe-menu|Flere valg|⋯/);
+  assert.match(html, /class="recipe-source" href="https:\/\/example.com\/" target="_blank" rel="noopener" aria-label="Åpne oppskriften på example.com \(åpnes i ny fane\)"/);
   assert.doesNotMatch(html, /Ingen oppskrift lagt inn ennå/);
   const missingDetail = renderMealDetailView({ meal: { id: "ny", title: "Ny" } });
   assert.match(missingDetail, /Ingen oppskrift lagt inn ennå/);
   assert.match(missingDetail, /data-edit-meal="ny">Legg inn oppskrift/);
 }
+
+for (const [url, label] of [
+  ["https://www.matprat.no/recipe", "matprat.no"],
+  [" HTTP://EXAMPLE.COM:80 ", "example.com"],
+  ["https://example.com/oppskrift med mellomrom", "example.com"],
+  ["https://www.instagram.com/post", "Instagram"],
+  ["https://m.facebook.com/post", "Facebook"],
+  ["https://fb.watch/recipe", "Facebook"],
+  ["https://m.tiktok.com/post", "TikTok"],
+  ["https://instagram.com.example.com/post", "instagram.com.example.com"],
+]) {
+  const html = renderMealDetailView({ meal: { id: "source", title: "Test", description: "Beskrivelse", recipeUrl: url }, escapeHtml });
+  assert.ok(html.includes(`href="${escapeHtml(new URL(url).href)}" target="_blank" rel="noopener"`));
+  assert.ok(html.includes(`<span>${label}</span>`));
+  assert.ok(html.includes(`aria-label="Åpne oppskriften på ${label} (åpnes i ny fane)"`));
+  assert.ok(html.indexOf("<p>Beskrivelse</p>") < html.indexOf('class="recipe-source"'));
+  assert.ok(html.indexOf('class="recipe-source"') < html.indexOf('class="recipe-serving-note"'));
+}
+assert.doesNotMatch(renderMealDetailView({ meal: { id: "none", title: "Uten kilde" } }), /class="recipe-source"/);
+for (const recipeUrl of ["javascript:alert(1)", "data:text/html,<h1>Test</h1>", "ftp://example.com", "", " ", "ugyldig adresse", "https://"]) {
+  const meal = { id: "invalid", title: "Rett kilde", recipeUrl };
+  const detail = renderMealDetailView({ meal, escapeHtml });
+  assert.doesNotMatch(detail, /class="recipe-source"|href=/);
+  const editor = renderMealEditorView({ meal, escapeHtml });
+  assert.ok(editor.includes(`name="recipeUrl" value="${escapeHtml(recipeUrl)}"`), "Invalid source remains editable");
+  assert.equal(meal.recipeUrl, recipeUrl, "Rendering does not rewrite stored source");
+}
+const detailCss = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+assert.match(detailCss, /\.recipe-source \{[^}]*min-height: 44px;[^}]*font-size: 14px;[^}]*font-weight: 600;[^}]*text-decoration: none/);
+assert.match(detailCss, /\.recipe-source:hover, \.recipe-source:focus \{ text-decoration: underline/);
+assert.match(detailCss, /@media \(min-width: 861px\) \{\s*\.meal-editor \.form-row \{ align-items: start; \}/);
+assert.match(detailCss, /\.meal-editor \.form-row > \.setting \{ align-content: start; \}/);
+assert.match(detailCss, /\.import-image-tile button \{[^}]*width: 44px; height: 44px;[^}]*background: transparent/);
+assert.match(detailCss, /\.import-image-tile button span \{ width: 26px; height: 26px;[^}]*font-size: 14px/);
 
 for (const description of ["Pasta", "PASTA 🍝", "  PASTA!!! "]) {
   const html = renderMealDetailView({meal:{id:"p",title:"Pasta",description}});

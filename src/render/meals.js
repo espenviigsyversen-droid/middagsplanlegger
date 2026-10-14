@@ -1,4 +1,4 @@
-import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex, descriptionRepeatsTitle } from "../domain/meals.js";
+import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex, descriptionRepeatsTitle, recipeSourceUrl } from "../domain/meals.js";
 import { renderSubpageBar } from "./subpage.js";
 import { renderRecipeImport } from "./recipe-import.js";
 import { pencilIcon } from "./icons.js";
@@ -175,18 +175,17 @@ export function renderMealDetailView(options = {}) {
     targetServings = null,
     shoppingIconHtml = "",
     scaleAmount = (amount) => amount,
-    importAvailable = false,
-    menuOpen = false,
     escapeHtml = String,
   } = options;
 
   return `
-    ${renderSubpageBar({ backAttribute: "data-close-meal", actionHtml: '<button class="icon-button" type="button" data-open-recipe-menu aria-label="Flere valg" aria-haspopup="dialog">⋯</button>' })}
+    ${renderSubpageBar({ backAttribute: "data-close-meal", actionHtml: `<button class="recipe-edit" type="button" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>` })}
     <section class="recipe-detail">
       <div class="recipe-hero">
         <div>
           <h2>${escapeHtml(meal.title)}</h2>
           ${meal.description && !descriptionRepeatsTitle(meal.title, meal.description) ? `<p>${escapeHtml(meal.description)}</p>` : ""}
+          ${renderRecipeSourceLink(meal.recipeUrl, escapeHtml)}
           <p class="recipe-serving-note">${escapeHtml(servingText)}</p>
           <div class="recipe-servings-control" aria-label="Juster porsjoner">
             <button class="button secondary" type="button" data-recipe-servings="-1" aria-label="Færre porsjoner" ${(targetServings ?? baseServings) <= 1 ? "disabled" : ""}>−</button>
@@ -226,21 +225,22 @@ export function renderMealDetailView(options = {}) {
         </section>
       </div>
     </section>
-    ${menuOpen ? renderRecipeMenuView({ meal, importAvailable, escapeHtml }) : ""}
   `;
 }
 
-export function renderRecipeMenuView({ meal, importAvailable = false, escapeHtml = String }) {
-  return `<div class="modal-backdrop editor-row-menu-backdrop active" data-close-recipe-menu>
-    <section class="modal editor-row-menu active" data-recipe-menu role="dialog" aria-modal="true" aria-labelledby="recipeMenuTitle">
-      <div class="modal-header"><h3 id="recipeMenuTitle">Flere valg</h3>
-        <button class="modal-close" type="button" data-focus-key="recipe-menu-close" data-close-recipe-menu aria-label="Lukk flere valg">×</button></div>
-      <div class="editor-row-menu-actions" data-scroll-key="recipe-menu">
-        <button class="button secondary" type="button" data-focus-key="recipe-menu-edit" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
-        ${meal.recipeUrl ? `<a class="button secondary" data-focus-key="recipe-menu-link" data-recipe-menu-link href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
-        ${mealCanImportFromLink(meal) ? `<button class="button secondary" type="button" data-focus-key="recipe-menu-import" data-import-from-link="${escapeHtml(meal.id)}" ${importAvailable ? "" : "disabled"}>Hent fra lenke</button>` : ""}
-      </div>
-    </section></div>`;
+function renderRecipeSourceLink(recipeUrl, escapeHtml) {
+  const url = recipeSourceUrl(recipeUrl);
+  if (!url) return "";
+  const host = url.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+  let label = host;
+  for (const [domain, name] of [["instagram.com", "Instagram"], ["facebook.com", "Facebook"], ["fb.watch", "Facebook"], ["tiktok.com", "TikTok"]]) {
+    if (host === domain || host.endsWith(`.${domain}`)) { label = name; break; }
+  }
+  const ariaLabel = `Åpne oppskriften på ${label} (åpnes i ny fane)`;
+  return `<a class="recipe-source" href="${escapeHtml(url.href)}" target="_blank" rel="noopener" aria-label="${escapeHtml(ariaLabel)}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"/></svg>
+    <span>${escapeHtml(label)}</span><svg class="recipe-source-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+  </a>`;
 }
 
 function renderOption(value, label, selected, escapeHtml = String) {
