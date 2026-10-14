@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v121 – Søk og filtre i Oppskrifter
+
+Publiser filene i docs/LEVERANSE_V121.md sammen, med src/render/meal-filters.js i begge asset-listene. App/cache v121, minimum fortsatt 120. Ingen server-/regelpublisering. Alle 58 testskript og 47 kildefilers syntakskontroller består.
+
+Kontroller på PC/iPhone: ingen doble søketreff, Enter lukker tastaturet, brikkene og søket virker sammen, Nullstill beholder sortering, og gamle lagrede filtre gir tom start. Søk/brikker beholdes gjennom oppskrift/tilbake og fanebytte. Prøv Mangler oppskrift og tomtilstanden. Velg middag skal fortsatt se ut og virke som før. Fire lokale visninger på 375/1280 px ligger under docs/screenshots. Native iPhone-tastatur/zoom/touch gjenstår på enhet. Ingen publisering er utført av agenten.
+
 ### v120 – Annen plan og eget notat
 
 Eier publiserer filene i docs/LEVERANSE_V120.md, inkludert src/render/picker-plans.js i begge asset-listene. App/cache og REQUIRED_MIN_APP_VERSION er 120. Ingen server-/regelpublisering er nødvendig. Alle 56 testskript og 46 kildefilers syntakskontroller består lokalt.

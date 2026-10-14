@@ -33,7 +33,7 @@ const circular = {}; circular.self = circular; assert.equal(store.write("key", c
 assert.doesNotThrow(() => createLocalStore({ getStorage: () => storage, onWrite: () => { throw new Error(); } }).write("key", {}));
 
 const domain = Object.fromEntries(PROJECT_DOMAIN_KEYS.map(key => [key, { retained: key }]));
-const state = { ...domain, weekOffset: 3, filters: { query: "fisk", sort: "title" },
+const state = { ...domain, weekOffset: 3, filters: { query: "fisk", sort: "alpha" },
   activeView: "meals", previousView: "planner", editingMealId: "recipe", selectedMealId: "recipe",
   draftMeal: { title: "PRIVATE_DRAFT" }, draftIngredients: [{ name: "PRIVATE_DRAFT" }], draftSteps: ["PRIVATE_DRAFT"],
   generateModal: { open: true }, mealPicker: { open: true }, plannerDaySheet: { open: true },
@@ -41,7 +41,7 @@ const state = { ...domain, weekOffset: 3, filters: { query: "fisk", sort: "title
 const local = localStateForStorage(state, "project");
 assert.deepEqual(Object.keys(local).sort(), [...PROJECT_DOMAIN_KEYS, "filters", "projectId"].sort());
 for (const key of PROJECT_DOMAIN_KEYS) assert.deepEqual(local[key], domain[key]);
-assert.equal(Object.hasOwn(local, "weekOffset"), false); assert.deepEqual(local.filters, state.filters); assert.equal(local.projectId, "project");
+assert.equal(Object.hasOwn(local, "weekOffset"), false); assert.deepEqual(local.filters, {sort:"alpha"}); assert.equal(local.projectId, "project");
 assert.doesNotMatch(JSON.stringify(local), /PRIVATE_|draft|Modal|Picker|Sheet|toast|activeView|localStoreFailed/);
 assert.equal(state.draftMeal.title, "PRIVATE_DRAFT", "Compact serialization does not mutate the live draft");
 console.log("local storage tests ok (quota, blocked access, malformed JSON, compact state)");

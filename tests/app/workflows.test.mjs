@@ -103,7 +103,7 @@ assert.equal(run("state.meals.length"), count);
 run('state.mealPicker = { open: true, dayIndex: 2, query: "Ny middag" };');
 list.handlers.click({ target: { closest: (selector) => selector === "[data-create-quick-meal]" ? {} : null } });
 assert.equal(run("getMeal(currentPlan()[2]).title"), "Ny middag");
-run('state.filters.flag = "needs-recipe";');
+run('state.filters.needsRecipe = true;');
 assert.equal(run('filteredMeals().some(meal => meal.title === "Ny middag")'), true);
 
 run('state.editingMealId = currentPlan()[2];');
@@ -170,7 +170,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v120");
+assert.equal(exported.appVersion, "v121");
 const { servingsByWeek: exportedServings, ...exportedDomain } = exported.data;
 const { servingsByWeek: localServings, ...localDomain } = snapshot("syncPayload()");
 assert.deepEqual(exportedDomain, localDomain);

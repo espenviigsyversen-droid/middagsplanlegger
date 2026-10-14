@@ -1,3 +1,5 @@
+import { mealNeedsRecipe } from "./meals.js";
+
 export function scoreMealRecency(daysSince) {
   if (daysSince === null || daysSince === undefined) return 25;
   if (daysSince <= 7) return -95;
@@ -82,6 +84,7 @@ export function mealMatchesPickerFilters(meal, filters = {}) {
   return (!filters.quick || meal.prepTime === "quick")
     && (!filters.kidFriendly || meal.kidFriendly)
     && (!filters.favorite || meal.favorite)
+    && (!filters.needsRecipe || mealNeedsRecipe(meal))
     && (!filters.suitability || (meal.suitability || []).includes(filters.suitability))
     && (!filters.category || filters.category === "all" || (meal.categories || []).includes(filters.category));
 }

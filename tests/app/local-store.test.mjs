@@ -109,12 +109,12 @@ f.run('setState({activeView:"app-settings"})'); assert.ok(f.app.innerHTML.includ
 assert.equal(f.run("state.toast"), null); assert.equal(f.run("syncStatusText()"), "Synket");
 const renders = f.rendered(); f.writesFail(false); f.run('setState({activeView:"app-settings"})');
 assert.equal(f.run("localStoreFailed"), false); assert.equal(f.app.innerHTML.includes(message), false); assert.ok(f.rendered() > renders);
-f.run('state.weekOffset=2; state.filters={query:"Ris",category:"all",flag:"all",sort:"title"}; state.draftMeal={title:"PRIVATE_DRAFT"}; state.draftIngredients=[{name:"PRIVATE_DRAFT"}]; state.draftSteps=["PRIVATE_DRAFT"]; state.mealPicker={open:true}; state.generateModal={open:true}; state.plannerDaySheet={open:true}; state.shoppingReview={groups:["PRIVATE_REVIEW"]}; state.toast="PRIVATE_TOAST"; saveState();');
+f.run('state.weekOffset=2; state.filters={query:"Ris",category:"all",flag:"all",sort:"alpha"}; state.draftMeal={title:"PRIVATE_DRAFT"}; state.draftIngredients=[{name:"PRIVATE_DRAFT"}]; state.draftSteps=["PRIVATE_DRAFT"]; state.mealPicker={open:true}; state.generateModal={open:true}; state.plannerDaySheet={open:true}; state.shoppingReview={groups:["PRIVATE_REVIEW"]}; state.toast="PRIVATE_TOAST"; saveState();');
 const saved = JSON.parse(f.storage.get("middagsapp-state"));
 assert.doesNotMatch(JSON.stringify(saved), /PRIVATE_|draft|toast|Modal|Sheet|Picker|editing|activeView/);
-assert.equal(Object.hasOwn(saved, "weekOffset"), false); assert.equal(saved.filters.query, "Ris"); assert.equal(saved.meals[0].title, "Ny middag fra skyen");
+assert.equal(Object.hasOwn(saved, "weekOffset"), false); assert.deepEqual(saved.filters, {sort:"alpha"}); assert.equal(saved.meals[0].title, "Ny middag fra skyen");
 assert.equal(f.run("loadState().activeView"), "shopping"); assert.equal(f.run("loadState().weekOffset"), 0);
-assert.equal(f.run("loadState().filters.query"), "Ris"); assert.equal(f.run("loadState().draftMeal"), null);
+assert.equal(f.run("loadState().filters.query"), ""); assert.equal(f.run("loadState().draftMeal"), null);
 f.run("stopAllSync()");
 
 for (const options of [{ readsFail: true, rawState: stale }, { rawState: "not JSON" }, { rawState: "[]" }, { rawState: "42" },
@@ -128,11 +128,11 @@ const blockedDeletion = fixture({ deletesFail: true }); await blockedDeletion.ru
 await blockedDeletion.auth(user); await blockedDeletion.run("signOutAccount()");
 assert.equal(blockedDeletion.run("accessState.kind"), "login");
 const legacy = fixture({ writesFail: false, rawState: JSON.stringify({ projectId, meals: [meal], weekOffset: 2,
-  filters: { query: "Ris", category: "all", flag: "all", sort: "title" }, activeView: "meals", editingMealId: "a",
+  filters: { query: "Ris", category: "all", flag: "all", sort: "alpha" }, activeView: "meals", editingMealId: "a",
   draftMeal: { title: "OLD_DRAFT" }, draftIngredients: [{ name: "OLD_DRAFT" }], draftSteps: ["OLD_DRAFT"],
   mealPicker: { open: true }, plannerDaySheet: { open: true }, generateModal: { open: true }, toast: { message: "OLD_TOAST" } }) });
 assert.equal(legacy.run("state.meals[0].title"), meal.title); assert.equal(legacy.run("state.weekOffset"), 0);
-assert.equal(legacy.run("state.filters.query"), "Ris"); assert.equal(legacy.run("state.activeView"), "shopping");
+assert.equal(legacy.run("state.filters.query"), ""); assert.equal(legacy.run("state.activeView"), "shopping");
 for (const field of ["draftMeal", "draftIngredients", "draftSteps", "editingMealId", "toast"]) assert.equal(legacy.run(`state.${field}`), null);
 for (const field of ["mealPicker", "plannerDaySheet", "generateModal"]) assert.equal(legacy.run(`state.${field}.open`), false);
 legacy.run("saveState()"); assert.doesNotMatch(legacy.storage.get("middagsapp-state"), /OLD_DRAFT|OLD_TOAST/);

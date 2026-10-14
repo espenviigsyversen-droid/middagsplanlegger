@@ -275,7 +275,7 @@ aiKeyUi.modelDraft, busyAction og status.model er midlertidige UI-verdier, uten 
 
 ## Kompakt lokal kopi fra v105
 
-middagsapp-state inneholder bare PROJECT_DOMAIN_KEYS: family, mealPreferences, meals, metadata, plansByWeek, lockedPlansByWeek, dayTypesByWeek, servingsByWeek, dayModesByWeek, dayNotesByWeek, shoppingList, clientUpdatedAt og pendingLocalSync, pluss projectId og filters. Alle domenedata og oppskriftsfiltre som faktisk overlever omstart beholdes. Ingen åpne dialoger, utkast, valgt oppskrift, toast, handlelistegjennomgang eller keepScreenAwake lagres. Startside og oppskriftsfiltre beholdes; fra v114 er ukevalget kun i minnet og nullstilles ved ny økt. Eldre lokale kopier støttes og gamle draft-felter nullstilles ved oppstart. Backup og Firestore-formatet endres ikke.
+middagsapp-state inneholder bare PROJECT_DOMAIN_KEYS: family, mealPreferences, meals, metadata, plansByWeek, lockedPlansByWeek, dayTypesByWeek, servingsByWeek, dayModesByWeek, dayNotesByWeek, shoppingList, clientUpdatedAt og pendingLocalSync, pluss projectId og filters. Alle domenedata beholdes. Fra v121 lagres bare filters.sort (category eller alpha); søk og brikker beholdes bare i minnet gjennom økten. Ingen åpne dialoger, utkast, valgt oppskrift, toast, handlelistegjennomgang eller keepScreenAwake lagres. Nye økter starter på Handle med tomt søk og ingen brikker; fra v114 er ukevalget kun i minnet og nullstilles ved ny økt. Eldre lokale kopier støttes og gamle draft-felter nullstilles ved oppstart. Backup og Firestore-formatet endres ikke.
 
 createLocalStore fanger både tilgangs-, lese-, JSON-, skrive- og slettefeil. Lesing som feiler/er ugyldig gir tom lagring; loadState beholder prosjektvernet. Skrivefeil endrer aldri domenestate i minnet og sletter ingen lokal kopi eller andre nøkler. Explicit utlogging/avvist medlemskap forsøker fortsatt å fjerne bare medlemsflagget gjennom trygg remove. Feiler også sletting, fullføres tilgangsflyten uten unntak.
 
@@ -295,7 +295,7 @@ Backup v106 lagrer null også for manglende standarddager. Restore validerer nul
 
 ## Uke-visning fra v112
 
-`activeView: "week"` erstatter calendar/planner i UI. Gamle navn tolkes som week ved normalisering, navigasjon og previousView-retur. Nye økter starter fremdeles på shopping; filters beholdes, mens weekOffset fra v114 starter på 0. Ingen visningsnavn inngår i synket domenestate.
+`activeView: "week"` erstatter calendar/planner i UI. Gamle navn tolkes som week ved normalisering, navigasjon og previousView-retur. Nye økter starter fremdeles på shopping; fra v121 beholdes bare filters.sort, mens weekOffset fra v114 starter på 0. Ingen visningsnavn inngår i synket domenestate.
 
 `plannerDaySheet` og `plannerActionsOpen` beholder navnene som interne UI-felter, men tegner nå dagsarket og ukemenyen over Uke. `mealPicker` brukes videre. Kun ett av disse vinduene eller tømmingsbekreftelsen vises av gangen. Plan/type dag og alternative planer i velgeren er valg inne i samme vindu.
 
@@ -309,7 +309,7 @@ weekOffset er kun runtime/UI-state: ingen lokal lagring eller gjenoppretting. no
 
 planningWindowWeekKey binder åpne dagsark, velger, ukemeny og bekreftelse til uka de ble åpnet for. Underliggende Uke-visning bruker det nullstilte ukevalget, mens vinduets datoer, porsjoner og middagsvalg fortsatt gjelder den opprinnelige uka. Retur mellom vinduer beholder konteksten, og siste lukking/tilgangsstopp forkaster den. Oppskriftens eksisterende selectedRecipeContext bevares.
 
-pickerFilters er bare i minnet: quick, kidFriendly, favorite, én suitability fra v115 og én category. Åpning/lukking og tilgangsbytte nullstiller dem. De påvirker forslag og resultatlista sammen med søket, men ikke de øvrige Foreslå-handlingene eller oppskriftslistens lagrede filters. pickerOtherPlans styrer fortsatt bare footerens planvalg. Ingen av disse runtime-feltene inngår i lokal kopi, synk eller sikkerhetskopi.
+pickerFilters er bare i minnet: quick, kidFriendly, favorite, én suitability fra v115 og én category. Åpning/lukking og tilgangsbytte nullstiller dem. De påvirker forslag og resultatlista sammen med søket, men ikke de øvrige Foreslå-handlingene eller oppskriftslistens separate filters (bare sort lagres fra v121). pickerOtherPlans styrer fortsatt bare footerens planvalg. Ingen av disse runtime-feltene inngår i lokal kopi, synk eller sikkerhetskopi.
 
 Den faste forslagplassen er avledet fra planhistorikk og lagres ikke i oppskriften. Poeng/delpoeng er ikke synkede data og vises aldri i appen. Domeneformat, null-porsjoner, Firestore-stier og minsteversjon 106 er uendret.
 
@@ -340,3 +340,9 @@ pickerNote er bare et runtime-utkast {text}. Det forhåndsutfylles ved åpning o
 Valg av middag/hurtigmiddag setter dayMode home, og notatet beholdes. Endring til andre planvalg beholder notatet. Tøm uke nullstiller også `_note` og tekst gjennom eksisterende standardkart. Backup og restore bevarer begge strengfeltene uten konvertering.
 
 Minsteversjonen er nå 120. Meta-heving er fortsatt bare for administrator på nett, og restore skriver 120. Porsjonsovergangen bruker den samme minsteversjonskonstanten, men beholder servingsDefaultsV106-navnet og øvrige vern. Eldre klienter stoppes for å unngå at `_note` tolkes som home. Ingen endring i ukesynkens dokument-/celleformat eller i Firestore-reglene.
+
+## Oppskriftssøk og brikker fra v121
+
+state.filters har query, quick, kidFriendly, favorite, needsRecipe, én suitability, én category og sort. Søk/brikker er UI-tilstand i minnet og beholdes gjennom oppskrift/tilbake og fanebytte. normalizeStateForStartup bruker tomme standardverdier og tar bare med gyldig sort (category/alpha) fra lokal kopi. Gamle query/category/flag ignoreres. localStateForStorage skriver filters:{sort} og ingen søk-/brikkefelt. Synk og backup inneholder ingen oppskriftsfiltre som før.
+
+pickerFilters er separat, nullstilles fortsatt ved lukking og påvirkes ikke av Oppskrifter. Begge bruker samme renderer og mealMatchesPickerFilters; needsRecipe er avledet fra mealNeedsRecipe, ikke lagret i oppskriften. Minsteversjonen forblir 120.

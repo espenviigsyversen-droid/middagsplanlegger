@@ -1,6 +1,7 @@
 import { mealEditorFingerprint, socialRecipeSource } from "./src/domain/meal-editor.js";
 import { renderSocialImportNotice } from "./src/render/recipe-import.js";
 import { pageScreenKey, createPageScroll } from "./src/ui/page-scroll.js";
+import { renderMealFilters, mealFiltersActive, toggleMealFilter } from "./src/render/meal-filters.js";
 import { renderPickerPlansView } from "./src/render/picker-plans.js";
 import { canonicalView, weekHeading, weekEligibleDays, weekSwipeDirection, lastPlannedLabel } from "./src/domain/week-view.js";
 import { renderWeekView, renderWeekRow, renderDaySheet, renderWeekMenu, renderWeekClear, weekIcon } from "./src/render/week.js";
@@ -99,7 +100,8 @@ import {
   renderMealCardView,
   renderMealDetailView,
   renderMealEditorView,
-  renderMealSearchSuggestionsView,
+  renderMealResultsView,
+  renderMealEmptyView,
   renderMealsView,
   renderIngredientEditorRowView,
   renderStepEditorRowView,
@@ -180,7 +182,7 @@ const defaultState = {
   keepScreenAwake: false,
   previousView: "shopping",
   weekOffset: 0,
-  filters: { query: "", category: "all", flag: "all", sort: "category" },
+  filters: { query: "", category: "all", suitability: "", quick: false, kidFriendly: false, favorite: false, needsRecipe: false, sort: "category" },
   metadata: {
     categoryLabels,
     units: defaultUnitOptions,
@@ -221,8 +223,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v120";
-const APP_VERSION_NUMBER = 120;
+const APP_VERSION = "v121";
+const APP_VERSION_NUMBER = 121;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -510,6 +512,7 @@ function normalizeStateForStartup(nextState) {
   const normalized = normalizeState({ ...nextState, weekOffset: 0 });
   return {
     ...normalized,
+    filters: { ...defaultState.filters, sort: nextState.filters?.sort === "alpha" ? "alpha" : "category" },
     activeView: "shopping",
     previousView: "shopping",
     selectedMealId: null,
@@ -888,18 +891,8 @@ function renderMealPickerModal() {
 function pickerFiltersActive() { return pickerFilters.quick || pickerFilters.kidFriendly || pickerFilters.favorite || Boolean(pickerFilters.suitability) || pickerFilters.category !== "all"; }
 
 function renderPickerFilters() {
-  const groups = [
-    [["quick","Rask"],["kidFriendly","Barnevennlig"],["favorite","Favoritter"]],
-    suitabilityEntries().map(([key,label])=>["suitability:"+key,label]),
-    Object.entries(getCategoryLabels()).map(([key,label])=>["category:"+key,label]),
-  ];
-  const renderButton = ([key,label]) => {
-    const selected = key.startsWith("category:") ? pickerFilters.category === key.slice(9)
-      : key.startsWith("suitability:") ? pickerFilters.suitability === key.slice("suitability:".length) : pickerFilters[key];
-    return '<button class="picker-filter" type="button" data-focus-key="picker-filter:'+escapeHtml(key)+'" data-picker-filter="'+escapeHtml(key)+'" aria-pressed="'+Boolean(selected)+'">'+escapeHtml(label)+'</button>';
-  };
-  return '<div class="picker-filters" data-scroll-key="picker-filters" aria-label="Filtrer middager">'
-    + groups.map(entries=>entries.map(renderButton).join("")).join('<span class="picker-filter-divider" aria-hidden="true"></span>') + '</div>';
+  return renderMealFilters({ filters: pickerFilters, suitabilityEntries: suitabilityEntries(),
+    categoryEntries: Object.entries(getCategoryLabels()), escapeHtml });
 }
 
 function renderPickerPlans() {
@@ -1642,10 +1635,11 @@ function suggestionReason(meal, dayIndex) {
 
 function renderMeals() {
   const meals = filteredMeals();
-  const grouped = state.filters.sort === "category" && !state.filters.query.trim() && state.filters.category === "all" && state.filters.flag === "all";
+  const grouped = state.filters.sort === "category" && !mealListFiltersActive();
   return renderMealsView({
     meals,
     filters: state.filters,
+    showNeedsRecipe: state.meals.some(mealNeedsRecipe),
     grouped,
     categoryEntries: categoryEntries(),
     categoryLabels: getCategoryLabels(),
@@ -1659,32 +1653,34 @@ function renderMeals() {
 
 function renderMealListOnly() {
   const meals = filteredMeals();
-  const grouped = state.filters.sort === "category" && !state.filters.query.trim() && state.filters.category === "all" && state.filters.flag === "all";
-  return grouped ? renderGroupedMeals(meals) : meals.map(renderMealCard).join("");
+  const grouped = state.filters.sort === "category" && !mealListFiltersActive();
+  return !meals.length ? renderMealEmptyView() : grouped ? renderGroupedMeals(meals) : meals.map(renderMealCard).join("");
 }
 
-function renderMealSearchSuggestionsOnly() {
-  return renderMealSearchSuggestionsView({
-    meals: filteredMeals(),
-    query: state.filters.query,
-    categoryLabels: getCategoryLabels(),
-    escapeHtml,
-  });
-}
+function mealListFiltersActive() { return Boolean(state.filters.query.trim()) || mealFiltersActive(state.filters); }
 
 function filteredMeals() {
   const query = state.filters.query.trim().toLowerCase();
-  return sortedMeals().filter((meal) => {
-    const matchesQuery = !query || [meal.title, meal.description, ...(meal.keyIngredients || []).map(ingredientBaseName)].join(" ").toLowerCase().includes(query);
-    const matchesCategory = state.filters.category === "all" || meal.categories.includes(state.filters.category);
-    const matchesFlag = state.filters.flag === "all"
-      || (state.filters.flag === "favorite" && meal.favorite)
-      || (state.filters.flag === "kid" && meal.kidFriendly)
-      || (state.filters.flag === "quick" && meal.prepTime === "quick")
-      || (state.filters.flag === "needs-recipe" && mealNeedsRecipe(meal))
-      || (state.filters.flag.startsWith("suitability:") && (meal.suitability || []).includes(state.filters.flag.replace("suitability:", "")));
-    return matchesQuery && matchesCategory && matchesFlag;
-  });
+  return sortedMeals().filter(meal => mealMatchesPickerFilters(meal, state.filters)
+    && (!query || [meal.title, meal.description, ...(meal.keyIngredients || []).map(ingredientBaseName)].join(" ").toLowerCase().includes(query)));
+}
+
+function bindMealListControls(root = app) {
+  root.querySelectorAll("[data-reset-meal-filters]").forEach(button => button.addEventListener("click", () => {
+    state.filters = { ...defaultState.filters, sort: state.filters.sort }; render();
+  }));
+  root.querySelectorAll("[data-meal-sort]").forEach(button => button.addEventListener("click", () => {
+    state.filters = { ...state.filters, sort: button.dataset.mealSort }; saveState(); render();
+  }));
+}
+
+function refreshMealResults() {
+  const clear = app.querySelector("[data-clear-meal-search]");
+  if (clear) clear.style.display = state.filters.query ? "" : "none";
+  const list = app.querySelector("[data-meal-list]");
+  if (list) { list.innerHTML = renderMealListOnly(); bindMealResultActions(list); bindMealListControls(list); }
+  const results = app.querySelector("[data-meal-results]");
+  if (results) { results.innerHTML = renderMealResultsView({count:filteredMeals().length,filters:state.filters}); bindMealListControls(results); }
 }
 
 function renderGroupedMeals(meals) {
@@ -3308,51 +3304,24 @@ function bindEvents() {
   app.querySelectorAll("[data-week]").forEach(button=>button.addEventListener("click",()=>changeWeek(Number(button.dataset.week))));
   bindWeekSwipe();
 
-  app.querySelectorAll("[data-filter]").forEach((field) => {
-    field.addEventListener("change", () => {
-      state.filters = { ...state.filters, [field.dataset.filter]: field.value };
-      navigate({ filters: state.filters });
-    });
-  });
-
+  app.querySelectorAll("[data-meal-filter]").forEach(button => button.addEventListener("click", () => {
+    state.filters = toggleMealFilter(state.filters, button.dataset.mealFilter); render();
+  }));
+  bindMealListControls();
   const mealSearchInput = app.querySelector("[data-meal-search]");
   if (mealSearchInput) {
     mealSearchInput.addEventListener("input", () => {
-      state.filters = { ...state.filters, query: mealSearchInput.value };
-      const clearButton = app.querySelector("[data-clear-meal-search]");
-      if (clearButton) clearButton.style.display = state.filters.query ? "" : "none";
-      const mealList = app.querySelector("[data-meal-list]");
-      if (mealList) {
-        mealList.innerHTML = renderMealListOnly();
-        bindMealResultActions(mealList);
-      }
-      const suggestions = app.querySelector("[data-meal-search-suggestions]");
-      if (suggestions) {
-        suggestions.innerHTML = renderMealSearchSuggestionsOnly();
-        bindMealResultActions(suggestions);
-      }
+      state.filters = { ...state.filters, query: mealSearchInput.value }; refreshMealResults();
+    });
+    mealSearchInput.addEventListener("keydown", event => {
+      if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); mealSearchInput.blur(); }
     });
   }
-
-  app.querySelectorAll("[data-clear-meal-search]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.filters = { ...state.filters, query: "" };
-      const input = app.querySelector("[data-meal-search]");
-      if (input) {
-        input.value = "";
-        input.focus();
-      }
-      button.style.display = "none";
-      const mealList = app.querySelector("[data-meal-list]");
-      if (mealList) {
-        mealList.innerHTML = renderMealListOnly();
-        bindMealResultActions(mealList);
-      }
-      const suggestions = app.querySelector("[data-meal-search-suggestions]");
-      if (suggestions) suggestions.innerHTML = "";
-      saveState();
-    });
-  });
+  app.querySelectorAll("[data-clear-meal-search]").forEach(button => button.addEventListener("click", () => {
+    state.filters = { ...state.filters, query: "" };
+    if (mealSearchInput) { mealSearchInput.value = ""; mealSearchInput.focus({preventScroll:true}); }
+    refreshMealResults();
+  }));
 
   app.querySelectorAll("[data-add-next]").forEach((button) => {
     button.addEventListener("click", () => addMealToNextFreeDay(button.dataset.addNext));
