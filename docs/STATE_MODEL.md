@@ -322,3 +322,11 @@ mealEditorSession er separat runtime-tilstand med editor-ID, fingeravtrykket av 
 Avbryt/tilbake leser skjemaet før sammenligning, inkludert overskriftsrader og steg. Endret utkast, importresultat eller uferdig importarbeid gir forkastingsark. Fortsett/tilbake fra arket bevarer alt, mens eksplisitt Forkast og lukket/byttet editor forkaster runtime-arbeidet. Besøk i AI-innstillinger fra editoren beholder utgangspunkt og utkast. Konto-/tilgangsbytte nullstiller det.
 
 Sosiale lenker og vanlig vellykket lenkeimport kan fylle tom recipeUrl i utkastet. Eksisterende annen kilde beholdes. Dette er ingen automatisk lagring: bare dagens Lagre-handler lager en meals-patch. Feltnavnet recipeUrl, importens porsjons-/gruppe-/erstatningsregler og alt lagret dataformat er uendret. Minsteversjon forblir 106.
+
+## Skjermrulling fra v119
+
+pageScroll i app.js er en runtime-kontroller med siste skjermnøkkel og en Map av posisjoner. pageScrollDirection er et kortvarig flagg rundt brukerhandlingen: forward, back, tab eller same. Ingen av disse inngår i state, localStateForStorage, syncPayload, history.state eller sikkerhetskopi. Tilgangsskjerm nullstiller minnet; omstart har ingen huskede posisjoner.
+
+mealEditorReturn beholder bare editorens opprinnelige UI-skjerm, selectedMealId, selectedRecipeContext og previousView i minnet. Den gjør at Avbryt/tilbake fra redigering åpnet i en oppskrift viser samme oppskrift og dagskontekst igjen. Listen er retur når editoren ble åpnet der. Lagre åpner lagret oppskrift; sletting går til den opprinnelige liste-/uke-/handlevisningen. Returtilstanden forkastes når editoren er avsluttet, ved fane-/tilgangsbytte, men beholdes ved besøk i AI-innstillinger.
+
+Skjermnøkkelen avhenger av faktisk helskjermvisning, ikke vinduer oppå. V108-vindusposisjoner og v117-forkastingsark er fortsatt separat runtime/UI. Ingen endring i oppskriftsfelter, ukedata, domenesynk eller minimum 106.

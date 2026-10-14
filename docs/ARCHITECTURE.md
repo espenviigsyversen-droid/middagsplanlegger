@@ -485,3 +485,19 @@ Editorens form-row er et ytre to-kolonne-rutenett på PC, med setting som indre 
 Bildeimportens fjern-knapp har en gjennomsiktig 44×44 px button rundt en 26 px mørk span-sirkel og 14 px ×. Knappens plassering -5 px og den sentrerte sirkelens 9 px innrykk gir 4 px fra rutens topp/høyre. Bildedata, filvalg og fjerning bruker samme flyt som før.
 
 App/cache er v118/118, minimum fortsatt 106. Ingen nye moduler eller endring i asset-listene utover cacheversjonen. Data, synk, server og regler er uendret.
+
+## Rulleposisjon ved skjermbytte fra v119
+
+src/ui/page-scroll.js gir pageScreenKey, pageScrollTarget og createPageScroll. Nøkkelen er editor:<id> når activeView er meals med åpen editor, recipe:<id> i oppskriftsvisningen, ellers kanonisk activeView. Åpne vinduer inngår ikke; AI-innstillinger har egen nøkkel selv om editorens utkast beholdes. Den rene beslutningen gir null ved lik nøkkel, 0 ved endret nøkkel framover/fane, og husket posisjon eller 0 ved tilbake.
+
+createPageScroll holder siste tegnede nøkkel og en Map av posisjoner i minnet. beforeRender husker posisjonen til skjermen som forlates og beregner neste mål. history.scrollRestoration settes til manual, så nettleseren ikke konkurrerer med appen. Ved tilgangsskjerm nullstilles minnet. Ingen nye state-/synk-/backupfelt.
+
+app.js markerer retning bare rundt den synkrone handlingen: navigate bruker forward som standard, bunnmenyens fanebytte bruker tab, backInApp bruker back både for Tilbake-knappen og popstate. Avbryt/Forkast og sletting bruker også back. Flagget gjenopprettes etter handlingen, slik at en senere status-/synkcallback ikke arver retningen. Vanlige renders, ukebytte og åpning/lukking av vinduer har samme nøkkel og skal ikke rulle hovedsiden.
+
+render leser nøkkel og window.scrollY før innerHTML byttes. Ved skjermbytte frigjøres en aktiv middagsvelgerlås først, slik at den virkelige underliggende posisjonen kan huskes. Den eksisterende låsen beholdes ved vanlig re-tegning. Målposisjonen settes med scrollTo etter markup, hendelsesbinding, v108-restaurering og loading-håndtering, før neste maling. Hvis neste skjerm har en velger, låses den først etter målsettingen. Velgerstatus skal bare låse week, ikke en annen skjerm med gammel UI-status.
+
+Trykk på den allerede viste rotfanen trenger ingen render/historikk: scrollTo med top:0 og smooth, eller auto når prefers-reduced-motion er aktiv. Fra oppskrift/editor er trykk på tilhørende fane et bytte til rotvisningen, som starter øverst. data-scroll-key/data-focus-key og v108-bevaring av vinduenes scrollTop/scrollLeft/fokus er uendret.
+
+openMealEditor deler Rediger-flyten mellom kort og oppskriftsvisning. Runtime mealEditorReturn beholder opprinnelig skjerm og dagskontekst. Editor fra oppskrift har oppskriftsnivået som logisk forelder i navigationLevels. Avbryt/tilbake viser oppskriften igjen på husket posisjon; fra listen returneres listen. Lagre viser den lagrede oppskriften som en ny framoverskjerm på 0, og tilbake fra den går til opprinnelig liste/Uke/Handle. Sletting går til denne foreldrevisningen med husket posisjon. Bare UI-patcher/retur er endret; oppskrifts- og ukeskrivinger bruker samme lagrings-/synkflyt.
+
+App/cache er v119/119, minimum 106. page-scroll.js står i begge asset-listene. Tester bruker syntetiske data og simulerte scrollY/History-hendelser. Lokal Chrome med filer direkte fra prosjektet og nettverk blokkert bekreftet liste 1200 → oppskrift 0 → re-tegning 800 → tilbake 1200, editor 0 → Avbryt 800, og Lagre 0. Ekte iPhone/Safari-tilbake-sveip gjenstår etter eiers publisering.

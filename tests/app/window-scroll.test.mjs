@@ -134,6 +134,7 @@ activate("planner-lock:2"); assert.equal(scroller("planner-day").scrollTop, 250)
 assert.equal(control("planner-lock:2").attrs["aria-checked"], "true");
 
 // The day sheet is suspended, and only the picker is rendered. Its own rerenders still preserve scroll/focus.
+window.scrollY = 330; pageScrolls.length = 0; // Scroll the week after arriving at the top of this screen.
 activate("planner-meal:2");
 assert.equal(run("state.plannerDaySheet.open"), false); assert.equal(scroller("planner-day"), null);
 assert.deepEqual(JSON.parse(run("JSON.stringify(navigationLevels())")), ["planner-day:2", "picker:2"]);

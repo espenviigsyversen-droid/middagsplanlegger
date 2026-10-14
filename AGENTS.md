@@ -52,6 +52,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/domain/week-view.js`: rene visningshjelpere for Uke, ISO-ukenummer, datotekster, planhistorikk og sveip.
 - `src/render/week.js`: HTML-rendering for Uke, dagsark, ukemeny og tømmingsbekreftelse.
+- `src/ui/page-scroll.js`: skjermnøkkel, ren beslutning om hovedsidens rulling og rulleposisjoner som bare huskes i minnet.
 - `src/render/setup.js`: HTML-rendering for Innstillinger, familie-/app-undersider og enkle metadata-sider.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
@@ -306,3 +307,13 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Bare editorens PC-rader (min-width:861px) bruker align-items:start på form-row og align-content:start på direkte setting-kolonner. Etiketter/felt starter på samme høyde, og hjelpetekst skal ikke strekke nabofelt. Mobilens énkolonne-regler beholdes. Kontroller alle fire rader: Navn/Porsjoner, Tilberedningstid, Kategorier/Merking og Rester/Minimum dager mellom.
 - Bilderutenes fjern-knapp har transparent 44×44-flate rundt en synlig 26 px sirkel med 14 px ×, 4 px fra topp/høyre. Ikke reduser den faktiske trykkflaten.
 - Kjør render/meals-, render/recipe-import-, app/navigation- og app/recipe-import-testene, alle øvrige testskript og syntakskontroller. v118/118, REQUIRED_MIN_APP_VERSION fortsatt 106; ingen nye moduler, datamodell-/synk-/server-/regelendringer.
+
+## Skjermrulling fra v119
+
+- pageScreenKey i src/ui/page-scroll.js skiller editor:<id> når editoren faktisk vises, recipe:<id>, og ellers kanonisk activeView. Gamle calendar/planner gir week. Vinduer/ark påvirker aldri nøkkelen; AI-innstillinger åpnet fra editoren er en egen skjerm.
+- pageScrollTarget er den rene beslutningen. Lik nøkkel gir null (ingen rulling), uansett retning. Endret nøkkel gir 0 ved forward/tab; back bruker husket posisjon eller 0. createPageScroll husker forrige skjerms window.scrollY før tegning, bare i en Map i minnet. history.scrollRestoration er manual. Ikke legg posisjoner/retning/returskjerm i state, lokal kopi, synk, history.state eller backup.
+- navigate markerer forward som standard; bunnmenyens knapper markerer tab. backInApp omslutter både Tilbake og popstate med back; closeMealEditor og sletting markerer også back. Retningen gjelder bare den synkrone handlingen, og nullstilles før senere callbacks. Samme nøkkel ved setState/render/skydata/ukebytte/vinduer skal ikke nullstille siden.
+- render frigjør middagsvelgerens lås før måling ved endret nøkkel. Etter markup, binding og v108-fokus/rullebevaring settes målposisjonen synkront. Ny lås tas eventuelt først etter målet er satt. Ved samme nøkkel beholdes eksisterende lås-/opplåsingsflyt. En gammel mealPicker-status utenfor week skal ikke holde siden låst.
+- Trykk på den allerede viste rotfanen ruller til 0 med smooth, eller auto ved prefers-reduced-motion. Fra oppskrift/editor er fanevalget et skjermbytte til rotfanen og starter øverst. Nye rullbare vinduer bruker fortsatt data-scroll-key/data-focus-key etter v108.
+- mealEditorReturn holder opprinnelig oppskrift og dagskontekst bare i minnet. Rediger fra oppskrift legger editorvern over oppskriftsnivået; Avbryt/tilbake returnerer til oppskriften med husket posisjon. Rediger/Ny fra listen returnerer til listen. Lagre åpner lagret oppskrift som forward på 0; sletting returnerer til den opprinnelige listen/Uke/Handle uten å vise slettet oppskrift. V117-forkastingsvernet beholdes.
+- Tilgangsskjerm nullstiller rulleminnet og editorens returtilstand. Besøk i AI-innstillinger fra editor beholder retur/utkast. Kjør node tests/ui/page-scroll.test.mjs og node tests/app/page-scroll.test.mjs, v108-vindu-/navigasjon-/editor-/synktestene samt alle øvrige tester og syntakskontroller. Ny modul skal stå i begge asset-listene. v119/119, minimum fortsatt 106; ingen datamodell-, synk-, server- eller regelendring.

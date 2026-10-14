@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { pageScreenKey, pageScrollTarget, createPageScroll } from "../../src/ui/page-scroll.js";
+
+assert.equal(pageScrollTarget("meals", "recipe:a", "forward", 800), 0);
+assert.equal(pageScrollTarget("recipe:a", "meals", "back", 1200), 1200);
+assert.equal(pageScrollTarget("recipe:a", "meals", "back", undefined), 0);
+assert.equal(pageScrollTarget("shopping", "week", "tab", 900), 0);
+for (const direction of ["forward", "back", "tab", "same"]) assert.equal(pageScrollTarget("recipe:a", "recipe:a", direction, 900), null);
+
+const history = {}, pages = createPageScroll({ history });
+assert.equal(history.scrollRestoration, "manual");
+assert.equal(pages.beforeRender("meals", 0, "forward"), 0);
+assert.equal(pages.beforeRender("recipe:a", 1200, "forward"), 0);
+assert.equal(pages.beforeRender("recipe:a", 800, "same"), null);
+assert.equal(pages.beforeRender("editor:a", 800, "forward"), 0);
+assert.equal(pages.beforeRender("recipe:a", 300, "back"), 800);
+assert.equal(pages.beforeRender("meals", 800, "back"), 1200);
+assert.equal(pages.beforeRender("recipe:a", 1200, "forward"), 0, "Reopening a known recipe still starts at the top");
+pages.reset(); assert.equal(pages.key, null);
+assert.equal(pages.beforeRender("meals", 0, "back"), 0, "Memory is cleared between access sessions");
+assert.equal(pageScreenKey({activeView:"meals",editingMealId:"new"}), "editor:new");
+assert.equal(pageScreenKey({activeView:"meals",editingMealId:"a"}), "editor:a");
+assert.equal(pageScreenKey({activeView:"recipe",selectedMealId:"a"}), "recipe:a");
+assert.equal(pageScreenKey({activeView:"ai-settings",editingMealId:"a"}), "ai-settings");
+for (const view of ["calendar","planner","week"]) assert.equal(pageScreenKey({activeView:view,mealPicker:{open:true},plannerDaySheet:{open:true}}),"week");
+assert.equal(pageScreenKey({activeView:"shopping",shoppingReview:{open:true}}), "shopping");
+const sw = readFileSync(new URL("../../service-worker.js",import.meta.url),"utf8");
+assert.equal(sw.split("src/ui/page-scroll.js").length, 3, "New module is in both offline asset lists");
+console.log("page scroll module tests ok");

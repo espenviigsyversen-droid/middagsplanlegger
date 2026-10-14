@@ -123,11 +123,12 @@ openAi.handlers.click();flush();history.go(-1);flush();assert.equal(run("state.a
 click("[data-cancel-edit]");assert.equal(index,2);click("[data-editor-discard]");assert.equal(index,0);
 selectors.delete("[data-meal-form]");selectors.delete("[data-ingredient-row]");selectors.delete("[data-step-row]");
 
-// Direct Edit replaces the recipe history level with the editor guard.
+// Direct Edit adds an editor guard above the recipe so Cancel/Back returns there.
 click("[data-view-meal]",{viewMeal:"wok"});
 const edit=button({editMeal:"wok"});selectors.set("[data-edit-meal]",[edit]);run("bindEvents()");edit.handlers.click({stopPropagation(){}});
-assert.equal(queue.length,1);assert.equal(run("state.editingMealId"),"wok");flush();assert.equal(index,1);
-selectors.delete("[data-edit-meal]");click("[data-cancel-edit]");
+assert.equal(queue.length,0);assert.equal(run("state.editingMealId"),"wok");flush();assert.equal(index,2);
+selectors.delete("[data-edit-meal]");click("[data-cancel-edit]");assert.equal(run("state.activeView"),"recipe");assert.equal(index,1);
+click("[data-close-meal]");assert.equal(index,0);
 
 // Calendar: real button binding, note and today mark only in the current week.
 run('state.activeView="week"; const weekKey=getWeekKey(); state.plansByWeek[weekKey]={...emptyWeekPlan(),2:"wok"}; state.dayNotesByWeek[weekKey]={...emptyWeekDayNotes(),3:"Middag hos venner"}; render()');

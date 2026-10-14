@@ -153,7 +153,7 @@ assert.deepEqual(snapshot("reloaded.metadata.storeCategoryOrder"), movedKeys);
 run('const invalidOrder = normalizeState({ ...structuredClone(defaultState), metadata: { storeCategoryOrder: "invalid" } });');
 assert.deepEqual(snapshot("invalidOrder.metadata.storeCategoryOrder"), []);
 
-run('state.family.name = "<img src=x onerror=alert(1)>"; renderShell("");');
+run('state.activeView="shopping"; state.family.name = "<img src=x onerror=alert(1)>"; renderShell("");');
 assert.match(app.innerHTML, /&lt;img src=x onerror=alert\(1\)&gt; sin middagsplan/);
 assert.doesNotMatch(app.innerHTML, /<img/);
 // Shell uses the effective status (including pending shopping writes), with
@@ -170,7 +170,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v118");
+assert.equal(exported.appVersion, "v119");
 const { servingsByWeek: exportedServings, ...exportedDomain } = exported.data;
 const { servingsByWeek: localServings, ...localDomain } = snapshot("syncPayload()");
 assert.deepEqual(exportedDomain, localDomain);

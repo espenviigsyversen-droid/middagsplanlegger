@@ -4,6 +4,19 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v119 – rulleposisjon ved skjermbytte
+
+Eier publiserer filene i docs/LEVERANSE_V119.md, inkludert ny src/ui/page-scroll.js i begge asset-listene. App/cache er v119, minimum fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 54 testskript og 45 kildefilers syntakskontroller består lokalt.
+
+Etter publisering på PC/iPhone:
+
+1. Rull langt ned i Oppskrifter, åpne en oppskrift og kontroller at den starter øverst. Rull ned der og bruk både Tilbake og systemets tilbake-sveip: listen skal være tilbake på sin posisjon. Åpne samme oppskrift igjen: øverst.
+2. Rediger fra oppskriften: editoren starter øverst. Avbryt uten endring returnerer oppskriften på tidligere posisjon. Endre noe og prøv v117-forkastingsarket, Fortsett og Forkast. Lagre skal vise oppskriften øverst; tilbake viser opprinnelig liste/Uke/Handle. Test også sletting og ny oppskrift.
+3. Rull Handle, huk av og vent på synk: ingen hopp. Bytt til Uke: øverst. Trykk aktiv rotfane: jevn rulling til toppen, eller uten animasjon ved redusert bevegelse. Ukebytte og vanlig re-tegning skal bevare posisjonen.
+4. Rull Uke og åpne dagsark/middagsvelger: vinduenes rulleposisjon og fokus skal fortsatt virke. Lukk med tilbake. Bytt skjerm mens velgerlåsen er aktiv og kontroller at neste skjerm ikke overtar den låste posisjonen. Prøv undersider i Innstillinger og retur fra AI-innstillinger til editor.
+
+Lokal Chrome-kontroll med nettverk blokkert bekreftet hovedsidens posisjoner og manual scrollRestoration. Ekte Safari/PWA, tilbake-sveip, native animasjoner, skjermtastatur og touch gjenstår på enhet. Ingen publisering er utført av agenten.
+
 ### v118 – kildelenke, direkte Rediger og jevne PC-rader
 
 Eier publiserer klientfilene i docs/LEVERANSE_V118.md. App/cache er v118, minimum fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 52 testskript og 44 kildefilers syntakskontroller består lokalt.

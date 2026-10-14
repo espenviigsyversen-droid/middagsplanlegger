@@ -1,5 +1,6 @@
 import { mealEditorFingerprint, socialRecipeSource } from "./src/domain/meal-editor.js";
 import { renderSocialImportNotice } from "./src/render/recipe-import.js";
+import { pageScreenKey, createPageScroll } from "./src/ui/page-scroll.js";
 import { canonicalView, weekHeading, weekEligibleDays, weekSwipeDirection, lastPlannedLabel } from "./src/domain/week-view.js";
 import { renderWeekView, renderWeekRow, renderDaySheet, renderWeekMenu, renderWeekClear, weekIcon } from "./src/render/week.js";
 import { renderSubpageBar } from "./src/render/subpage.js";
@@ -219,8 +220,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v118";
-const APP_VERSION_NUMBER = 118;
+const APP_VERSION = "v119";
+const APP_VERSION_NUMBER = 119;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -236,6 +237,9 @@ let mealPickerScrollY = 0;
 let mealPickerReturn = null;
 let pickerOtherPlans = false, weekClearConfirmation = null;
 let mealEditorSession = null, editorDiscardOpen = false;
+let mealEditorReturn = null;
+const pageScroll = createPageScroll({ history: window.history });
+let pageScrollDirection = "same";
 const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, suitability: "", category: "all" });
 let pickerFilters = emptyPickerFilters(), planningWindowWeekKey = null;
 let backgroundAt = null, lastVisibleWeekKey = getWeekKeyForOffset(0);
@@ -276,7 +280,10 @@ window.addEventListener("popstate", event => uiHistory.pop(event));
 function navigationLevels() {
   if (accessState.kind !== "ready") return [];
   const levels = [];
-  if (state.editingMealId && (state.activeView === "meals" || aiKeyEditorReturn)) levels.push(`editor:${state.editingMealId}`);
+  if (state.editingMealId && (state.activeView === "meals" || aiKeyEditorReturn)) {
+    if (mealEditorReturn?.activeView === "recipe") levels.push(`recipe:${mealEditorReturn.selectedMealId}`);
+    levels.push(`editor:${state.editingMealId}`);
+  }
   if (state.activeView === "recipe") levels.push(`recipe:${state.selectedMealId}`);
   else if (SUBPAGE_VIEWS.has(state.activeView)) levels.push(`page:${state.activeView}`);
   if ((state.plannerActionsOpen || weekClearConfirmation) && canonicalView(state.activeView) === "week") levels.push("planner-actions");
@@ -294,9 +301,22 @@ function navigationLevels() {
   return levels;
 }
 
-function navigate(patch) { setState(patch); uiHistory.sync(); }
+function withPageScrollDirection(direction, action) {
+  const previousDirection = pageScrollDirection;
+  pageScrollDirection = direction;
+  try { return action(); } finally { pageScrollDirection = previousDirection; }
+}
+
+function navigate(patch, direction = "forward") {
+  withPageScrollDirection(direction, () => setState(patch));
+  uiHistory.sync();
+}
 
 function backInApp() {
+  return withPageScrollDirection("back", performBackInApp);
+}
+
+function performBackInApp() {
   if (accessState.kind !== "ready") return false;
   if (editorDiscardOpen) { continueMealEditing(); return true; }
   if (weekClearConfirmation) { cancelWeekClear(); return true; }
@@ -1753,7 +1773,17 @@ function hasUnsavedMealEditorChanges() {
 
 function closeMealEditor() {
   editorDiscardOpen=false; mealEditorSession=null;
-  navigate({editingMealId:null,draftMeal:null,draftIngredients:null,draftSteps:null});
+  const target = mealEditorReturn || { activeView: "meals", selectedMealId: null, selectedRecipeContext: null };
+  mealEditorReturn = null;
+  navigate({...target,editingMealId:null,draftMeal:null,draftIngredients:null,draftSteps:null}, "back");
+}
+
+function openMealEditor(mealId) {
+  mealEditorReturn = state.activeView === "recipe"
+    ? { activeView: "recipe", selectedMealId: state.selectedMealId, selectedRecipeContext: state.selectedRecipeContext, previousView: state.previousView }
+    : { activeView: "meals", selectedMealId: null, selectedRecipeContext: null, previousView: "meals" };
+  navigate({ activeView: "meals", previousView: "meals", editingMealId: mealId, draftMeal: null, draftIngredients: null,
+    draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
 }
 
 function requestCancelMealEditor() {
@@ -1826,7 +1856,11 @@ function saveMealFromForm(form) {
   const meals = isNew
     ? [...state.meals, meal]
     : state.meals.map((item) => item.id === meal.id ? meal : item);
-  navigate({ meals, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: meal.id });
+  const origin = mealEditorReturn;
+  mealEditorReturn = null;
+  navigate({ meals, activeView: "recipe", previousView: origin?.activeView === "recipe" ? origin.previousView : "meals",
+    selectedRecipeContext: origin?.activeView === "recipe" ? origin.selectedRecipeContext : null,
+    editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: meal.id });
 }
 
 function makeMealId(title) {
@@ -2326,7 +2360,10 @@ function deleteCurrentMeal() {
     Object.fromEntries(Object.entries(plan).map(([day, plannedId]) => [day, plannedId === mealId ? "" : plannedId])),
   ]));
   const meals = state.meals.filter((meal) => meal.id !== mealId);
-  navigate({ meals, plansByWeek, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null });
+  const returnView = mealEditorReturn?.activeView === "recipe" ? mealEditorReturn.previousView : "meals";
+  mealEditorReturn = null;
+  navigate({ meals, plansByWeek, activeView: returnView || "meals", editingMealId: null, draftMeal: null, draftIngredients: null,
+    draftSteps: null, selectedMealId: null, selectedRecipeContext: null }, "back");
 }
 
 function renderSetup() {
@@ -3047,17 +3084,7 @@ function bindMealResultActions(root = app) {
   root.querySelectorAll("[data-edit-meal]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      navigate({
-        activeView: "meals",
-        previousView: "meals",
-        editingMealId: button.dataset.editMeal,
-        draftMeal: null,
-        draftIngredients: null,
-        draftSteps: null,
-        selectedMealId: null,
-        selectedRecipeContext: null,
-        keepScreenAwake: false,
-      });
+      openMealEditor(button.dataset.editMeal);
     });
   });
 }
@@ -3074,7 +3101,16 @@ function bindEvents() {
   app.querySelectorAll("[data-recipe-servings]").forEach(button => button.addEventListener("click", () => changeRecipeServings(Number(button.dataset.recipeServings))));
   app.querySelectorAll("[data-use-standard-servings]").forEach(button => button.addEventListener("click", () => updateDayServings(Number(button.dataset.useStandardServings), null)));
   app.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => navigate({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false, plannerDaySheet:{open:false,dayIndex:null}, plannerActionsOpen:false, mealPicker:{open:false,dayIndex:null,query:""} }));
+    button.addEventListener("click", () => {
+      const view = canonicalView(button.dataset.view), isTab = Boolean(button.matches?.(".nav-button"));
+      if (isTab && pageScreenKey(state) === view) {
+        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        window.scrollTo?.({ top: 0, left: 0, behavior: reduced ? "auto" : "smooth" });
+        return;
+      }
+      navigate({ activeView: view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false,
+        plannerDaySheet:{open:false,dayIndex:null}, plannerActionsOpen:false, mealPicker:{open:false,dayIndex:null,query:""} }, isTab ? "tab" : "forward");
+    });
   });
 
   // Open meal picker modal
@@ -3268,7 +3304,7 @@ function bindEvents() {
   app.querySelectorAll("[data-edit-meal]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      navigate({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
+      openMealEditor(button.dataset.editMeal);
     });
   });
 
@@ -3726,6 +3762,11 @@ function restoreWindowPositions(positions) {
 
 function render(preserveShoppingInput = true) {
   state.activeView = canonicalView(state.activeView); state.previousView = canonicalView(state.previousView);
+  const screenKey = accessState.kind === "ready" ? pageScreenKey(state) : null;
+  const screenChanged = screenKey !== pageScroll.key;
+  if (screenChanged) syncMealPickerScrollLock(false);
+  const pageTarget = screenKey === null ? null
+    : pageScroll.beforeRender(screenKey, window.scrollY ?? document.documentElement?.scrollTop ?? 0, pageScrollDirection);
   if (!planningWindowOpen() || accessState.kind !== "ready") planningWindowWeekKey = null;
   if (!state.mealPicker?.open || accessState.kind !== "ready") { pickerFilters = emptyPickerFilters(); pickerOtherPlans = false; }
   if (state.activeView !== "week" || accessState.kind !== "ready") weekClearConfirmation = null;
@@ -3734,10 +3775,12 @@ function render(preserveShoppingInput = true) {
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
   if (!state.editingMealId || accessState.kind!=="ready" || (state.activeView!=="meals" && !aiKeyEditorReturn)) {mealEditorSession=null;editorDiscardOpen=false;}
+  if (!state.editingMealId || accessState.kind !== "ready" || (state.activeView !== "meals" && !aiKeyEditorReturn)) mealEditorReturn = null;
   syncAiKeyContext();
   if (!state.editingMealId) aiKeyEditorReturn = null;
   if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
   if (accessState.kind !== "ready") {
+    pageScroll.reset();
     resetRecipeImport();
     syncMealPickerScrollLock(false);
     releaseWakeLock();
@@ -3771,7 +3814,8 @@ function render(preserveShoppingInput = true) {
     "ingredient-mappings": renderIngredientMappingsSetup,
     "store-categories": renderStoreCategoriesSetup,
   };
-  syncMealPickerScrollLock(Boolean(state.mealPicker?.open));
+  const pickerOpen = Boolean(state.mealPicker?.open && state.activeView === "week");
+  if (!screenChanged) syncMealPickerScrollLock(pickerOpen);
   renderShell((views[state.activeView] || renderMeals)());
   bindEvents();
   bindAccountEvents();
@@ -3791,6 +3835,8 @@ function render(preserveShoppingInput = true) {
   }
   restoreWindowPositions(windowPositions);
   hideLoadingScreen();
+  if (pageTarget !== null) window.scrollTo?.(0, pageTarget);
+  if (screenChanged && pickerOpen) syncMealPickerScrollLock(true);
 }
 
 function hideLoadingScreen() {
