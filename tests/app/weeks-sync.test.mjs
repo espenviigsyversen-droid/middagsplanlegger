@@ -28,7 +28,7 @@ function fixture({ write = () => Promise.resolve() } = {}) {
   });
   vm.runInContext(source, context);
   const run = code => vm.runInContext(code, context), snapshot = code => JSON.parse(JSON.stringify(run(code)));
-  run('const renderWithDom = render; render = () => {}; loadAiKeyStatus = async () => {}; accessState = {kind:"ready",user:{uid:"user",email:"member@example.com"},role:"member",offline:false}; syncAiKeyContext(); syncEnabled=true; syncStatus="Synket"; state.activeView="planner"; state.family.familySize=4; state.clientUpdatedAt=1234; state.pendingLocalSync=false; state.weekOffset=0; state.meals=normalizeMeals(Array.from({length:12},(_,i)=>({...emptyMeal(),id:`meal-${i}`,title:`Middag ${i}`,ingredients:[{name:"Ris",amount:"2",unit:"dl"}],steps:["Kok"]}))); Object.assign(state,Object.fromEntries(WEEK_SYNC_FIELDS.map(field=>[field,{}])));');
+  run('const renderWithDom = render; render = () => {}; loadAiKeyStatus = async () => {}; accessState = {kind:"ready",user:{uid:"user",email:"member@example.com"},role:"member",offline:false}; syncAiKeyContext(); syncEnabled=true; syncStatus="Synket"; state.activeView="week"; state.family.familySize=4; state.clientUpdatedAt=1234; state.pendingLocalSync=false; state.weekOffset=0; state.meals=normalizeMeals(Array.from({length:12},(_,i)=>({...emptyMeal(),id:`meal-${i}`,title:`Middag ${i}`,ingredients:[{name:"Ris",amount:"2",unit:"dl"}],steps:["Kok"]}))); Object.assign(state,Object.fromEntries(WEEK_SYNC_FIELDS.map(field=>[field,{}])));');
   const refs = { meals: "meals", weeks: "weeks", profile: "profile", preferences: "preferences", metadata: "metadata" };
   const api = {
     doc: (collection, id) => `${collection}/${id}`, serverTimestamp: () => "server",
@@ -119,7 +119,7 @@ assert.equal(missing.calls.length, 0); assert.equal(missing.run("state.pendingLo
 
 const cleared = fixture(); await cleared.start(); cleared.server({ [cleared.key]: { plan: { 1: "meal-1" }, lockedPlan: { 1: true }, servings: { 1: 2 } } });
 const button = { handlers: {}, addEventListener(name, callback) { this.handlers[name] = callback; } };
-cleared.selectors.set("[data-clear-week]", [button]); cleared.run("bindEvents()"); button.handlers.click(); cleared.tick();
+cleared.selectors.set("[data-clear-week]", [button]); cleared.run("bindEvents()"); cleared.run("openWeekMenu()"); button.handlers.click(); cleared.run("confirmWeekClear()"); cleared.tick();
 assert.deepEqual(cleared.calls[0]?.[2], { plan: { 1: "" }, lockedPlan: { 1: false }, servings: { 1: null }, updatedAt: "server" }); cleared.stop();
 
 const exported = fixture(); await exported.start(); exported.server();

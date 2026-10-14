@@ -4,6 +4,22 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v112 – Uke erstatter Kalender og Planlegger
+
+Bare klienten publiseres av eier. Ta med alle endrede/nye filer og slettingene i docs/LEVERANSE_V112.md. App, HTML-parametre og cache er v112; REQUIRED_MIN_APP_VERSION forblir 106. Ingen server-/regelpublisering er nødvendig. Handle er fremdeles startside.
+
+Lokalt består alle 49 testskript og 41 kildefilers syntakskontroller. Tester bruker syntetiske data og lokale DOM/History-stubber uten nettverk.
+
+Etter eiers publisering:
+
+1. Kontroller v112 på PC og iPhone. Fanene er Handle/Uke/Oppskrifter, og omstart går til Handle. Åpne denne, neste, forrige og en fjern uke; kontroller dato/ukenummer ved måneds- og årsskifte og at pilene står stille.
+2. Ved 375 px: prøv hovedrad og blyant, tom og låst hjemmedag, annen plan, notat og eget porsjonstall. Dagens markering skal bare vises i denne uka. Oppskrift åpnes med riktig dag og går tilbake til samme uke.
+3. Dagsark: prøv Plan, Type dag, porsjoner/Bruk standard, lås, notat og Fjern middag. Bytt middag virker på låst dag; Foreslå annen skal være deaktivert. Kontroller rulling, fokus og skjermtastatur.
+4. Velger: 0–3 forslag uten allerede brukte middager, kategorier/søk og Ikke middag hjemme. Valg og tilbake fra dagsark skal returnere til samme dagsark. Direkte åpning returnerer til uka.
+5. Ukemeny: kontroller telling og låser/annen plan. Tøm uka åpner bekreftelse med dagstyper; Avbryt/tilbake viser ukemenyen, og bekreftet tømming lukker begge. Ingen to vinduer skal ligge oppå hverandre.
+6. Prøv vannrett sveip fra midten, vanlig loddrett rulling og systemets tilbake-sveip fra kanten på ekte telefon. Bekreftelsesvindu, middagsvelger, dagsark og ukemeny skal lukkes i riktig rekkefølge. Kontroller safe-area og telefonens fontstørrelse. Dette er ikke verifisert av lokale stubber.
+
+
 ### v109 – tilbake, oppskrift og Kalender
 
 Bare klienten publiseres; ingen server-/regelpublisering er nødvendig. Minsteversjonen er fortsatt 106. Filene står i docs/LEVERANSE_V109.md.
@@ -37,12 +53,13 @@ node tests/app/workflows.test.mjs
 node tests/app/startup.test.mjs
 node tests/domain/suggestions.test.mjs
 node tests/domain/weeks.test.mjs
-node tests/render/calendar.test.mjs
+node tests/domain/week-view.test.mjs
+node tests/render/week.test.mjs
+node tests/app/week.test.mjs
 node tests/render/meals.test.mjs
 node tests/app/editor-rows.test.mjs
 node tests/app/window-scroll.test.mjs
 node tests/app/navigation.test.mjs
-node tests/render/planner.test.mjs
 node tests/render/setup.test.mjs
 node tests/render/shopping.test.mjs
 node tests/sync/firebase.test.mjs

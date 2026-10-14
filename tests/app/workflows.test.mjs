@@ -59,12 +59,12 @@ const element = (properties = {}) => ({
 });
 assert.equal(run("state.activeView"), "shopping");
 assert.equal(run("state.previousView"), "shopping");
-run('state.activeView = "planner"; state.previousView = "meals"; saveState();');
+run('state.activeView = "week"; state.previousView = "meals"; saveState();');
 assert.equal(run("loadState().activeView"), "shopping");
 assert.equal(run("loadState().previousView"), "shopping");
 run('state.activeView = "shopping"; renderShell("");');
 assert.deepEqual([...app.innerHTML.matchAll(/class="nav-button[^"]*" data-view="([^"]+)"/g)].map(match => match[1]),
-  ["shopping", "calendar", "planner", "meals"]);
+  ["shopping", "week", "meals"]);
 // Explicit test fixtures replace production examples removed in v95.
 run('accessState = { kind: "ready", user: { uid: "test", email: "test@example.com" }, role: "admin" }; state.meals = normalizeMeals([{ id: "taco", title: "Taco", categories: [], recipeUrl: "", baseServings: 4, ingredients: [{name:"Paprika",amount:"1",unit:"stk"}], steps: ["Stek"], suitability: [] }]);');
 const initialData = snapshot("syncPayload()");
@@ -78,7 +78,7 @@ const beforeInput = run("renders");
 search.handlers.input({ target: search });
 assert.equal(run("renders"), beforeInput);
 assert.match(list.innerHTML, /Lasagne &lt;ny&gt;/);
-assert.ok(list.innerHTML.indexOf("data-create-quick-meal") < list.innerHTML.indexOf('data-select-meal=""'));
+assert.doesNotMatch(list.innerHTML, /data-select-meal=""/);
 let prevented = false;
 search.handlers.keydown({ key: "Enter", preventDefault() { prevented = true; } });
 assert.equal(prevented, true);
@@ -170,7 +170,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v111");
+assert.equal(exported.appVersion, "v112");
 const { servingsByWeek: exportedServings, ...exportedDomain } = exported.data;
 const { servingsByWeek: localServings, ...localDomain } = snapshot("syncPayload()");
 assert.deepEqual(exportedDomain, localDomain);
@@ -317,9 +317,9 @@ assert.equal(run('generateShoppingListItems([{weekKey:"2026-10-12",dayIndex:0,da
 assert.match(run('createWeekShoppingReview([{weekKey:"2026-10-12",dayIndex:0,dayMode:"home",date:dateForWeekDay("2026-10-12",0)}]).groups[0].subtitle'),/5 porsjoner/);
 run('state.weekOffset=0;');
 run('const portionSelectedWeek=getWeekKey(); state.servingsByWeek[portionSelectedWeek]={0:null,1:6}; state.plansByWeek[portionSelectedWeek]={0:"portion-meal"}; state.plannerDaySheet={open:true,dayIndex:0};');
-assert.match(run("renderPlanner()"),/Følger standarden/);
-assert.match(run("renderPlanner()"),/6 porsj\./);assert.doesNotMatch(run("renderPlanner()"),/5 porsj\./);
-run('state.plannerDaySheet.dayIndex=1;');assert.match(run("renderPlanner()"),/Endret for denne dagen/);assert.match(run("renderPlanner()"),/Bruk standard \(5\)/);
+assert.match(run("renderWeek()"),/Følger standarden/);
+assert.match(run("renderWeek()"),/6 porsjoner/);assert.doesNotMatch(run("renderWeek()"),/week-day-note">5 porsjoner/);
+run('state.plannerDaySheet.dayIndex=1;');assert.match(run("renderWeek()"),/Endret for denne dagen/);assert.match(run("renderWeek()"),/Bruk standard \(5\)/);
 const standardButton=element({dataset:{useStandardServings:"1"}});selectors.set("[data-use-standard-servings]",[standardButton]);run("bindEvents()");standardButton.handlers.click();
 assert.equal(run("state.servingsByWeek[portionSelectedWeek][1]"),null);
 run('updateDayServings(0,5,"2026-10-12")');assert.equal(run('state.servingsByWeek["2026-10-12"][0]'),null);

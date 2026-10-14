@@ -23,8 +23,8 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/sync/version.js` definerer felles REQUIRED_MIN_APP_VERSION for administratorheving og gjenoppretting.
 - `src/render/shopping.js` inneholder HTML-malene for handlelistevisningen, vareeditor, vareforslag og shopping review modal.
 - `src/render/meals.js` inneholder HTML-malene for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
-- `src/render/calendar.js` inneholder HTML-malene for kalender/forside.
-- `src/render/planner.js` inneholder HTML-malene for ukeplanleggeren, dagkort og planleggerens bottom sheets.
+- `src/domain/week-view.js` beregner ISO-ukenummer, datointervaller, visningsnavn, sveipeterskler og tidligere planbruk.
+- `src/render/week.js` tegner Uke-visningen, dagsark, ukemeny og bekreftelse.
 - `src/render/setup.js` inneholder HTML-malene for Innstillinger, familie-/app-undersider og enkle metadata-sider.
 - `styles.css` inneholder alle visuelle regler.
 - `service-worker.js` håndterer cache, offline-støtte og oppdateringsflyt.
@@ -58,7 +58,9 @@ render() bruker captureWindowPositions før innerHTML erstattes og restoreWindow
 |---|---|---|
 | shopping-review | .shopping-review-backdrop | Fast bakgrunn med overflow-y:auto både på PC og mobil. Modal og body har overflow:visible og ingen maks-høyde som gir egen rulling. |
 | generate-days | .gen-modal-list | overflow-y:auto og flex:1 innenfor høydebegrenset .modal. |
-| planner-day | .planner-sheet-body | overflow-y:auto overstyrer .modal-body sin overflow:hidden; flex:1/min-height:0 gir rullbart innhold i dagsarket. |
+| planner-day | .week-sheet-body i dagsarket | overflow-y:auto og min-height:0 innenfor høydebegrenset .week-sheet. |
+| week-menu / week-clear | .week-sheet-body i ukemenyen/bekreftelsen | Samme høydebegrensning og egen overflow-y:auto; vinduene erstatter hverandre. |
+| picker-plans | .picker-plan-choices | max-height:30vh og overflow-y:auto for mange alternative planvalg inne i velgerens footer. |
 | meal-picker | .meal-picker-list | overflow-y:auto/flex:1 med max-height:60vh på PC; på mobil min-height:0 inne i et 100dvh-vindu med overflow:hidden utenfor listen. |
 | editor-row-menu | .editor-row-menu-actions | overflow-y:auto inni .editor-row-menu med max-height:75vh og overflow:hidden på modalen. |
 
@@ -88,7 +90,7 @@ Fra v92 kjører et vanlig innebygd skript i `index.html` før appmodulen. Det fa
 - State/persistens: `loadState`, `saveState`, `setState`.
 - Importert domenelogikk: oppskrift/måltid fra `src/domain/meals.js`, mengder/handleliste fra `src/domain/shopping.js`, forslagpoeng fra `src/domain/suggestions.js` og uke/dato fra `src/domain/weeks.js`.
 - Importert synklogikk: Firebase-oppkobling fra `src/sync/firebase.js`, egen operasjons-/snapshotflyt i shopping/meals/weeks-modulene, konflikt-/scopebeslutninger fra `src/sync/state.js` og write-bygging fra `src/sync/writes.js`.
-- Importert renderlogikk: kalender-HTML fra `src/render/calendar.js`, oppskrifts-HTML fra `src/render/meals.js`, planlegger-HTML fra `src/render/planner.js`, innstillings-HTML fra `src/render/setup.js` og handleliste-HTML fra `src/render/shopping.js`.
+- Importert renderlogikk: uke-HTML fra `src/render/week.js` og oppskrifts-HTML fra `src/render/meals.js`, innstillings-HTML fra `src/render/setup.js` og handleliste-HTML fra `src/render/shopping.js`.
 - Synk-hjelpere og Firestore payloads.
 - Rendering av modal- og komponentdeler.
 - Kalender, planlegger, oppskrifter, handleliste og oppsett.
@@ -280,7 +282,7 @@ Prioritert rekkefølge:
 5. Dele CSS i logiske områder.
 6. Legge til enkle tester for handleliste, mengder, ukeplan og synkbeskyttelse.
 
-Første testområder er etablert i `tests/domain/meals.test.mjs`, `tests/domain/shopping.test.mjs`, `tests/domain/suggestions.test.mjs`, `tests/domain/weeks.test.mjs`, `tests/render/calendar.test.mjs`, `tests/render/meals.test.mjs`, `tests/render/planner.test.mjs`, `tests/render/setup.test.mjs`, `tests/render/shopping.test.mjs`, `tests/sync/firebase.test.mjs`, `tests/sync/weeks.test.mjs` og `tests/app/weeks-sync.test.mjs`, `tests/sync/state.test.mjs` og `tests/sync/writes.test.mjs`.
+Første testområder er etablert i `tests/domain/meals.test.mjs`, `tests/domain/shopping.test.mjs`, `tests/domain/suggestions.test.mjs`, `tests/domain/weeks.test.mjs`, `tests/domain/week-view.test.mjs`, `tests/render/week.test.mjs`, `tests/app/week.test.mjs`, `tests/render/meals.test.mjs`, `tests/render/setup.test.mjs`, `tests/render/shopping.test.mjs`, `tests/sync/firebase.test.mjs`, `tests/sync/weeks.test.mjs` og `tests/app/weeks-sync.test.mjs`, `tests/sync/state.test.mjs` og `tests/sync/writes.test.mjs`.
 
 ## Foreslått fremtidig mappestruktur
 
@@ -300,16 +302,14 @@ src/
     state.js
     writes.js
   render/
-    calendar.js
+    week.js
     meals.js
-    planner.js
     setup.js
     shopping.js
   state.js
   sync.js
   render/
-    calendar.js
-    planner.js
+    week.js
     meals.js
     shopping.js
     setup.js
@@ -385,3 +385,19 @@ createServingsDefaultsTransition i sync/servings-defaults.js gjør ett forsøk p
 For aktuelle/fremtidige uker settes eksplisitt 5 eller gjeldende standard til null, uten å røre andre tall eller eldre uker. setState køer bare endrede servings-celler. weeksSync.waitForWrites venter gjennom samlingsvinduet og SDK-kvitteringer; stop/avvisning avbryter uten merke. Deretter leses meta igjen og admin oppdaterer bare servingsDefaultsV106:true. En ikke-blokkerende toast viser antall endrede dager og standarden. Ingen automatisk retry i samme økt; neste oppstart prøver på nytt uten skade etter delvis skriving. Den eksisterende snapshot-/overlay-/generasjonsbeskyttelsen og stale-vernet for profile/preferences/metadata er beholdt.
 
 Backup v106 fyller null for manglende dager i ukekartene. Restore godtar null eller tall >=1. Eldre backupversjoner konverterer dagsverdier lik den eksporterte familySize til null; andre verdier og nye kopiers egne tall beholdes. Fullført restore skriver meta sist med minimum 106 og overgangsmerket true, siden konverteringen da allerede er utført. Firestore-stier, øvrige dokumentfelter, oppskrifter og funksjoner/regler er uendret. Minsteversjonen er 106 for å beskytte den nye betydningen og overgangen.
+
+## Samlet Uke-visning fra v112
+
+Handle, Uke og Oppskrifter er de tre fanene. Uke har activeView="week"; canonicalView tolker calendar/planner som week ved normalisering, brukerens navigasjon og oppskriftsretur. normalizeStateForStartup starter fremdeles på shopping. Valgt uke og filtre overlever som før, mens UI-navn ikke inngår i domenepayload eller den kompakte lokale kopien. De gamle renderCalendar/renderPlanner-funksjonene og deres CSS/moduler er fjernet.
+
+renderWeek samler én liste med primærhandling per dag og en egen blyant. Planlagt middag åpner oppskrift med uke-/dagkontekst; tom hjemmedag åpner velgeren direkte; annen plan og blyant åpner dagsarket. Egne porsjoner og notat vises på én linje. Dagens markering bruker faktisk dato, bare i inneværende uke, og er uavhengig av låsen. weekHeading gir ISO-ukenummer også ved årsskifte; midtknappen og I dag vender tilbake til denne uka. Begge pilene står i faste kolonner.
+
+rankedSuggestions er den eksisterende pickSuggestion-rangeringen trukket ut som en hel liste, med uendret poengberegning og sortering. pickSuggestion tar første kandidat. Velgeren viser 0–3 forslag uten middager allerede brukt i uka; ellers vises kategoriene og dagens søk som før. lastPlannedLabel leser bare planlegging før den aktuelle datoen. Lås beskytter forslag, ikke manuelle endringer. Hovedknapp og ukemeny teller de samme ulåste hjemmedagene som fillWeek og replaceOpenWeek; sistnevnte omfatter også hjemmedager uten middag.
+
+Dagsarket, velgeren, ukemenyen og tømmingsbekreftelsen vises ett om gangen over samme Uke-visning. Plan og type bruker native select inne i dagsarket; alternative planer vises inne i velgerens footer og bruker eksisterende updateDayMode. Notat lagres ved change/Enter, og porsjoner går gjennom updateDayServings. Dagsark → velger bevarer mealPickerReturn med skjult logisk forelder og v108-posisjon/fokus. Ukemeny → bekreftelse bevarer tilsvarende weekClearConfirmation; Avbryt/popstate gjenåpner menyen. Tøm uka nullstiller de samme seks ukekartene gjennom eksisterende setState/ukesynk og lukker begge nivåer uten window.confirm.
+
+navigationLevels/backInApp registrerer også week-clear. Den eksisterende History-controlleren og rulle-/fokusfunksjonene brukes videre. render, skydata og status endrer ikke historikken. weekClearConfirmation og pickerOtherPlans ligger bare i minnet og nullstilles ved visnings-/tilgangsbytte. Nye rullbare vinduer skal ha stabile data-scroll-key og data-focus-key. Se tabellen ovenfor.
+
+Sveip på dagslisten bruker passive touch-hendelser: én finger, start minst 24 px fra kanten, minst 60 px vannrett og mer enn 1,5 ganger loddrett avstand. Gjenkjent sveip undertrykker radens etterfølgende klikk; loddrett rulling og sveip fra kanten bytter ikke uke. Telefonens systemgest, virkelig rulling, skjermtastatur og safe-area må kontrolleres på ekte enhet. CSS følger skissene ved 375 px og sentrerer samme innhold med maks 720 px på PC.
+
+Klienten/cache er v112/112, minsteversjonen er 106. Begge asset-listene har domain/week-view.js og render/week.js i stedet for de gamle kalender-/planleggermodulene. Ingen endring i service worker-strategi, synkmoduler, dokumentformat, functions eller firestore.rules.

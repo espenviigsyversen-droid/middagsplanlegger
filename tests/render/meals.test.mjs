@@ -288,7 +288,7 @@ assert.match(svgRule, /flex-shrink:\s*0/);
 assert.doesNotMatch(css, /\.recipe-primary[^{}]*svg\s*\{/);
 assert.match(css, /\.button\.recipe-primary\s*\{[^}]*min-height:\s*48px;[^}]*white-space:\s*nowrap/);
 assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.recipe-primary\s*\{\s*width:\s*100%/);
-for (const [selector, size] of [[".nav-button svg", 20], [".topbar-settings-button svg", 19], [".planner-fab svg", 20]]) {
+for (const [selector, size] of [[".nav-button svg", 20], [".topbar-settings-button svg", 19]]) {
   const rule = css.slice(css.indexOf(selector)).split("}", 1)[0];
   assert.match(rule, new RegExp(`width:\\s*${size}px`)); assert.match(rule, new RegExp(`height:\\s*${size}px`));
 }

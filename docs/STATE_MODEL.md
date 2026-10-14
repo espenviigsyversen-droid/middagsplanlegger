@@ -292,3 +292,13 @@ recipeServingsView er separat minnetilstand for justering fra oppskriftslisten; 
 Meta får servingsDefaultsV106:true etter én bekreftet adminovergang. Den skjer etter serverbekreftet minimum 106, initialisering, autoritativt ukebilde og familieprofil fra serveren. Bare nåværende og senere uker: 5 eller gjeldende familySize blir null. Andre tall og eldre uker beholdes. Alle writes er vanlige ukepatcher; waitForWrites venter på SDK-kvitteringer før meta leses igjen og merket settes. Ingen merke ved avbrudd/feil; neste oppstart kan gjenta operasjonen. Toasten «Porsjonene for N dager følger nå standarden (familySize).» vises én gang etter suksess. Runtime-beredskap/ventere/kø og forsøksstatus lagres ikke.
 
 Backup v106 lagrer null også for manglende standarddager. Restore validerer null/tall >=1. Bare eldre kopier konverterer tall lik kopiens familySize til null; egne tall i v106 eller nyere beholdes. Meta skrives helt sist med minAppVersion:106 og servingsDefaultsV106:true etter fullført restore. Overgangsmerket inngår ikke i backupens domenedata. Ingen ny Firestore-sti eller endring av recipes/shoppingItems/profilfeltnavn.
+
+## Uke-visning fra v112
+
+`activeView: "week"` erstatter calendar/planner i UI. Gamle navn tolkes som week ved normalisering, navigasjon og previousView-retur. Nye økter starter fremdeles på shopping; weekOffset og filters beholdes som før. Ingen visningsnavn inngår i synket domenestate.
+
+`plannerDaySheet` og `plannerActionsOpen` beholder navnene som interne UI-felter, men tegner nå dagsarket og ukemenyen over Uke. `mealPicker` brukes videre. Kun ett av disse vinduene eller tømmingsbekreftelsen vises av gangen. Plan/type dag og alternative planer i velgeren er valg inne i samme vindu.
+
+`weekClearConfirmation` er separat runtime-tilstand med ukemenyens rulleposisjon/fokus og logiske foreldrenivå. `pickerOtherPlans` er et runtime-flagg for valg inne i velgeren. Ingen av dem lagres lokalt, synkes eller eksporteres. `mealPickerReturn` bevarer som før skjult dagsark under velgeren. Tilbake fra bekreftelse viser ukemenyen, fra velger med retur viser dagsarket, og fra oppskrift åpnet i Uke går det til samme uke.
+
+Domenefeltene og null-betydningen i servingsByWeek er uendret. Lås hindrer forslag, men ikke manuelle middagsvalg. Tøm uka bekreftes i appen og nullstiller plan, låser, dagstyper, porsjoner, planvalg og notater med eksisterende standardverdier/synk. REQUIRED_MIN_APP_VERSION forblir 106.

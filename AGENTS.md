@@ -22,8 +22,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Etter endringer i Firestore write-/payload-bygging: kjør `node tests/sync/writes.test.mjs`.
 - Etter endringer i handleliste-rendering: kjør `node tests/render/shopping.test.mjs`.
 - Etter endringer i oppskrifts-rendering: kjør `node tests/render/meals.test.mjs`.
-- Etter endringer i kalender-rendering: kjør `node tests/render/calendar.test.mjs`.
-- Etter endringer i planlegger-rendering: kjør `node tests/render/planner.test.mjs`.
+- Etter endringer i Uke-visningen: kjør `node tests/domain/week-view.test.mjs`, `node tests/render/week.test.mjs` og `node tests/app/week.test.mjs`.
 - Etter endringer i setup-rendering: kjør `node tests/render/setup.test.mjs`.
 - Ved kodeendringer: oppsummer nøyaktig hvilke filer som er endret og hvilke filer som må lastes opp til GitHub.
 - Ikke endre appens dataformat, Firebase-struktur eller service worker-strategi uten å dokumentere konsekvensen.
@@ -49,8 +48,8 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/sync/shopping.js`: migrering, varebasert synk, minnekø og handlelistelytter.
 - `src/render/shopping.js`: HTML-rendering for handleliste, vareeditor, vareforslag og shopping review modal.
 - `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
-- `src/render/calendar.js`: HTML-rendering for kalender/forside.
-- `src/render/planner.js`: HTML-rendering for ukeplanleggeren.
+- `src/domain/week-view.js`: rene visningshjelpere for Uke, ISO-ukenummer, datotekster, planhistorikk og sveip.
+- `src/render/week.js`: HTML-rendering for Uke, dagsark, ukemeny og tømmingsbekreftelse.
 - `src/render/setup.js`: HTML-rendering for Innstillinger, familie-/app-undersider og enkle metadata-sider.
 - `styles.css`: all visuell styling, responsive regler og komponentstiler.
 - `service-worker.js`: PWA-cache og offline/oppdateringsstrategi.
@@ -153,7 +152,7 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 
 ## Rulleposisjon og fokus i vinduer fra v108
 
-- Nye vinduer med egen rulleliste skal ha en unik, stabil data-scroll-key på elementet som faktisk ruller. Undersøk overflow, høydebegrensninger og foreldre/mobilregler før nøkkelen plasseres. Ikke sett nøkkel på en innholdsbeholder med overflow:visible. Gjennomgangen ruller på .shopping-review-backdrop; øvrige nøkler står på .gen-modal-list, .planner-sheet-body, .meal-picker-list og .editor-row-menu-actions.
+- Nye vinduer med egen rulleliste skal ha en unik, stabil data-scroll-key på elementet som faktisk ruller. Undersøk overflow, høydebegrensninger og foreldre/mobilregler før nøkkelen plasseres. Ikke sett nøkkel på en innholdsbeholder med overflow:visible. Gjennomgangen ruller på .shopping-review-backdrop; øvrige nøkler står på .gen-modal-list, .week-sheet-body, .meal-picker-list og .editor-row-menu-actions; se v112 for de nye ukemenynøklene.
 - Fokusbare kontroller i disse vinduene får en stabil data-focus-key. Bruk vare-ID/datonøkkel/dag eller målgruppeindeks ved gjentatte kontroller, og ulike nøkler for ulike handlinger. Identiteten skal ikke avhenge av valgt-status, teller eller knappetekst. Dette gjelder også vinduets topp-/bunnknapper utenfor selve rullelisten.
 - render() tar en lokal kopi av scrollTop og fokusnøkkel før innerHTML erstattes. Etter rendering og binding gjenopprettes fokus innenfor samme vindu med focus({preventScroll:true}), deretter scrollTop synkront i samme render. Match fokusnøklene som tekst, uten interpolering av vilkårlige ID-er i CSS-selektorer. Flere åpne vinduer bevarer hver sin posisjon.
 - Kopien finnes bare i den aktuelle render-kallstakken, aldri i state, localStorage, synk eller backup. En lukket/fjernet nøkkel ignoreres; åpning etter lukking begynner øverst. Manglende/fjernet fokuskontroll ignoreres. syncMealPickerScrollLock og dagens tegneflyt beholdes.
@@ -171,7 +170,7 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Tilbakeknappen og popstate deler backInApp: vindu først, så oppskrift til previousView, underside til setup og AI-side til editor når aiKeyEditorReturn er satt. Tilbake i editoren leser dagens skjema og forkaster ingenting; historikkoppføringen gjeninnsettes. Andre eksplisitte Avbryt/Lagre-flyter er som før.
 - Ved appens lukking/navigering konsumeres eksisterende oppføringer med history.go; nye nivåer legges først inn etter popstate. Raske nye brukerhandlinger under ventingen bruker det siste UI-målet. Ny åpning etter tilbake erstatter framoveroppføringer, slik at gjentatte runder ikke bygger opp historikk. Historikken inneholder bare øktmerke/UI-nivå-ID-er, aldri utkast eller domenekopier. Framover skal ikke gjenåpne forkastet UI. Tilgangs-/synkstopp nullstiller merket med replaceState, uten push.
 - Kalender har bare ukelisten. Hver rad er én knapp: planlagt middag åpner oppskrift med riktig dag, ellers Planlegger/dagsark. Dagens rad markeres bare i inneværende uke. Notater vises på én linje med ellipsis; ikke gjeninnfør renderTodaySummary eller dagsblokkens CSS.
-- Kjør node tests/app/navigation.test.mjs, meals/calendar/setup/account/ai-key-render-testene, node tests/app/window-scroll.test.mjs, alle øvrige testskript og syntakskontroller. Ny subpage.js/navigation.js skal stå i begge asset-listene. v109/109, REQUIRED_MIN_APP_VERSION fortsatt 106. Ingen functions/regler/datamodell/synkendring eller nettverk/publisering/Git i leveransen.
+- Kjør node tests/app/navigation.test.mjs, meals/week/setup/account/ai-key-render-testene, node tests/app/window-scroll.test.mjs, alle øvrige testskript og syntakskontroller. Ny subpage.js/navigation.js skal stå i begge asset-listene. v109/109, REQUIRED_MIN_APP_VERSION fortsatt 106. Ingen functions/regler/datamodell/synkendring eller nettverk/publisering/Git i leveransen.
 
 ## Importvalg og blandede tall fra v99
 
@@ -249,3 +248,12 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Backup v106 fyller manglende dagsverdier med null. Restore validerer null eller tall >=1; kopier før v106 konverterer tall lik kopiens familySize til null, nye kopier beholder egne tall. Meta skrives sist med minimum 106 og servingsDefaultsV106:true etter fullført restore.
 - APP_VERSION/versjonsvakt/cache er v106/106, REQUIRED_MIN_APP_VERSION=106. Ny servings-defaults.js står i begge asset-listene. Ingen nettverk, installasjon, publisering, Git eller endring i functions/firestore.rules inngår.
 - Kjør node tests/sync/servings-defaults.test.mjs, uke-/mengde-/backup-/restore-/access-/render-/workflow-testene, alle øvrige testskript og node --check av kildefilene. Test særlig standardendring uten nytt snapshot, minnejustering, markør etter kvittering, stopp/avvisning og avrunding etter sammenslåing.
+
+## Uke-visningen fra v112
+
+- Bunnmenyen har Handle, Uke og Oppskrifter. `activeView: "week"` erstatter calendar/planner; canonicalView oversetter gamle navn ved normalisering, navigasjon og retur. Nye økter starter fortsatt på Handleliste, med beholdt ukevalg. Visningsnavn er UI, ikke et nytt domenefelt.
+- src/domain/week-view.js beregner ISO-ukenummer, overskrifter/datointervaller, sveip og tidligere planbruk. Sveip må starte minst 24 px fra begge skjermkanter, være minst 60 px vannrett og mer enn 1,5 ganger loddrett avstand. Ikke bytt uke under åpne vinduer. Ekte tilbake-sveip må testes på telefon.
+- Lås beskytter bare mot forslag. Manuelle middagsvalg, også på tomme låste dager, er tillatt. Telling og fillWeek/replaceOpenWeek hopper over låste dager og annen plan enn Middag hjemme. rankedSuggestions inneholder eksisterende rangering; pickSuggestion tar første element, og velgeren viser inntil tre kandidater uten allerede brukte middager. Historikkteksten beskriver plansByWeek, ikke faktisk spising.
+- Dagsark, middagsvelger, ukemeny og bekreftelse vises ett om gangen. Plan/type og Ikke middag hjemme velges inne i eksisterende vindu. plannerDaySheet/plannerActionsOpen beholder interne UI-navn. mealPickerReturn og weekClearConfirmation bevarer skjult logisk forelder og rulleposisjon/fokus: velger → dagsark → Uke, bekreftelse → ukemeny → Uke. Tøm uka bruker aldri window.confirm og lukker begge nivåer etter bekreftelse.
+- weekClearConfirmation og pickerOtherPlans er runtime-tilstand, aldri lokal kopi/synk/backup. Oppskrift åpnet fra Uke beholder ukedagkontekst og samme weekOffset; tilbake går til Uke. render/setState/skydata oppretter ikke historikk. Nye vinduer skal få tilbakehåndtering og data-scroll-key på faktisk rullende element, med stabile data-focus-key-kontroller. Fra v112: planner-day på .week-sheet-body, week-menu, week-clear og picker-plans på sine rullbare beholdere.
+- Kjør de tre week-testene, tests/app/navigation.test.mjs, tests/app/window-scroll.test.mjs, tests/app/weeks-sync.test.mjs og alle øvrige tests/ og functions/tests/ samt node --check av kildefilene. De fjernede kalender-/planlegger-render-testene er erstattet av week.test.mjs. Nye domain/week-view.js og render/week.js står i begge service worker-listene; gamle render/calendar.js og render/planner.js fjernes. v112/112, REQUIRED_MIN_APP_VERSION 106; ingen endring i synk, datamodell, functions eller regler.

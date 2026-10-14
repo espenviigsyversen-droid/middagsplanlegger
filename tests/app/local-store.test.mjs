@@ -92,7 +92,7 @@ f.snapshot("meals", { a: meal }); f.snapshot("weeks", { [key]: { plan: { 1: "a" 
 assert.match(f.app.innerHTML, /Vare fra skyen/); assert.match(f.app.innerHTML, /Familie fra skyen/); assert.equal(f.run("syncStatusText()"), "Synket");
 assert.equal(f.run("state.meals[0].id"), "a"); assert.equal(f.storage.get("middagsapp-state"), stale);
 assert.equal(f.storage.get("another-app"), "UNCHANGED");
-f.nodes.get("planner").handlers.click(); assert.equal(f.run("state.activeView"), "planner"); assert.match(f.app.innerHTML, /Middag fra skyen/);
+f.nodes.get("week").handlers.click(); assert.equal(f.run("state.activeView"), "week"); assert.match(f.app.innerHTML, /Middag fra skyen/);
 f.nodes.get("meals").handlers.click(); assert.equal(f.run("state.activeView"), "meals"); assert.match(f.app.innerHTML, /Middag fra skyen/);
 f.run('setState({meals:state.meals.map(meal=>({...meal,title:"Endret middag"}))}); updatePlanDay(2,"a"); setState({shoppingList:{...state.shoppingList,items:state.shoppingList.items.map(item=>({...item,name:"Endret vare"}))}});');
 f.tick(); await settle();
@@ -100,7 +100,7 @@ assert.deepEqual(f.writes.map(write => write.slice(0, 2)), [["set", "meals/a"], 
 assert.equal(f.writes[0][2].title, "Endret middag"); assert.equal(f.writes[1][2].name, "Endret vare"); assert.equal(f.writes[2][2].plan[2], "a");
 f.snapshot("meals", { a: { ...meal, title: "Ny middag fra skyen" } });
 assert.match(f.app.innerHTML, /Ny middag fra skyen/); assert.equal(f.run("mealsSyncStatus"), "Synket");
-f.nodes.get("planner").handlers.click(); f.snapshot("weeks", { [key]: { plan: { 3: "a" }, dayNotes: { 3: "Notat fra skyen" } } });
+f.nodes.get("week").handlers.click(); f.snapshot("weeks", { [key]: { plan: { 3: "a" }, dayNotes: { 3: "Notat fra skyen" } } });
 assert.equal(f.run("state.dayNotesByWeek[getWeekKey()][3]"), "Notat fra skyen"); assert.match(f.app.innerHTML, /Ny middag fra skyen/);
 assert.equal(f.run("weeksSyncStatus"), "Synket");
 f.nodes.get("shopping").handlers.click(); f.snapshot("shoppingItems", { item: { ...item, name: "Ny vare fra skyen" } });

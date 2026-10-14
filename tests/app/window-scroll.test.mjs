@@ -126,12 +126,12 @@ activate("generate-cancel"); run('setState({generateModal:{open:true,selectedDay
 assert.equal(scroller("generate-days").scrollTop, 0);
 
 // Planner body and a footer button outside the scroller keep position/focus.
-run('setState({generateModal:{open:false},activeView:"planner",plannerDaySheet:{open:true,dayIndex:2}})');
+run('setState({generateModal:{open:false},activeView:"week",plannerDaySheet:{open:true,dayIndex:2}})');
 assert.ok(scroller("planner-day")); scroller("planner-day").scrollTop = 250;
-activate("planner-servings:2", "change", node => { node.value = "6"; });
-assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-servings:2");
+activate("planner-plus:2");
+assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-plus:2");
 activate("planner-lock:2"); assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-lock:2");
-assert.match(app.innerHTML, /Lås opp dagen/);
+assert.equal(control("planner-lock:2").attrs["aria-checked"], "true");
 
 // The day sheet is suspended, and only the picker is rendered. Its own rerenders still preserve scroll/focus.
 activate("planner-meal:2");
@@ -164,8 +164,8 @@ assert.equal(run("currentPlan()[2]"), "pick"); assert.equal(run("state.mealPicke
 assert.equal(run("state.plannerDaySheet.open"), true); assert.match(app.innerHTML, /Valgt middag/);
 assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:2");
 activate("planner-meal:2");
-const emptyChoice = app.querySelectorAll("[data-select-meal]").find(node => node.dataset.selectMeal === "");
-scroller("meal-picker").handlers.click({target:emptyChoice});
+activate("picker-close");
+app.querySelector("[data-remove-day-meal]").handlers.click();
 assert.equal(run("currentPlan()[2]"), ""); assert.equal(run("state.plannerDaySheet.open"), true);
 assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:2");
 
@@ -179,6 +179,14 @@ assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:
 run('openMealPicker(2)');
 assert.equal(scroller("meal-picker").scrollTop, 0);
 assert.equal(run("mealPickerReturn"), null); activate("picker-close"); assert.equal(run("state.plannerDaySheet.open"), false);
+
+// The clear confirmation replaces the week menu and returns to its scroll/focus on cancellation.
+run("openWeekMenu()");scroller("week-menu").scrollTop=330;
+activate("week-menu-clear");assert.equal(scroller("week-menu"),null);assert.ok(scroller("week-clear"));
+scroller("week-clear").scrollTop=80;control("week-clear-cancel").focus({preventScroll:true});run("render()");
+assert.equal(scroller("week-clear").scrollTop,80);expectFocus("week-clear-cancel");
+activate("week-clear-cancel");assert.equal(scroller("week-clear"),null);
+assert.equal(scroller("week-menu").scrollTop,330);expectFocus("week-menu-clear");activate("week-menu-close");
 
 // Row-menu list, unrelated focus, and a focused control that disappears.
 run('setState({mealPicker:{open:false,dayIndex:null,query:""},plannerDaySheet:{open:false},activeView:"meals",editingMealId:"new",draftMeal:emptyMeal(),draftIngredients:[{type:"heading",title:"Mat"},{name:"gulrot"},{type:"heading",title:"Saus"},{name:"vann"}],draftSteps:[""]})');

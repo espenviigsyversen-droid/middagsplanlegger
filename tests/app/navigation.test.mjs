@@ -28,7 +28,7 @@ const context=vm.createContext({...bindings,structuredClone,Date,Blob,File,URL,c
 });
 vm.runInContext(source,context);
 const run=code=>vm.runInContext(code,context),json=code=>JSON.parse(run(`JSON.stringify(${code})`));
-run('accessState={kind:"ready",offline:true}; loadAiKeyStatus=async()=>{}; state.activeView="calendar"; state.meals=normalizeMeals([{...emptyMeal(),id:"wok",title:"Kyllingwok",ingredients:[{name:"Kylling",amount:"1",unit:"stk"}],steps:["Stek"]}]);');
+run('accessState={kind:"ready",offline:true}; loadAiKeyStatus=async()=>{}; state.activeView="week"; state.meals=normalizeMeals([{...emptyMeal(),id:"wok",title:"Kyllingwok",ingredients:[{name:"Kylling",amount:"1",unit:"stk"}],steps:["Stek"]}]);');
 assert.equal(pushes,0,"Startup adds no entry");
 const button=(dataset={})=>({dataset,tagName:"BUTTON",handlers:{},addEventListener(type,fn){this.handlers[type]=fn;},focus(){},select(){}});
 const click=(selector,dataset={})=>{
@@ -36,7 +36,7 @@ const click=(selector,dataset={})=>{
   node.handlers.click({target:node,currentTarget:node,stopPropagation(){},preventDefault(){}});selectors.delete(selector);flush();
 };
 click("[data-view-meal]",{viewMeal:"wok",recipeDay:"2"});
-assert.equal(index,1);assert.equal(run("state.previousView"),"calendar");
+assert.equal(index,1);assert.equal(run("state.previousView"),"week");
 assert.deepEqual(json("state.selectedRecipeContext"),{weekKey:run("getWeekKey()"),dayIndex:2});
 const noRenderPush=pushes;run("render(); render(); applyRemoteStatePatch({family:{...state.family,name:'Sky'}})");
 assert.equal(pushes,noRenderPush,"Rendering/sky updates never add entries");
@@ -44,16 +44,16 @@ click("[data-open-recipe-menu]"); assert.equal(run("recipeMenuOpen"),true);asser
 history.go(-1);flush();assert.equal(run("recipeMenuOpen"),false);assert.equal(run("state.activeView"),"recipe");
 click("[data-add-to-shopping]",{addToShopping:"wok"});assert.equal(index,2);
 history.go(-1);flush();assert.equal(run("state.shoppingReview.open"),false);assert.equal(run("state.activeView"),"recipe");
-history.go(-1);flush();assert.equal(run("state.activeView"),"calendar");assert.equal(index,0);
+history.go(-1);flush();assert.equal(run("state.activeView"),"week");assert.equal(index,0);
 for(let turn=0;turn<8;turn++) {
   click("[data-view-meal]",{viewMeal:"wok"});click("[data-close-meal]");
   assert.equal(index,0);assert.equal(entries.length,2,"Back + new entry reuses the forward slot");
 }
-history.go(1);flush();assert.equal(index,0);assert.equal(run("state.activeView"),"calendar","Forward does not resurrect an old recipe");
-run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"calendar"}); recipeMenuOpen=true; render(); uiHistory.sync()');
-const beforePop=pushes;history.go(-2);flush();assert.equal(run("state.activeView"),"calendar");assert.equal(pushes,beforePop);
+history.go(1);flush();assert.equal(index,0);assert.equal(run("state.activeView"),"week","Forward does not resurrect an old recipe");
+run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"week"}); recipeMenuOpen=true; render(); uiHistory.sync()');
+const beforePop=pushes;history.go(-2);flush();assert.equal(run("state.activeView"),"week");assert.equal(pushes,beforePop);
 // A new action while the browser is consuming a closed entry uses the latest target.
-run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"calendar"}); navigateBack(); navigate({activeView:"family-settings"})');
+run('navigate({activeView:"recipe",selectedMealId:"wok",previousView:"week"}); navigateBack(); navigate({activeView:"family-settings"})');
 flush();assert.equal(run("state.activeView"),"family-settings");assert.equal(index,1);
 click("[data-subpage-back]");
 const pages=["account-settings","ai-settings","family-settings","app-settings","meal-preferences","categories","units","prep-times","suitability","plan-modes","ingredient-mappings","store-categories"];
@@ -66,9 +66,9 @@ for(const page of pages) {
 // Each window closes before the parent view; no user edits are restored from history data.
 for(const [patch,open] of [
   ['{activeView:"shopping",generateModal:{open:true,selectedDays:[]}}','state.generateModal.open'],
-  ['{activeView:"planner",plannerDaySheet:{open:true,dayIndex:2}}','state.plannerDaySheet.open'],
-  ['{activeView:"planner",plannerActionsOpen:true}','state.plannerActionsOpen'],
-  ['{activeView:"planner",mealPicker:{open:true,dayIndex:2,query:""}}','state.mealPicker.open'],
+  ['{activeView:"week",plannerDaySheet:{open:true,dayIndex:2}}','state.plannerDaySheet.open'],
+  ['{activeView:"week",plannerActionsOpen:true}','state.plannerActionsOpen'],
+  ['{activeView:"week",mealPicker:{open:true,dayIndex:2,query:""}}','state.mealPicker.open'],
 ]) {
   run(`navigate(${patch})`);flush();assert.equal(run(open),true);assert.equal(index,1);
   history.go(-1);flush();assert.equal(run(open),false);assert.equal(index,0);
@@ -81,7 +81,7 @@ const chooseDinner = mealId => {
 };
 for(const fromCalendar of [false,true]) {
   if(fromCalendar) click("[data-calendar-day]",{calendarDay:"3"});
-  else run('navigate({activeView:"planner",plannerDaySheet:{open:true,dayIndex:3}})');
+  else run('navigate({activeView:"week",plannerDaySheet:{open:true,dayIndex:3}})');
   flush();assert.equal(index,1);
   run('openMealPicker(3,true)');flush();
   assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(run("state.mealPicker.open"),true);assert.equal(index,2);
@@ -93,11 +93,11 @@ for(const fromCalendar of [false,true]) {
   assert.equal(run("state.plannerDaySheet.open"),true);
   run('openMealPicker(3,true)');flush();chooseDinner("wok");
   assert.equal(run("currentPlan()[3]"),"wok");assert.equal(index,1);assert.equal(run("state.plannerDaySheet.dayIndex"),3);
-  run('openMealPicker(3,true)');flush();chooseDinner("");assert.equal(run("currentPlan()[3]"),"");assert.equal(index,1);
+  click("[data-remove-day-meal]",{removeDayMeal:"3"});assert.equal(run("currentPlan()[3]"),"");assert.equal(index,1);
   for(let turn=0;turn<4;turn++) {
     run('openMealPicker(3,true)');flush();click("[data-close-meal-picker]");assert.equal(index,1);assert.equal(entries.length,3);
   }
-  history.go(-1);flush();assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(run("state.activeView"),"planner");assert.equal(index,0);
+  history.go(-1);flush();assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(run("state.activeView"),"week");assert.equal(index,0);
 }
 run('openMealPicker(1)');flush();assert.equal(index,1);assert.equal(run("mealPickerReturn"),null);
 chooseDinner("wok");assert.equal(run("currentPlan()[1]"),"wok");assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(index,0);
@@ -128,11 +128,11 @@ assert.equal(queue.length,1);assert.equal(run("state.editingMealId"),"wok");flus
 selectors.delete("[data-edit-meal]");click("[data-cancel-edit]");
 
 // Calendar: real button binding, note and today mark only in the current week.
-run('state.activeView="calendar"; const weekKey=getWeekKey(); state.plansByWeek[weekKey]={...emptyWeekPlan(),2:"wok"}; state.dayNotesByWeek[weekKey]={...emptyWeekDayNotes(),3:"Middag hos venner"}; render()');
+run('state.activeView="week"; const weekKey=getWeekKey(); state.plansByWeek[weekKey]={...emptyWeekPlan(),2:"wok"}; state.dayNotesByWeek[weekKey]={...emptyWeekDayNotes(),3:"Middag hos venner"}; render()');
 assert.doesNotMatch(app.innerHTML,/today-summary|today-kicker/);assert.match(app.innerHTML,/Middag hos venner/);
-assert.equal((app.innerHTML.match(/week-today-badge/g)||[]).length,1);
-run("state.weekOffset=1; render()");assert.doesNotMatch(app.innerHTML,/week-today-badge/);run("state.weekOffset=0");
-click("[data-calendar-day]",{calendarDay:"3"});assert.equal(run("state.activeView"),"planner");
+assert.equal((app.innerHTML.match(/week-today-label/g)||[]).length,1);
+run("state.weekOffset=1; render()");assert.doesNotMatch(app.innerHTML,/week-today-label/);run("state.weekOffset=0");
+click("[data-calendar-day]",{calendarDay:"3"});assert.equal(run("state.activeView"),"week");
 assert.equal(run("state.plannerDaySheet.dayIndex"),3);history.go(-1);flush();
 click("[data-view-meal]",{viewMeal:"wok",recipeDay:"2"});assert.equal(run("state.selectedRecipeContext.dayIndex"),2);
 click("[data-toggle-wake]");assert.equal(run("state.keepScreenAwake"),true);click("[data-toggle-wake]");assert.equal(run("state.keepScreenAwake"),false);
