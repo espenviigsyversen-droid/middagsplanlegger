@@ -1,8 +1,8 @@
-export function parseRecipeServings(value) {
+export function parseRecipeServings(value, maximum = 30) {
   const text = String(value ?? "").trim();
-  if (!/^[0-9]{1,2}$/.test(text)) return null;
+  if (!/^[0-9]{1,3}$/.test(text) || text.length > String(maximum).length) return null;
   const number = Number(text);
-  return number >= 1 && number <= 30 ? number : null;
+  return number >= 1 && number <= maximum ? number : null;
 }
 
 // A short-lived UI buffer. The ordinary week sync still owns document writes.

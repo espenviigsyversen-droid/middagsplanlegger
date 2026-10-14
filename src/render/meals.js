@@ -3,6 +3,7 @@ import { renderSubpageBar } from "./subpage.js";
 import { renderRecipeImport } from "./recipe-import.js";
 import { pencilIcon } from "./icons.js";
 import { renderMealFilters, mealFiltersActive } from "./meal-filters.js";
+import { renderRecipeYieldEditor } from "./recipe-yield.js";
 
 export function renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml }) {
   let previous = "";
@@ -145,6 +146,11 @@ export function renderMealDetailView(options = {}) {
     servingScope = "",
     baseServings = 4,
     targetServings = null,
+    pickerMaximum = 30,
+    pickerUnit = "porsjoner",
+    yieldEstimate = "",
+    yieldNote = "",
+    scaleBase = baseServings,
     shoppingIconHtml = "",
     scaleAmount = (amount) => amount,
     escapeHtml = String,
@@ -160,10 +166,12 @@ export function renderMealDetailView(options = {}) {
           ${renderRecipeSourceLink(meal.recipeUrl, escapeHtml)}
           <p class="recipe-serving-note" data-recipe-serving-note>${escapeHtml(servingText)}</p>
           <div class="recipe-servings-control" aria-label="Juster porsjoner">
-            <button class="button secondary" type="button" data-recipe-servings="-1" aria-label="Færre porsjoner" ${(targetServings ?? baseServings) <= 1 ? "disabled" : ""}>−</button>
-            <label class="recipe-servings-value"><input type="text" inputmode="numeric" pattern="[0-9]*" data-recipe-servings-input aria-label="Antall porsjoner" value="${escapeHtml(targetServings ?? baseServings)}"><span>porsjoner</span></label>
-            <button class="button secondary" type="button" data-recipe-servings="1" aria-label="Flere porsjoner" ${(targetServings ?? baseServings) >= 30 ? "disabled" : ""}>+</button>
+            <button class="button secondary" type="button" data-recipe-servings="-1" aria-label="Færre ${escapeHtml(pickerUnit)}" ${(targetServings ?? baseServings) <= 1 ? "disabled" : ""}>−</button>
+            <label class="recipe-servings-value"><input type="text" inputmode="numeric" pattern="[0-9]*" data-recipe-servings-input aria-label="Antall ${escapeHtml(pickerUnit)}" value="${escapeHtml(targetServings ?? baseServings)}"><span data-recipe-picker-unit>${escapeHtml(pickerUnit)}</span></label>
+            <button class="button secondary" type="button" data-recipe-servings="1" aria-label="Flere ${escapeHtml(pickerUnit)}" ${(targetServings ?? baseServings) >= pickerMaximum ? "disabled" : ""}>+</button>
           </div>
+          <p class="recipe-yield-estimate" data-recipe-yield-estimate ${yieldEstimate?"":"hidden"}>${escapeHtml(yieldEstimate)}</p>
+          <p class="field-hint" data-recipe-yield-note ${yieldNote?"":"hidden"}>${escapeHtml(yieldNote)}</p>
           <p class="field-hint" data-recipe-serving-scope ${servingScope ? "" : "hidden"}>${escapeHtml(servingScope)}</p>
         </div>
         ${ingredients.length ? `<button class="button recipe-primary" type="button" data-add-to-shopping="${escapeHtml(meal.id)}">${shoppingIconHtml} Legg i handleliste</button>`
@@ -179,7 +187,7 @@ export function renderMealDetailView(options = {}) {
           <h3>Ingredienser</h3>
           ${ingredients.length ? `
             <div class="ingredient-table" data-recipe-ingredients>
-              ${renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml })}
+              ${renderIngredientList(ingredients, { scaleAmount, baseServings: scaleBase, targetServings, escapeHtml })}
             </div>
           ` : '<p class="empty-recipe-text">Ingen ingredienser er lagt inn ennå.</p>'}
         </section>
@@ -290,7 +298,6 @@ export function renderMealEditorView(options = {}) {
   const {
     isNew = false,
     meal,
-    baseServings = 4,
     ingredients = [],
     steps = [],
     categoryEntries = [],
@@ -323,9 +330,7 @@ export function renderMealEditorView(options = {}) {
             <input id="mealTitle" class="input" name="title" required value="${escapeHtml(meal.title)}">
           </div>
           <div class="setting">
-            <label for="mealBaseServings">Porsjoner i oppskriften</label>
-            <input id="mealBaseServings" class="input" type="number" min="1" max="30" name="baseServings" value="${baseServings}" aria-describedby="mealBaseServingsHint">
-            <p id="mealBaseServingsHint" class="field-hint">Antallet mengdene er beregnet for. Ukeplan og handleliste regner om til porsjonene for dagen.</p>
+            ${renderRecipeYieldEditor(meal, escapeHtml)}
           </div>
         </div>
         <div class="form-row">

@@ -193,9 +193,9 @@ function testMealEditorRender() {
   assert.match(html, /data-ingredient-row="0"/);
   assert.match(html, /data-step-row="0"/);
   assert.match(html, /Slett/);
-  assert.match(html, /Porsjoner i oppskriften/);
-  assert.match(html, /Antallet mengdene er beregnet for\. Ukeplan og handleliste regner om til porsjonene for dagen\./);
-  assert.match(html, /aria-describedby="mealBaseServingsHint"/);
+  assert.match(html, /Oppskriften gir/);
+  assert.match(html, /Brukes når middagen planlegges i Uke/);
+  assert.match(html, /name="yieldAmount"/);assert.match(html, /name="yieldUnit"/);
   const quickEditor = renderMealEditorView({ meal: { id: "ny", title: "Ny", prepTime: "" }, prepTimeEntries: [["quick", "Rask"]] });
   assert.match(quickEditor, /value="" selected>Ikke angitt/);
   assert.doesNotMatch(quickEditor, /value="quick" selected/);

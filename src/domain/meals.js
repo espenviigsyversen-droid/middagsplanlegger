@@ -27,11 +27,26 @@ export function normalizeMeals(meals = []) {
   return (Array.isArray(meals) ? meals : []).map((value) => {
     const { updatedAt: ignoredUpdatedAt, clientUpdatedAt: ignoredClientUpdatedAt, ...meal } = value;
     const ingredients = normalizeIngredients(meal.ingredients, meal.keyIngredients);
-    return { ...meal, recipeUrl: String(meal.recipeUrl || "").trim(),
-      baseServings: Math.max(1, Number(meal.baseServings) || 4), ingredients,
+    const normalizedYield = normalizeRecipeYield(meal);
+    return { ...normalizedYield, recipeUrl: String(meal.recipeUrl || "").trim(),
+      baseServings: normalizedYield.yieldUnit ? normalizedYield.baseServings : Math.max(1, Number(meal.baseServings) || 4), ingredients,
       keyIngredients: [...new Set(ingredients.map(item => ingredientBaseName(item.name).toLowerCase()))],
       suitability: Array.isArray(meal.suitability) ? meal.suitability : [] };
   });
+}
+
+export function recipeYieldFields(meal) {
+  const unit = typeof meal?.yieldUnit === "string" ? meal.yieldUnit.trim() : "";
+  return Number.isInteger(meal?.yieldAmount) && meal.yieldAmount >= 1 && meal.yieldAmount <= 200
+    && unit.length >= 1 && unit.length <= 20 && unit.toLocaleLowerCase("nb") !== "porsjoner"
+    ? { yieldAmount: meal.yieldAmount, yieldUnit: unit } : {};
+}
+
+export function normalizeRecipeYield(meal) {
+  const { yieldAmount: ignoredAmount, yieldUnit: ignoredUnit, ...rest } = meal;
+  const fields = recipeYieldFields(meal);
+  return { ...rest, ...fields, ...(fields.yieldUnit
+    ? { baseServings: Math.max(1, Math.min(30, Math.round(Number(meal.baseServings) || 4))) } : {}) };
 }
 
 // Headings exist only in the editor; persisted ingredients carry their group.

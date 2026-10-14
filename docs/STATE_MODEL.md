@@ -133,6 +133,8 @@ En oppskrift inneholder typisk:
 - `categories`
 - `recipeUrl`
 - `baseServings`
+- `yieldAmount` (valgfritt heltall 1–200, fra v123)
+- `yieldUnit` (valgfri trimmet tekst 1–20 tegn, fra v123)
 - `ingredients`
 - `steps`
 - `prepTime`
@@ -352,3 +354,13 @@ pickerFilters er separat, nullstilles fortsatt ved lukking og påvirkes ikke av 
 recipeServingsBuffer.pending inneholder midlertidig mealId, weekKey, dayIndex og value med en timer/generasjon. Det er separat runtime, ikke state, lokal kopi, Firestore eller sikkerhetskopi. Før 500 ms er day-servings uendret; visningen bruker pending-verdi foran snapshotet. Etter ro, eller ved avgang/skjuling, lagres bare eksisterende servingsByWeek-celle gjennom updateDayServings. Verdi lik standard blir fortsatt null.
 
 recipeServingsView er fortsatt bare minnejustering for en oppskrift fra listen. Tallfeltets uferdige tekst finnes bare i DOM og valideres ved Enter/blur/avgang. Konto-/tilgangsstopp canceller pending uten skriving. Ukesynkens nye valgfri immediate-parameter endrer kun sendetidspunkt for allerede ventede porsjonspatcher, ikke dokument-, celle-, kvitterings- eller generasjonsformat. Minimum forblir 120.
+
+## Oppskriftens utbytte fra v123
+
+meals/<id> kan ha yieldAmount: heltall 1–200 og yieldUnit: trimmet streng 1–20 tegn. Begge gyldige finnes ved stykkoppskrift; begge utelates ved vanlig porsjonsoppskrift, inkludert enhet porsjoner. NormalizeMeals fjerner ugyldige/ufullstendige par. Stykkoppskriftens baseServings er hvor mange personer hele oppskriften omtrent holder til (1–30); ukedata og alle dags-/ukehandlelistefaktorer fortsetter å bruke baseServings.
+
+Skjemaet bruker _yieldAmountInput, _yieldUnitInput og _yieldApproxServings kun i draftMeal for å bevare uferdig tekst og holder-valget gjennom render/import/AI-innstillinger. Fingeravtrykket tar dem med som redigerbare verdier. De lagres ikke i meals, lokal kopi, synk eller backup. mealEditorSession.yieldApproxInitialized husker bare at familiens standard er brukt ved første enhetsbytte.
+
+recipeYieldAmounts og recipeServingsView.mode/value er kun øktminne for valgt stykktall uten dagskontekst. Slikt stykktall skriver aldri days.servings. Dagskonteksten bruker eksisterende porsjonsbuffer og servingsByWeek, med null når standard følges. Konto-/tilgangsstopp tømmer visningsvalgene.
+
+Backup/restore bevarer yield-feltene i eksisterende eksportformat 1. Restore validerer typer/grenser og normaliserer paret før dokumentbygging. SchemaVersion, firestore.rules, dokumentstier, synkmønstre og REQUIRED_MIN_APP_VERSION=120 beholdes. Eldre ...existing-lagring bevarer de additive feltene og bruker baseServings til dagsmengdene. AI-importens svarformat er uendret og inneholder ingen yield-enhet.

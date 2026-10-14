@@ -1,5 +1,6 @@
 import { WEEK_SYNC_FIELDS } from "./state.js";
 import { REQUIRED_MIN_APP_VERSION } from "./version.js";
+import { normalizeRecipeYield } from "../domain/meals.js";
 import { emptyWeekPlan, emptyWeekLocks, emptyWeekDayTypes, emptyWeekServings,
   emptyWeekDayModes, emptyWeekDayNotes } from "../domain/weeks.js";
 
@@ -47,6 +48,8 @@ export function validateBackup(backup) {
     if (typeof meal.title !== "string" || !meal.title.trim() || !strings(meal.categories)
       || !Array.isArray(meal.ingredients) || !strings(meal.steps)
       || !Number.isFinite(meal.baseServings) || meal.baseServings < 1) reject();
+    if (meal.yieldAmount !== undefined && (!Number.isInteger(meal.yieldAmount) || meal.yieldAmount < 1 || meal.yieldAmount > 200)) reject();
+    if (meal.yieldUnit !== undefined && (typeof meal.yieldUnit !== "string" || !meal.yieldUnit.trim() || meal.yieldUnit.trim().length > 20)) reject();
     for (const ingredient of meal.ingredients) {
       if (!object(ingredient) || !["name", "amount", "unit"].every((key) => typeof ingredient[key] === "string")) reject();
       if (ingredient.group !== undefined && (typeof ingredient.group !== "string" || ingredient.group.trim().length > 60)) reject();
@@ -72,6 +75,7 @@ export function validateBackup(backup) {
     }
   }
   const normalized = structuredClone(backup);
+  normalized.data.meals = normalized.data.meals.map(normalizeRecipeYield);
   if (!(Number(backup.appVersion.replace(/^v/, "")) >= 106)) {
     for (const days of Object.values(normalized.data.servingsByWeek)) {
       for (const [day, value] of Object.entries(days)) if (value === normalized.data.family.familySize) days[day] = null;

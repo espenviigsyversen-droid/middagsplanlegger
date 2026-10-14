@@ -1,9 +1,12 @@
+import { recipeYieldEditorValues } from "./recipe-yield.js";
+
 // Only editable recipe values, never saved UI state or import payloads.
 export function mealEditorFingerprint(meal, ingredients, steps) {
   const text = value => String(value ?? "").trim();
   return JSON.stringify({
     title: text(meal.title), description: text(meal.description), recipeUrl: text(meal.recipeUrl),
     baseServings: Number(meal.baseServings) || 4, minDaysBetween: Number(meal.minDaysBetween) || 14,
+    recipeYield: recipeYieldEditorValues(meal),
     prepTime: meal.prepTime || "", leftovers: meal.leftovers || "none",
     categories: [...(meal.categories || [])].sort(), suitability: [...(meal.suitability || [])].sort(),
     kidFriendly: Boolean(meal.kidFriendly), favorite: Boolean(meal.favorite), excludeFromSuggestions: Boolean(meal.excludeFromSuggestions),

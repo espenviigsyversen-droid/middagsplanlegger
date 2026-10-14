@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v123 – Oppskriften gir antall og enhet
+
+Publiser filene i docs/LEVERANSE_V123.md sammen, med src/domain/recipe-yield.js og src/render/recipe-yield.js i begge asset-listene. V123/cache 123, minimum fortsatt 120. Ingen server-/regelpublisering eller massemigrering. Alle 62 testskript og 51 syntakskontroller består (inkludert arkivert v122-testkode).
+
+Prøv på iPhone/PC: 15 pannekaker, holder til ca. 4. Uten dagskontekst skal 15 gi hele oppskriften og 30 doble mengder; valgt antall huskes i økten. Fra en dag med 5 porsjoner skal lappen vise 19 pannekaker og ingredienser/handleliste bruke 5/4. Prøv også 2 brød, som gir ca. 2,5 ved 5/4. I skjemaet: snarvalg/fritekst, bytte tilbake til porsjoner, første holder-verdi fra familiens standard, ugyldig verdi, forkastevern og lagring. Kontroller vanlig AI-import, backup/restore og gammel klientlagring. AI velger ingen stykk-enhet; enheten velges i skjemaet. Tre lokale 375 px-visninger finnes under docs/screenshots. Ekte Safari/PWA, skjermtastatur og nett-synk mellom enheter gjenstår.
+
 ### v122 – Porsjonsvelgeren reagerer på hvert trykk
 
 Publiser filene i docs/LEVERANSE_V122.md sammen, inkludert src/ui/recipe-servings.js i begge asset-listene. V122/cache 122, minimum fortsatt 120. Ingen server-/regelpublisering. Alle 60 testskript og 48 kildefilers syntakskontroller består.

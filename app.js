@@ -3,6 +3,7 @@ import { renderSocialImportNotice } from "./src/render/recipe-import.js";
 import { pageScreenKey, createPageScroll } from "./src/ui/page-scroll.js";
 import { renderMealFilters, mealFiltersActive, toggleMealFilter } from "./src/render/meal-filters.js";
 import { createRecipeServingsBuffer, parseRecipeServings } from "./src/ui/recipe-servings.js";
+import { recipeYieldView, recipeYieldEditorValues, recipeYieldFromInputs } from "./src/domain/recipe-yield.js";
 import { renderPickerPlansView } from "./src/render/picker-plans.js";
 import { canonicalView, weekHeading, weekEligibleDays, weekSwipeDirection, lastPlannedLabel } from "./src/domain/week-view.js";
 import { renderWeekView, renderWeekRow, renderDaySheet, renderWeekMenu, renderWeekClear, weekIcon } from "./src/render/week.js";
@@ -12,6 +13,7 @@ import {
   createQuickMeal,
   makeSlug,
   mealBaseServings,
+  recipeYieldFields,
   mealNeedsRecipe,
   mealCanImportFromLink,
   normalizeIngredients,
@@ -225,8 +227,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v122";
-const APP_VERSION_NUMBER = 122;
+const APP_VERSION = "v123";
+const APP_VERSION_NUMBER = 123;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -254,6 +256,7 @@ let mealsSyncStatus = null;
 let weeksSyncStatus = null;
 let servingsTransition = null, weeksServerReady = false, profileServerReady = false;
 let recipeServingsView = { key: null, value: null };
+const recipeYieldAmounts = new Map();
 const recipeServingsBuffer = createRecipeServingsBuffer({
   commit: ({ weekKey, dayIndex, value }) => updateDayServings(dayIndex, value, weekKey, { redraw: false, immediateWeeks: true }),
   setTimer: setTimeout, clearTimer: clearTimeout,
@@ -1187,18 +1190,27 @@ function recipeTargetServings() {
   const pending = recipeServingsBuffer.pending;
   if (context && pending?.mealId === state.selectedMealId && pending.weekKey === context.weekKey && pending.dayIndex === context.dayIndex) return pending.value;
   if (context) return servingsForDay(context.weekKey, context.dayIndex);
+  const yieldFields = recipeYieldFields(getMeal(state.selectedMealId));
+  if (yieldFields.yieldUnit) {
+    if (recipeServingsView.key !== state.selectedMealId || recipeServingsView.mode !== "yield") recipeServingsView = { key: state.selectedMealId, mode: "yield",
+      value: recipeYieldAmounts.get(state.selectedMealId) ?? yieldFields.yieldAmount };
+    return recipeServingsView.value ?? yieldFields.yieldAmount;
+  }
+  if (recipeServingsView.mode === "yield") recipeServingsView = { key: state.selectedMealId, value: null };
   if (recipeServingsView.key !== state.selectedMealId) recipeServingsView = { key: state.selectedMealId, value: null };
   return recipeServingsView.value ?? state.family.familySize;
 }
 
 function changeRecipeServings(delta) {
-  setRecipeServings(Math.max(1, Math.min(30, recipeTargetServings() + delta)));
+  const maximum = recipeYieldView(getMeal(state.selectedMealId), recipeTargetServings(), Boolean(state.selectedRecipeContext)).maximum;
+  setRecipeServings(Math.max(1, Math.min(maximum, recipeTargetServings() + delta)));
 }
 
 function setRecipeServings(value) {
   if (value !== recipeTargetServings()) {
     const context = state.selectedRecipeContext;
     if (context) recipeServingsBuffer.queue({ ...context, mealId: state.selectedMealId, value });
+    else if (recipeYieldFields(getMeal(state.selectedMealId)).yieldUnit) { recipeServingsView.value = value; recipeYieldAmounts.set(state.selectedMealId, value); }
     else recipeServingsView.value = value === state.family.familySize ? null : value;
   }
   refreshRecipeServings(true);
@@ -1207,7 +1219,7 @@ function setRecipeServings(value) {
 function commitRecipeServingsInput() {
   const input = app.querySelector("[data-recipe-servings-input]");
   if (!input || state.activeView !== "recipe") return;
-  const value = parseRecipeServings(input.value);
+  const value = parseRecipeServings(input.value, recipeYieldView(getMeal(state.selectedMealId), recipeTargetServings(), Boolean(state.selectedRecipeContext)).maximum);
   if (value !== null) setRecipeServings(value);
   else input.value = String(recipeTargetServings());
 }
@@ -1219,6 +1231,8 @@ function flushRecipeServings() {
 
 function recipeServingCopy(meal, targetServings) {
   const base = mealBaseServings(meal), context = state.selectedRecipeContext;
+  const yieldView = recipeYieldView(meal, targetServings, Boolean(context));
+  if (yieldView.byCount) return { text: yieldView.title, scope: yieldView.scope };
   return {
     text: targetServings === base ? `Oppskrift til ${targetServings} porsjoner.`
       : `Justert til ${targetServings} porsjoner fra en oppskrift på ${base}.`,
@@ -1231,17 +1245,24 @@ function refreshRecipeServings(forceInput = false) {
   const meal = getMeal(state.selectedMealId);
   if (!meal || state.activeView !== "recipe") return;
   const value = recipeTargetServings(), copy = recipeServingCopy(meal, value);
+  const yieldView = recipeYieldView(meal, value, Boolean(state.selectedRecipeContext));
   const input = app.querySelector("[data-recipe-servings-input]");
   if (input && (forceInput || document.activeElement !== input)) input.value = String(value);
   app.querySelectorAll("[data-recipe-servings]").forEach(button => {
-    button.disabled = Number(button.dataset.recipeServings) < 0 ? value <= 1 : value >= 30;
+    button.disabled = Number(button.dataset.recipeServings) < 0 ? value <= 1 : value >= yieldView.maximum;
+    button.setAttribute?.("aria-label", `${Number(button.dataset.recipeServings)<0?"Færre":"Flere"} ${yieldView.unit}`);
   });
+  input?.setAttribute?.("aria-label", `Antall ${yieldView.unit}`);
+  const unit = app.querySelector("[data-recipe-picker-unit]"); if (unit) unit.textContent = yieldView.unit;
+  for (const [selector, text] of [["[data-recipe-yield-estimate]", yieldView.estimate],["[data-recipe-yield-note]", yieldView.note]]) {
+    const element = app.querySelector(selector); if (element) { element.textContent = text; element.hidden = !text; }
+  }
   const note = app.querySelector("[data-recipe-serving-note]"); if (note) note.textContent = copy.text;
   const scope = app.querySelector("[data-recipe-serving-scope]"); if (scope) { scope.textContent = copy.scope; scope.hidden = !copy.scope; }
   app.querySelector("[data-toggle-wake]")?.setAttribute?.("aria-checked", String(state.keepScreenAwake));
   const ingredients = app.querySelector("[data-recipe-ingredients]");
   if (ingredients) ingredients.innerHTML = renderIngredientList(normalizeIngredients(meal.ingredients, meal.keyIngredients), {
-    scaleAmount, baseServings: mealBaseServings(meal), targetServings: value, escapeHtml,
+    scaleAmount, baseServings: yieldView.scaleBase, targetServings: value, escapeHtml,
   });
 }
 
@@ -1324,7 +1345,8 @@ function createShoppingItemFromIngredient(ingredient, ratio = 1, custom = false)
 function createMealShoppingReview(meal) {
   if (!meal?.ingredients?.length) return null;
   const targetServings = recipeTargetServings();
-  const ratio = mealBaseServings(meal) > 0 ? targetServings / mealBaseServings(meal) : 1;
+  const yieldView = recipeYieldView(meal, targetServings, Boolean(state.selectedRecipeContext));
+  const ratio = yieldView.ratio;
   const items = meal.ingredients
     .filter((ingredient) => ingredient.name?.trim())
     .map((ingredient) => createShoppingItemFromIngredient(ingredient, ratio, true));
@@ -1338,7 +1360,7 @@ function createMealShoppingReview(meal) {
     groups: [{
       id: meal.id,
       title: meal.title,
-      subtitle: targetServings ? `${targetServings} porsjoner` : "",
+      subtitle: targetServings ? `${targetServings} ${yieldView.unit}` : "",
       items,
     }],
     selectedItemIds: items.map((item) => item.id),
@@ -1769,6 +1791,7 @@ function renderMealDetail() {
   const leftoversText = leftoversLabel(meal.leftovers);
   const baseServings = mealBaseServings(meal);
   const targetServings = recipeTargetServings();
+  const yieldView = recipeYieldView(meal, targetServings, Boolean(state.selectedRecipeContext));
   const { text: servingText, scope: servingScope } = recipeServingCopy(meal, targetServings);
 
   return renderMealDetailView({
@@ -1782,6 +1805,8 @@ function renderMealDetail() {
     servingScope,
     baseServings,
     targetServings,
+    pickerMaximum: yieldView.maximum, pickerUnit: yieldView.unit,
+    yieldEstimate: yieldView.estimate, yieldNote: yieldView.note, scaleBase: yieldView.scaleBase,
     shoppingIconHtml: icon("shopping"),
     scaleAmount,
     escapeHtml,
@@ -1820,7 +1845,6 @@ function renderMealEditor() {
   return renderMealEditorView({
     isNew,
     meal,
-    baseServings: mealBaseServings(meal),
     ingredients,
     steps,
     categoryEntries: categoryEntries(),
@@ -1841,7 +1865,7 @@ function renderMealEditor() {
 function ensureMealEditorSession(base) {
   if (mealEditorSession?.id === state.editingMealId) return;
   const items=normalizeIngredients(base.ingredients,base.keyIngredients);
-  mealEditorSession={id:state.editingMealId,signature:mealEditorFingerprint(base,items.length?ingredientsToEditorRows(items):[{name:"",amount:"",unit:""}],base.steps?.length?base.steps:[""]),source:base.recipeUrl||""};
+  mealEditorSession={id:state.editingMealId,signature:mealEditorFingerprint(base,items.length?ingredientsToEditorRows(items):[{name:"",amount:"",unit:""}],base.steps?.length?base.steps:[""]),source:base.recipeUrl||"",yieldApproxInitialized:Boolean(recipeYieldFields(base).yieldUnit)};
   editorDiscardOpen=false;
 }
 
@@ -1915,13 +1939,18 @@ function saveMealFromForm(form) {
   const id = isNew ? makeMealId(title) : existing.id;
   const categories = formData.getAll("categories");
   const ingredients = collectIngredientRows();
+  const yieldValues = readYieldFormValues(formData, existing);
+  if (!yieldValues.valid) {
+    const field = app.querySelector("[data-yield-amount]");
+    field?.setCustomValidity?.("Sjekk antall, enhet og hvor mange oppskriften holder til."); field?.reportValidity?.(); return;
+  }
   const meal = {
     ...existing,
     id,
     title,
     description: String(formData.get("description") || "").trim(),
     recipeUrl: normalizedRecipeUrl(formData.get("recipeUrl")),
-    baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
+    ...yieldValues.saved,
     categories,
     suitability: formData.getAll("suitability"),
     kidFriendly: formData.has("kidFriendly"),
@@ -2054,15 +2083,62 @@ document.addEventListener("keydown", event => {
   }
 });
 
+function readYieldFormValues(formData, base = emptyMeal()) {
+  if (!formData.has("yieldAmount")) return { valid: true, saved: {
+    ...recipeYieldFields(base), baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
+  }, draft: {} };
+  const amount = String(formData.get("yieldAmount") ?? ""), unit = String(formData.get("yieldUnit") ?? "");
+  const approximate = parseRecipeServings(formData.get("baseServings")) ?? recipeYieldEditorValues(base).approximate;
+  const values = recipeYieldFromInputs({ amount, unit, approximate });
+  return { valid: Boolean(values), saved: { yieldAmount: undefined, yieldUnit: undefined,
+    ...(values || { baseServings: mealBaseServings(base) }) },
+    draft: { _yieldAmountInput: amount, _yieldUnitInput: unit, _yieldApproxServings: approximate } };
+}
+
+function bindYieldEditorEvents() {
+  const amount = app.querySelector("[data-yield-amount]"), unit = app.querySelector("[data-yield-unit]");
+  const holder = app.querySelector("[data-yield-holder-input]");
+  if (!amount || !unit || !holder) return;
+  const refresh = () => {
+    const pieces = Boolean(unit.value.trim()) && unit.value.trim().toLocaleLowerCase("nb") !== "porsjoner";
+    if (pieces && mealEditorSession && !mealEditorSession.yieldApproxInitialized) {
+      holder.value = String(Math.max(1, Math.min(30, Math.round(state.family.familySize))));
+      mealEditorSession.yieldApproxInitialized = true;
+    }
+    const section = app.querySelector("[data-yield-holder-section]"); if (section) section.hidden = !pieces;
+    amount.setCustomValidity?.("");
+    app.querySelectorAll("[data-yield-unit-choice]").forEach(button => button.setAttribute?.("aria-pressed", String(button.dataset.yieldUnitChoice === unit.value.trim().toLocaleLowerCase("nb"))));
+    app.querySelectorAll("[data-yield-holder]").forEach(button => { button.disabled = Number(button.dataset.yieldHolder)<0 ? Number(holder.value)<=1 : Number(holder.value)>=30; });
+    syncMealEditorDraftFromDom();
+  };
+  unit.addEventListener("input", refresh);
+  amount.addEventListener("input", refresh);
+  app.querySelectorAll("[data-yield-unit-choice]").forEach(button => button.addEventListener("click", () => { unit.value = button.dataset.yieldUnitChoice; refresh(); }));
+  const rememberedApproximate = () => recipeYieldEditorValues(getDraftMeal(
+    (state.editingMealId === "new" ? emptyMeal() : getMeal(state.editingMealId)) || emptyMeal())).approximate;
+  const commitHolder = () => {
+    holder.value = String(parseRecipeServings(holder.value) ?? rememberedApproximate());
+    refresh();
+  };
+  holder.addEventListener("focus", () => holder.select());
+  holder.addEventListener("blur", commitHolder);
+  holder.addEventListener("keydown", event => { if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); commitHolder(); holder.blur(); } });
+  app.querySelectorAll("[data-yield-holder]").forEach(button => button.addEventListener("click", () => {
+    holder.value = String(Math.max(1, Math.min(30, (parseRecipeServings(holder.value) ?? rememberedApproximate()) + Number(button.dataset.yieldHolder)))); refresh();
+  }));
+}
+
 function syncDraftMealFromDom() {
   const form = app.querySelector("[data-meal-form]");
   if (!form) return;
   const formData = new FormData(form);
+  const base = getDraftMeal(state.editingMealId === "new" ? emptyMeal() : getMeal(state.editingMealId));
+  const yieldValues = readYieldFormValues(formData, base);
   state.draftMeal = {
     title: String(formData.get("title") || "").trim(),
     description: String(formData.get("description") || "").trim(),
     recipeUrl: String(formData.get("recipeUrl") || "").trim(),
-    baseServings: Math.max(1, Number(formData.get("baseServings")) || 4),
+    ...yieldValues.saved, ...yieldValues.draft,
     categories: formData.getAll("categories"),
     kidFriendly: formData.has("kidFriendly"),
     favorite: formData.has("favorite"),
@@ -2161,6 +2237,10 @@ function applyRecipeImportToEditor(recipe, options = {}) {
   const hasSteps = draft.steps.some(step => step.trim());
   const ingredients = recipe.ingredients?.length || 0, steps = recipe.steps?.length || 0;
   const next = applyImportedRecipe(draft, recipe, { isNew, ...options });
+  if (recipe.ingredients?.length && (!hasIngredients || options.replaceIngredients) && recipe.servingsKnown !== false) {
+    if (recipeYieldEditorValues(next).unit.trim().toLocaleLowerCase("nb") === "porsjoner") next._yieldAmountInput = String(next.baseServings);
+    next._yieldApproxServings = next.baseServings;
+  }
   const filledIngredients = ingredients && (!hasIngredients || options.replaceIngredients) ? ingredients : 0;
   const filledSteps = steps && (!hasSteps || options.replaceSteps) ? steps : 0;
   state.draftMeal = next;
@@ -3182,6 +3262,7 @@ function bindMealResultActions(root = app) {
 }
 
 function bindEvents() {
+  bindYieldEditorEvents();
   app.querySelectorAll("[data-subpage-back]").forEach(button => button.addEventListener("click", navigateBack));
   app.querySelectorAll("[data-calendar-day]").forEach(button => button.addEventListener("click", () => openDaySheet(Number(button.dataset.calendarDay))));
   app.querySelectorAll("[data-editor-row-menu]").forEach(button => button.addEventListener("click", () => openEditorRowMenu(button.dataset.editorRowMenu, Number(button.dataset.rowIndex))));
@@ -4040,6 +4121,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  recipeYieldAmounts.clear();
   recipeServingsBuffer.cancel();
   mealEditorSession=null;editorDiscardOpen=false;
   planningWindowWeekKey = null; pickerFilters = emptyPickerFilters();

@@ -2698,3 +2698,19 @@ button {
 
 /* Remove double-tap delay/zoom while retaining pinch zoom. */
 button, a, input, select, textarea, label, summary, [role="button"], [role="switch"] { touch-action: manipulation; }
+
+/* v123: the recipe yield is distinct from the people it roughly serves. */
+.recipe-yield-editor { min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.recipe-yield-editor legend { padding: 0 4px; color: var(--text); font-weight: 750; }
+.recipe-yield-fields { display: grid; grid-template-columns: minmax(60px, 1fr) minmax(0, 2fr); gap: 8px; }
+.recipe-yield-fields label { display: grid; gap: 6px; min-width: 0; font-size: 13px; color: var(--muted); }
+.recipe-yield-fields input { min-width: 0; width: 100%; min-height: 48px; font-size: 16px; }
+.recipe-yield-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.recipe-yield-shortcuts .picker-filter { padding: 0 10px; font-size: 13px; }
+.yield-holder { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.yield-holder[hidden], .recipe-hero [data-recipe-yield-estimate][hidden], .recipe-hero [data-recipe-yield-note][hidden] { display: none; }
+.recipe-servings-value { min-width: 0; flex-shrink: 1; }
+.recipe-servings-value input { flex-shrink: 0; }
+.recipe-servings-value span { overflow-wrap: anywhere; min-width: 0; }
+.recipe-hero .recipe-yield-estimate { display: inline-block; margin: 8px 0; padding: 8px 12px; background: #e3efe8; border-radius: 10px; color: var(--brand-dark); font-weight: 700; }
+.recipe-hero [data-recipe-yield-note] { font-size: 14px; margin-bottom: 8px; }
