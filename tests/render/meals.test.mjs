@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { pencilIcon } from "../../src/render/icons.js";
+import { renderWeekRow, weekIcon } from "../../src/render/week.js";
 import { readFileSync } from "node:fs";
 import {
   renderMealCardView,
@@ -38,8 +40,8 @@ function testMealCardRender() {
     escapeHtml,
   });
   assert.match(html, /Pasta &lt;god&gt;/);
-  assert.match(html, /aria-label="Åpne oppskrift"/);
-  assert.match(html, /aria-label="Rediger oppskrift"/);
+  assert.match(html, /aria-label="Pasta &lt;god&gt;, åpne oppskrift"/);
+  assert.match(html, /aria-label="Rediger Pasta &lt;god&gt;"/);
   assert.doesNotMatch(html, /Favoritt/);
   assert.doesNotMatch(html, /Kun oppskrift/);
   assert.doesNotMatch(html, /Rask/);
@@ -294,3 +296,23 @@ for (const [selector, size] of [[".nav-button svg", 20], [".topbar-settings-butt
 }
 const compactGenerate = css.slice(css.indexOf(".shopping-view-header .button svg")).split("}", 1)[0];
 assert.match(compactGenerate, /width:\s*18px/); assert.match(compactGenerate, /height:\s*18px/);
+
+
+// v116: sibling native buttons and one shared edit SVG, with offline coverage.
+const card = renderMealCardView({meal:{id:"accessible",title:'Fisk & ris',ingredients:[]},escapeHtml});
+assert.doesNotMatch(card,/□|✎|meal-open-btn/);
+assert.doesNotMatch(card,/<article[^>]*data-view-meal/);
+const cardButtons=[...card.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+assert.equal(cardButtons.length,2);
+assert.match(cardButtons[0][1],/data-view-meal="accessible"/);assert.match(cardButtons[0][1],/aria-label="Fisk &amp; ris, åpne oppskrift"/);
+assert.match(cardButtons[0][2],/Fisk &amp; ris/);assert.match(cardButtons[0][2],/Mangler oppskrift/);
+assert.match(cardButtons[1][1],/data-edit-meal="accessible"/);assert.match(cardButtons[1][1],/aria-label="Rediger Fisk &amp; ris"/);
+assert.ok(cardButtons.every(match=>!/<button\b/.test(match[2])),"Buttons must never be nested");
+assert.equal(cardButtons[1][2],pencilIcon());assert.equal(weekIcon("pencil"),pencilIcon());
+const weekPencil=renderWeekRow({day:"Mandag",dateLabel:"12. okt.",index:0,title:"Fisk",home:true,mealId:"accessible",escapeHtml});
+assert.match(weekPencil,/class="pencil-button week-pencil"/);assert.ok(weekPencil.includes(pencilIcon()));
+for(const file of ['meals.js','week.js'])assert.match(readFileSync(new URL('../../src/render/'+file,import.meta.url),'utf8'),/import \{ pencilIcon \} from "\.\/icons\.js"/);
+const pencilRule=/\.pencil-button\s*\{([^}]+)\}/.exec(css)?.[1];
+assert.match(pencilRule,/width:\s*44px/);assert.match(pencilRule,/height:\s*44px/);assert.match(pencilRule,/background:\s*transparent/);assert.match(pencilRule,/border:\s*none/);assert.match(pencilRule,/color:\s*var\(--muted\)/);
+assert.match(css,/\.pencil-button svg\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px/);
+const sw=readFileSync(new URL('../../service-worker.js',import.meta.url),'utf8');assert.equal(sw.split('src/render/icons.js').length-1,2);

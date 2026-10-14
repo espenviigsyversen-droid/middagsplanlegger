@@ -4,6 +4,13 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v116 – oppskriftskort med felles blyant
+
+Eier publiserer filene i docs/LEVERANSE_V116.md, inkludert den nye src/render/icons.js som står i begge asset-listene. Minsteversjonen er fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 49 testskript og 42 syntakskontroller består lokalt.
+
+Etter publisering: kontroller v116 på PC og telefon. Oppskriftskort har tittel/merker i én hovedknapp og en grå SVG-blyant ved siden av. Ingen firkant eller oransje ikonbakgrunn. Tab/Enter/Space skal kunne åpne både oppskrift og redigering, uten at blyanten åpner oppskriften først. Prøv vanlig liste, kategorigrupper og søk. Uke-blyanten skal være identisk, og kortenes titler/mangler-merke lesbare. Ekte tastatur-/skjermleser-/telefonkontroll gjenstår.
+
+
 ### v115 – Passer til i middagsvelgeren
 
 Eier publiserer klientfilene i docs/LEVERANSE_V115.md. Ingen server-/regelpublisering er nødvendig, og minsteversjonen forblir 106. Alle 49 testskript og 41 syntakskontroller består lokalt.

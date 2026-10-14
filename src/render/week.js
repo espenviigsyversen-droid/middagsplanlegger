@@ -1,8 +1,9 @@
 import { descriptionRepeatsTitle } from "../domain/meals.js";
+import { pencilIcon } from "./icons.js";
 
 export function weekIcon(name, label = "") {
+  if (name === "pencil") return pencilIcon(label);
   const paths = {
-    pencil: '<path d="m16 3 5 5-12 12-6 1 1-6Z"/><path d="m14 5 5 5"/>',
     lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     refresh: '<path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2 6"/>',
     swap: '<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
@@ -26,7 +27,7 @@ export function renderWeekRow({ day, dateLabel, index, title, home, mealId, lock
       <span class="week-day-content"><span class="week-day-title">${e(text)}</span>${subline ? `<small class="week-day-note">${e(subline)}</small>` : ""}</span>
     </button>
     ${locked ? `<span class="week-day-lock">${weekIcon("lock", "Låst")}</span>` : ""}
-    ${!empty ? `<button class="week-pencil" type="button" data-edit-planner-day="${index}" aria-label="Endre ${e(day.toLowerCase())}">${weekIcon("pencil")}</button>` : ""}
+    ${!empty ? `<button class="pencil-button week-pencil" type="button" data-edit-planner-day="${index}" aria-label="Endre ${e(day.toLowerCase())}">${pencilIcon()}</button>` : ""}
   </div>`;
 }
 

@@ -322,4 +322,17 @@ assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("").map
 run('closeMealPicker();openMealPicker(0)');assert.equal(run('pickerFilters.suitability'),'');assert.equal(control('picker-filter:suitability:custom_day').attrs['aria-pressed'],'false');
 run('saveState()');assert.doesNotMatch(storage.get('middagsapp-state'),/pickerFilters/);
 
+
+// v116: keyboard-reachable recipe-card controls use the existing open/edit flows separately.
+run('closeMealPicker(); state.meals=normalizeMeals([{...emptyMeal(),id:"card-recipe",title:"Kortoppskrift"}]); navigate({activeView:"meals",editingMealId:null,selectedMealId:null,filters:{query:"",category:"all",flag:"all",sort:"title"}})');
+const primary=app.querySelector('[data-view-meal="card-recipe"]'),edit=app.querySelector('[data-edit-meal="card-recipe"]');
+assert.ok(primary);assert.ok(edit);assert.equal(primary.tagName,'button');assert.equal(edit.tagName,'button');
+assert.equal(primary.attrs['aria-label'],'Kortoppskrift, åpne oppskrift');assert.equal(edit.attrs['aria-label'],'Rediger Kortoppskrift');
+const recipeArticle=primary.closest('.meal-card');assert.ok(recipeArticle);assert.equal(recipeArticle.dataset.viewMeal,undefined);
+assert.equal(primary.parent,edit.parent);assert.equal(primary.contains(edit),false);assert.equal(edit.contains(primary),false);
+primary.focus({preventScroll:true});primary.handlers.click({stopPropagation(){}});
+assert.equal(run('state.activeView'),'recipe');assert.equal(run('state.selectedMealId'),'card-recipe');assert.equal(run('state.editingMealId'),null);
+run('navigateBack()');const editAfterReturn=app.querySelector('[data-edit-meal="card-recipe"]');assert.ok(editAfterReturn);
+editAfterReturn.focus({preventScroll:true});editAfterReturn.handlers.click({stopPropagation(){}});
+assert.equal(run('state.activeView'),'meals');assert.equal(run('state.editingMealId'),'card-recipe');assert.equal(run('state.selectedMealId'),null);
 console.log("window scroll/focus app tests ok");

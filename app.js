@@ -217,8 +217,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v115";
-const APP_VERSION_NUMBER = 115;
+const APP_VERSION = "v116";
+const APP_VERSION_NUMBER = 116;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });

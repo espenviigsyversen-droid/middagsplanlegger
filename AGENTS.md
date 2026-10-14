@@ -48,6 +48,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - `src/sync/version.js`: én REQUIRED_MIN_APP_VERSION, brukt ved administratorheving og gjenoppretting.
 - `src/sync/shopping.js`: migrering, varebasert synk, minnekø og handlelistelytter.
 - `src/render/shopping.js`: HTML-rendering for handleliste, vareeditor, vareforslag og shopping review modal.
+- `src/render/icons.js`: felles pencilIcon for redigeringsknapper i Uke og Oppskrifter.
 - `src/render/meals.js`: HTML-rendering for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/domain/week-view.js`: rene visningshjelpere for Uke, ISO-ukenummer, datotekster, planhistorikk og sveip.
 - `src/render/week.js`: HTML-rendering for Uke, dagsark, ukemeny og tømmingsbekreftelse.
@@ -280,3 +281,9 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Filterraden bruker suitabilityEntries() i samme rekkefølge og med samme navn som Innstillinger, etter Favoritter og før kategoriene. To aria-hidden skillelinjer er 1 px --line og 24 px høye; raden ruller fortsatt vannrett på én linje.
 - pickerFilters.suitability er én nøkkel eller tom streng. Bytte erstatter forrige valg; trykk på aktivt valg slår det av. mealMatchesPickerFilters krever at meal.suitability inneholder nøkkelen; uten merker vises ikke middagen. Filtrene og søket gjelder både forslag og liste, før fast plass velges.
 - Feltet er kun runtime som øvrige velgerfiltre. Lukking, Fjern filtre og tilgangsbytte nullstiller det. Ingen ny lagring, datamodell eller poengmodell. Kontroller suggestions-, window-scroll- og week-render-testene samt alle øvrige tester og syntakskontroller. v115/115, REQUIRED_MIN_APP_VERSION 106.
+
+## Oppskriftskort fra v116
+
+- Et oppskriftskort er en article uten data-view-meal, med to søskenknapper: hovedknappen dekker tittel/merker og har data-view-meal samt aria-label med tittel; blyanten har data-edit-meal og Rediger + tittel. Aldri legg knapper inni hverandre eller gjør article klikkbar igjen. Native button gir tastaturtilgang til begge handlinger.
+- pencilIcon i src/render/icons.js er eneste SVG-kilde for blyanten i Uke/Oppskrifter. .pencil-button er eneste felles størrelses-/fargeregel: 44×44, SVG 18 px, --muted, gjennomsiktig og uten ramme. weekIcon delegerer pencil til samme funksjon; Uke beholder bare sin ytre marg. Ikke gjeninnfør tekstsymbolene for rediger/åpne.
+- Nye icons.js må være i begge service worker-listene. Kjør render/meals-, render/week- og app/window-scroll-testene samt alle øvrige tester og syntakskontroller. v116/116, REQUIRED_MIN_APP_VERSION fortsatt 106; ingen datamodell- eller synkendring.

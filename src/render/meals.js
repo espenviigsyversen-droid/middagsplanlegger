@@ -1,5 +1,6 @@
 import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex, descriptionRepeatsTitle } from "../domain/meals.js";
 import { renderSubpageBar } from "./subpage.js";
+import { pencilIcon } from "./icons.js";
 
 function renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml }) {
   let previous = "";
@@ -38,16 +39,13 @@ export function renderMealCardView(options = {}) {
   } = options;
 
   return `
-    <article class="meal-card compact-meal-card" data-view-meal="${escapeHtml(meal.id)}">
+    <article class="meal-card compact-meal-card">
       <div class="meal-card-head">
-        <div class="meal-card-main">
-          <p class="meal-title">${escapeHtml(meal.title)}</p>
+        <button class="meal-card-main" type="button" data-view-meal="${escapeHtml(meal.id)}" aria-label="${escapeHtml(meal.title)}, åpne oppskrift">
+          <span class="meal-title">${escapeHtml(meal.title)}</span>
           ${mealNeedsRecipe(meal) ? '<span class="chip missing-recipe-chip">Mangler oppskrift</span>' : ""}
-        </div>
-        <div class="card-actions">
-          <button class="icon-button meal-open-btn" type="button" data-view-meal="${escapeHtml(meal.id)}" aria-label="Åpne oppskrift">□</button>
-          <button class="icon-button meal-edit-btn" type="button" data-edit-meal="${escapeHtml(meal.id)}" aria-label="Rediger oppskrift">✎</button>
-        </div>
+        </button>
+        <button class="pencil-button meal-edit-btn" type="button" data-edit-meal="${escapeHtml(meal.id)}" aria-label="Rediger ${escapeHtml(meal.title)}">${pencilIcon()}</button>
       </div>
     </article>
   `;

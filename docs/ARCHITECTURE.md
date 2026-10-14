@@ -22,6 +22,7 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 - `src/sync/meals.js` håndterer oppskriftsdiffer og synk per dokument fra v100, med minnekø og vern for ventende lokale oppskriftsendringer.
 - `src/sync/version.js` definerer felles REQUIRED_MIN_APP_VERSION for administratorheving og gjenoppretting.
 - `src/render/shopping.js` inneholder HTML-malene for handlelistevisningen, vareeditor, vareforslag og shopping review modal.
+- `src/render/icons.js` inneholder felles pencilIcon for redigeringsknappene i Uke og Oppskrifter.
 - `src/render/meals.js` inneholder HTML-malene for oppskriftsliste, oppskriftskort, gruppering, oppskriftsdetalj og oppskriftseditor.
 - `src/domain/week-view.js` beregner ISO-ukenummer, datointervaller, visningsnavn, sveipeterskler og tidligere planbruk.
 - `src/render/week.js` tegner Uke-visningen, dagsark, ukemeny og bekreftelse.
@@ -448,3 +449,11 @@ renderPickerFilters bygger tre grupper: Rask/Barnevennlig/Favoritter, suitabilit
 pickerFilters.suitability er en enkelt valgt nøkkel eller tom streng. togglePickerFilter erstatter forrige verdi eller slår aktivt valg av. Det rene mealMatchesPickerFilters krever arraymedlemskap i meal.suitability; tomme/manglende merker filtreres bort. Alle andre filtre og søket kombineres som før for både forslag og resultatliste. Eksisterende fast plass velges etter filtrering; poeng og forslagkommandoer er uendret.
 
 Runtime-feltet bruker samme lukking/nullstilling, aria-pressed, tomtilstand, scrollLeft-/fokusbevaring og Fjern filtre som øvrige filtre. App/cache er v115/115, minimum fortsatt 106. Ingen ny modul, asset-listendring, datamodell, skysynk eller serverendring.
+
+## Tastaturtilgjengelige oppskriftskort fra v116
+
+renderMealCardView tegner article som kortbeholder uten data-view-meal. Inne i kortets eksisterende rad står en native hovedknapp med tittel og eventuell Mangler oppskrift, og en separat redigeringsknapp. De er søsken, aldri nestede knapper. Hovedknappens aria-label er tittel + åpne oppskrift, blyantens er Rediger + tittel. Eksisterende hendelsesbindinger brukes uendret, også når søk erstatter kortlisten uten full render.
+
+pencilIcon er flyttet fra weekIcon sin path-tabell til src/render/icons.js. Uke og Oppskrifter importerer samme funksjon; weekIcon("pencil") delegerer også dit for å bevare API-et. .pencil-button deler 44×44-trykkflate, 18 px SVG, --muted, gjennomsiktig bakgrunn og ingen ramme. Uke beholder sin eksisterende marg. Kortets ramme, radius, farger, tittelstil og mangler-merke beholdes; mer tittelbredde er tilgjengelig etter at den doble åpneknappen er fjernet. Hovedknappen har min-height 44 px og tastaturfokus vises med focus-visible.
+
+Den nye lokale ikonmodulen er lagt i begge asset-listene. Versjon/cache er v116/116, minsteversjon 106. Ingen endring i service worker-strategi, domenedata, synk eller server/regler.

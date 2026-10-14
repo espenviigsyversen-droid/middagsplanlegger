@@ -597,13 +597,20 @@ button {
   padding: 10px 12px;
 }
 
-.compact-meal-card {
-  cursor: pointer;
-}
-
 .meal-card-main {
   min-width: 0;
+  min-height: 44px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
 }
+
+.meal-card-main .meal-title { display: block; }
+.meal-card-main:focus-visible, .pencil-button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 
 .missing-recipe-chip {
   margin-top: 4px;
@@ -2549,8 +2556,9 @@ button {
 .week-day-main.empty .week-day-title { color: var(--brand); font-weight: 700; }
 .week-day-main.away .week-day-title { color: var(--muted); }
 .week-day-note { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.week-pencil { width: 44px; height: 44px; flex-shrink: 0; margin-right: 8px; padding: 0; background: transparent; border: none; color: var(--muted); }
-.week-pencil svg { width: 18px; height: 18px; }
+.pencil-button { width: 44px; height: 44px; flex-shrink: 0; padding: 0; background: transparent; border: none; color: var(--muted); }
+.pencil-button svg { width: 18px; height: 18px; }
+.week-pencil { margin-right: 8px; }
 .week-day-lock { color: var(--muted); padding-right: 4px; }
 .week-day-lock svg { width: 16px; height: 16px; }
 .week-view button:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; }
