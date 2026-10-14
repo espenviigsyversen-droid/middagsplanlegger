@@ -21,15 +21,15 @@ for (const isAdmin of [true, false]) for (const configured of [true, false]) {
   }
   if (isAdmin) { assert.match(html, /type="password" autocomplete="off"/); assert.doesNotMatch(html, /value="sk-/); }
   else { assert.match(html, /Bare administratorer/); assert.doesNotMatch(html, /data-ai-key-input|data-ai-key-test|data-ai-key-delete/); }
-  const editor = renderMealEditorView({ meal: { title: "Fisk" }, aiKeyStatus: status, isAdmin, importAvailable: true, escapeHtml });
-  assert.equal(editor.includes("data-import-fetch"), configured);
+  const editor = renderMealEditorView({ isNew: true, recipeImport:{url:"https://example.com/recipe"}, meal: { title: "Fisk" }, aiKeyStatus: status, isAdmin, importAvailable: true, escapeHtml });
+  assert.equal(/data-import-fetch[^>]*disabled/.test(editor), !configured);
   if (!configured) {
     assert.match(editor, /Oppskriftsimport er ikke satt opp/);
     if (isAdmin) assert.match(editor, /data-open-ai-settings/); else assert.match(editor, /Be en administrator legge inn OpenAI-nøkkel/);
   }
 }
-const badEditor = renderMealEditorView({ meal: { title: "Fisk" }, aiKeyStatus: { configured: true, status: "invalid" }, importAvailable: true });
-assert.match(badEditor, /OpenAI-nøkkelen virker ikke/); assert.doesNotMatch(badEditor, /data-import-fetch/);
+const badEditor = renderMealEditorView({ isNew:true, meal: { title: "Fisk" }, aiKeyStatus: { configured: true, status: "invalid" }, importAvailable: true });
+assert.match(badEditor, /OpenAI-nøkkelen virker ikke/); assert.match(badEditor, /data-import-fetch[^>]*disabled/);
 for (const options of [{ available: false }, { available: true, busy: true }]) {
   const disabled = renderAiKeyView({ ...options, isAdmin: true, status: { configured: true }, escapeHtml });
   for (const action of ["save", "test", "delete"]) assert.match(disabled, new RegExp(`data-ai-key-${action} disabled`));
@@ -40,7 +40,7 @@ assert.match(renderAiKeyView({ busy: true, busyAction: "model" }), /Tester model
 assert.equal(aiKeyStatusLabel({ configured: true, status: "invalid" }), "Nøkkelen virker ikke");
 assert.equal(aiKeyStatusLabel({ configured: true, status: "connected" }), "Tilkoblet");
 assert.equal(aiKeyStatusLabel({ configured: true, status: "unavailable" }), "Kunne ikke kontrolleres");
-assert.match(renderMealEditorView({ meal: { title: "Fisk" }, aiKeyStatus: { configured: true, status: "unavailable" }, importAvailable: true }), /data-import-fetch/);
+assert.match(renderMealEditorView({ isNew:true, meal: { title: "Fisk" }, aiKeyStatus: { configured: true, status: "unavailable" }, importAvailable: true }), /data-import-fetch/);
 assert.match(renderSetupView({ aiStatusSummary: "Tilkoblet" }), /AI og oppskriftsimport/);
 assert.match(renderSetupView({ aiStatusSummary: "Tilkoblet" }), /Tilkoblet/);
 console.log("AI settings and recipe import rendering tests ok");

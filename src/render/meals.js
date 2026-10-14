@@ -1,5 +1,6 @@
 import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex, descriptionRepeatsTitle } from "../domain/meals.js";
 import { renderSubpageBar } from "./subpage.js";
+import { renderRecipeImport } from "./recipe-import.js";
 import { pencilIcon } from "./icons.js";
 
 function renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml }) {
@@ -116,6 +117,7 @@ export function renderMealsView(options = {}) {
     escapeHtml = String,
   } = options;
 
+  if (editorHtml) return editorHtml;
   return `
     <section class="view-header meals-view-header">
       <div class="meals-header-row">
@@ -325,6 +327,7 @@ export function renderMealEditorView(options = {}) {
     unitOptions = [],
     recipeImport = {},
     rowMenu = null,
+    discardOpen = false,
     aiKeyStatus = null,
     aiKeyMessage = "",
     isAdmin = false,
@@ -338,44 +341,10 @@ export function renderMealEditorView(options = {}) {
 
   return `
     <section class="panel meal-editor">
-      <div class="meal-editor-head">
-        <h2>${isNew ? "Ny oppskrift" : `Rediger ${escapeHtml(meal.title)}`}</h2>
-        <button class="button ghost" data-cancel-edit>Avbryt</button>
-      </div>
-      <section class="recipe-import-panel" aria-label="Importer oppskrift">
-        <h3>Importer oppskrift</h3>
-        ${!aiKeyStatus || !aiKeyStatus.configured || aiKeyStatus.status === "invalid" ? `
-          <p role="status">${!importAvailable ? "Oppskriftsimport krever innlogging og nett." : !aiKeyStatus ? escapeHtml(aiKeyMessage || "Kontrollerer OpenAI-tilkoblingen …") : aiKeyStatus.status === "invalid" ? "OpenAI-nøkkelen virker ikke." : "Oppskriftsimport er ikke satt opp."}</p>
-          ${isAdmin ? '<button class="button secondary" type="button" data-open-ai-settings>Åpne AI-innstillinger</button>' : '<p>Be en administrator legge inn OpenAI-nøkkel.</p>'}
-          ${recipeImport.message && !(recipeImport.pending && recipeImport.message === "Ingenting ble endret.") ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
-        ` : `
-        <label for="recipeImportUrl">Lenke til oppskrift</label>
-        <div class="recipe-import-url-row"><input id="recipeImportUrl" class="input" type="url" inputmode="url" data-import-url value="${escapeHtml(recipeImport.url || "")}" maxlength="2000" placeholder="https://…" ${recipeImport.busy ? "disabled" : ""}>
-          <button class="button secondary" type="button" data-import-fetch ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>Hent</button></div>
-        <div class="button-row"><button class="button ghost" type="button" data-import-show-text ${recipeImport.busy || recipeImport.preparing ? "disabled" : ""}>Lim inn tekst i stedet</button>
-          <button class="button ghost" type="button" data-import-show-images ${recipeImport.busy || recipeImport.preparing ? "disabled" : ""}>Importer fra bilde</button></div>
-        ${recipeImport.showText ? `<label for="recipeImportText">Oppskriftstekst</label><textarea id="recipeImportText" class="textarea" data-import-text maxlength="20000" ${recipeImport.busy ? "disabled" : ""}>${escapeHtml(recipeImport.text || "")}</textarea>
-          <button class="button secondary" type="button" data-import-interpret ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>Tolk tekst</button>` : ""}
-        ${recipeImport.showImages ? `<label for="recipeImportImages">Bilder og skjermbilder (inntil fire)</label>
-          <input id="recipeImportImages" class="input" type="file" accept="image/*" multiple data-import-image-files ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>
-          <ul>${(recipeImport.images || []).map((_, index) => `<li>Bilde ${index + 1} <button class="button ghost" type="button" data-import-remove-image="${index}" aria-label="Fjern bilde ${index + 1}" ${recipeImport.busy || recipeImport.preparing ? "disabled" : ""}>Fjern</button></li>`).join("")}</ul>
-          <button class="button secondary" type="button" data-import-images ${recipeImport.busy || recipeImport.preparing || !importAvailable ? "disabled" : ""}>Tolk bilder</button>` : ""}
-        ${!importAvailable ? '<p class="field-hint">Oppskriftsimport krever innlogging og nett.</p>' : ""}
-        ${recipeImport.preparing ? '<p role="status">Klargjør bilder …</p>' : ""}
-        ${recipeImport.busy ? `<p role="status">${recipeImport.mode === "image" ? "Leser bildene … Det kan ta opptil et minutt." : "Henter oppskrift … Det kan ta opptil et halvt minutt."}</p>` : ""}
-        ${recipeImport.message && !(recipeImport.pending && recipeImport.message === "Ingenting ble endret.") ? `<p role="status">${escapeHtml(recipeImport.message)}</p>` : ""}
-        ${recipeImport.pending ? `<div class="recipe-import-choice" data-import-choice role="group" aria-labelledby="recipeImportChoiceTitle">
-          <h4 id="recipeImportChoiceTitle">Ikke alt ble byttet</h4>
-          <p role="status">Oppskriften hadde ${recipeImport.pending.conflictIngredients && recipeImport.pending.conflictSteps ? "ingredienser og fremgangsmåte fra før, og de står urørt" : recipeImport.pending.conflictIngredients ? "ingredienser fra før, og de står urørt" : "fremgangsmåte fra før, og den står urørt"}.
-          Importen fant ${[recipeImport.pending.conflictIngredients ? `${recipeImport.pending.recipe.ingredients?.length || 0} ingredienser` : "", recipeImport.pending.conflictSteps ? `${recipeImport.pending.recipe.steps?.length || 0} steg` : ""].filter(Boolean).join(" og ")}.</p>
-          <div class="button-row"><button class="button" type="button" data-import-replace>Bytt til de importerte</button>
-          <button class="button secondary" type="button" data-import-keep>Behold mine</button></div>
-        </div>` : ""}
-        ${recipeImport.warnings?.length ? `<ul>${recipeImport.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul>` : ""}
-        ${Number.isInteger(recipeImport.remainingToday) && recipeImport.remainingToday >= 0 && recipeImport.remainingToday <= 30 ? `<p role="status">${recipeImport.remainingToday} importer igjen i dag.</p>` : ""}
-        `}
-      </section>
-      <form class="form" data-meal-form>
+      <div class="meal-editor-bar"><button class="editor-cancel" type="button" data-cancel-edit>Avbryt</button><strong>${isNew?"Ny oppskrift":"Rediger"}</strong><button class="button editor-save" type="submit" form="mealEditorForm">Lagre</button></div>
+      ${renderRecipeImport({isNew,meal,recipeImport,aiKeyStatus,aiKeyMessage,isAdmin,importAvailable,escapeHtml})}
+      ${(recipeImport.expanded ?? (isNew || mealCanImportFromLink(meal)))?'<div class="editor-manual-divider"><span>eller fyll ut selv</span></div>':''}
+      <form id="mealEditorForm" class="form" data-meal-form>
         <div class="form-row">
           <div class="setting">
             <label for="mealTitle">Navn</label>
@@ -401,8 +370,9 @@ export function renderMealEditorView(options = {}) {
           <textarea id="mealDescription" class="textarea" name="description">${escapeHtml(meal.description)}</textarea>
         </div>
         <div class="setting">
-          <label for="mealRecipeUrl">Lenke til oppskrift</label>
+          <label for="mealRecipeUrl">Kilde (lenke)</label>
           <input id="mealRecipeUrl" class="input" type="text" inputmode="url" name="recipeUrl" value="${escapeHtml(meal.recipeUrl || "")}" placeholder="https://...">
+          <p class="field-hint">Åpnes med «Åpne lenke» i oppskriften.</p>
         </div>
         <div class="form-row">
           <div class="setting">
@@ -479,11 +449,16 @@ export function renderMealEditorView(options = {}) {
         </div>
         <div class="form-actions">
           ${isNew ? "" : '<button class="button danger" type="button" data-delete-meal>Slett</button>'}
-          <button class="button secondary" type="button" data-cancel-edit>Avbryt</button>
           <button class="button" type="submit">Lagre middag</button>
         </div>
       </form>
+      ${discardOpen ? renderDiscardMealEditor({meal,isNew,escapeHtml}) : ""}
       ${rowMenu ? renderEditorRowMenuView({ ...rowMenu, ingredients: ingredientRows, steps, escapeHtml }) : ""}
     </section>
   `;
+}
+
+export function renderDiscardMealEditor({meal,isNew,escapeHtml=String}) {
+  const title=String(meal.title||'').trim();
+  return `<div class="modal-backdrop editor-discard-backdrop"><section class="modal editor-discard" role="alertdialog" aria-modal="true" aria-labelledby="editorDiscardTitle" aria-describedby="editorDiscardText"><div class="week-sheet-handle" aria-hidden="true"></div><div class="editor-discard-body" data-scroll-key="editor-discard"><h3 id="editorDiscardTitle">Forkaste endringene?</h3><p id="editorDiscardText">${isNew&&!title?'Den nye oppskriften er ikke lagret.':'Endringene i «'+escapeHtml(title)+'» er ikke lagret.'}</p><button class="button" type="button" data-editor-continue data-focus-key="editor-continue">Fortsett å redigere</button><button class="editor-discard-confirm" type="button" data-editor-discard data-focus-key="editor-discard">Forkast endringene</button></div></section></div>`;
 }

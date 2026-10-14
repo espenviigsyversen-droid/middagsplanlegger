@@ -457,3 +457,19 @@ renderMealCardView tegner article som kortbeholder uten data-view-meal. Inne i k
 pencilIcon er flyttet fra weekIcon sin path-tabell til src/render/icons.js. Uke og Oppskrifter importerer samme funksjon; weekIcon("pencil") delegerer også dit for å bevare API-et. .pencil-button deler 44×44-trykkflate, 18 px SVG, --muted, gjennomsiktig bakgrunn og ingen ramme. Uke beholder sin eksisterende marg. Kortets ramme, radius, farger, tittelstil og mangler-merke beholdes; mer tittelbredde er tilgjengelig etter at den doble åpneknappen er fjernet. Hovedknappen har min-height 44 px og tastaturfokus vises med focus-visible.
 
 Den nye lokale ikonmodulen er lagt i begge asset-listene. Versjon/cache er v116/116, minsteversjon 106. Ingen endring i service worker-strategi, domenedata, synk eller server/regler.
+
+## Oppskriftsskjema fra v117
+
+Editoren erstatter hele oppskriftslistens innhold mens den er åpen. Toppfeltet erstattes av .meal-editor-bar: sticky stripe med safe-area, Avbryt, Ny oppskrift/Rediger og Lagre. Begge Lagre-knapper sender samme mealEditorForm med eksisterende native feltvalidering og submit-handler. Nederst beholdes Lagre middag og Slett for eksisterende oppskrifter.
+
+src/domain/meal-editor.js inneholder mealEditorFingerprint og socialRecipeSource. Fingeravtrykket sammenligner alle redigerbare felt, overskrifts-/ingrediensrader og steg; kategorier/merker sammenlignes uten hensyn til rekkefølgen på avkrysningsboksene. mealEditorSession fryser utgangspunktet når editoren åpnes, slik at senere renders eller skysnapshots ikke flytter sammenligningsgrunnlaget. Før Avbryt/tilbake leses dagens skjema og importfelter. Ulagret importresultat og uferdig arbeid i importkortet beskyttes også.
+
+Uendret skjema lukkes direkte. Ved endringer vises editor-discard som alertdialog nedenfra, med Fortsett å redigere og Forkast endringene. Tilbake på selve editoren returnerer en blokkert navigasjon til den eksisterende historikkontrolleren når arket må vises; kontrolleren gjenoppretter editornivået og legger arket over. Tilbake/Escape i arket lukker bare arket. Forkast lukker editor og ark uten lagring. Fortsett bevarer alle utkast/importfelter. Arket har data-scroll-key="editor-discard", stabile fokusnøkler og avgrenset tastaturfokus. render eller synk legger fortsatt ikke historikkoppføringer inn.
+
+src/render/recipe-import.js tegner importkortet separat fra selve oppskriftsskjemaet. Lenke/Bilde/Tekst er tre like knapper med aria-pressed; kun valgt modus tegnes. tab/expanded er tillegg i den eksisterende recipeImportState i minnet. Inputhendelser oppdaterer knappestatus og sosial forklaring uten full render per tastetrykk. Modusbytte leser først skjemaet og beholder lenke, tekst, bilder, meldinger og ventende erstatningsvalg. Kortet starter lukket på eksisterende oppskrifter, men åpent på nye og på oppskrifter med kilde uten ingredienser/steg. Åpneknappen velger Lenke og fyller en tom importlenke fra dagens kilde.
+
+Bildevalget bruker egne knapper som åpner et visuelt skjult native filfelt. De forminskede bildene beholdes som før i minnet; visningen bruker de tillatte Bilde N-rutene med fjern-knapp og stiplet pluss-rute. Ingen ekstra bildekopier, filnavn eller bildedata settes inn i markup eller varig lagring.
+
+socialRecipeSource analyserer vertsnavnet lokalt for instagram.com, facebook.com, fb.watch og tiktok.com, inkludert underdomener. En kjent sosial lenke viser Bruk tekst/Bruk bilde og skjuler Hent uten serverkall. Den fyller bare en tom recipeUrl i utkastet; en annen kilde beholdes. Kildelinjen er bekreftelse på utfylt skjema, ikke automatisk oppskriftslagring. En vanlig vellykket lenkeimport fyller også tom kilde. Serverens validering, SSRF-vern, AI-tolking og klientens import-/kvotelogikk er uendret.
+
+App/cache er v117/117. De to nye modulene er med i begge asset-listene. Minsteversjon 106, domenefelter, synkmoduler, functions og regler er uendret.

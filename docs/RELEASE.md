@@ -4,6 +4,20 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v117 – oppskriftsskjema med fast stripe og nytt importkort
+
+Eier publiserer klientfilene i docs/LEVERANSE_V117.md, inkludert src/domain/meal-editor.js og src/render/recipe-import.js i begge asset-listene. App/cache er v117, minsteversjonen fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 52 testskript og 44 kildefilers syntakskontroller består lokalt.
+
+Etter publisering på PC og iPhone:
+
+1. Kontroller v117. Ny/redigert oppskrift viser bare skjemaet og sticky Avbryt/Ny oppskrift eller Rediger/Lagre. Test safe-area og rulling ved 375 px, topplagring med manglende navn og samme lagring som Lagre middag nederst.
+2. Avbryt/tilbake uten endring lukker. Endre felt, ingredienser, overskrift eller steg, og importer innhold: begge tilbakeveier skal vise Forkaste endringene. Fortsett og tilbake i arket bevarer arbeidet; Forkast lukker uten lagring. Test også Escape/Tab på PC og iPhones tilbake-sveip.
+3. Bytt Lenke/Bilde/Tekst, og lukk/åpne importkortet på en eksisterende oppskrift. Innholdet skal beholdes. Eksisterende oppskrift starter lukket, unntatt kilde uten ingredienser/steg. Ny starter åpent. Tom importknapp er deaktivert.
+4. Lim inn Instagram/Facebook/fb.watch/TikTok med og uten underdomene: forklaring og Bruk tekst/bilde kommer straks, Hent skjules. Tom kilde fylles; en annen kilde beholdes. Sjekk at vanlig vellykket lenkeimport også fyller tom kilde.
+5. Velg bilder på PC/iPhone, inkludert kamera når filvelgeren tilbyr det. Rutene Bilde 1–4, fjern/pluss og Hent fra N skal oppdateres. Test formatering, erstatningsvalg, advarsler, kvote og nøkkel-/nettstatus som før. Bildene lagres aldri med oppskriften.
+
+Kontrollene under utvikling bruker lokale DOM-/History-/SDK-stubber og CSS-inspeksjon. Visuell 375 px-kontroll, ekte safe-area, skjermtastatur, native filvelger/kamera, nettleserens feltvalidering og telefonens tilbake-sveip gjenstår på ekte enhet. Ingen publisering er utført av agenten.
+
 ### v116 – oppskriftskort med felles blyant
 
 Eier publiserer filene i docs/LEVERANSE_V116.md, inkludert den nye src/render/icons.js som står i begge asset-listene. Minsteversjonen er fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 49 testskript og 42 syntakskontroller består lokalt.

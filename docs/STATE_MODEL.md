@@ -314,3 +314,11 @@ pickerFilters er bare i minnet: quick, kidFriendly, favorite, én suitability fr
 Den faste forslagplassen er avledet fra planhistorikk og lagres ikke i oppskriften. Poeng/delpoeng er ikke synkede data og vises aldri i appen. Domeneformat, null-porsjoner, Firestore-stier og minsteversjon 106 er uendret.
 
 Fra v115 er pickerFilters.suitability en enkelt nøkkel fra metadata.suitabilityLabels eller tom streng. Den finnes bare i minnet og nullstilles sammen med øvrige velgerfiltre. Oppskriftens lagrede suitability og metadataformatet er uendret.
+
+## Editorens endringsvern og importkort fra v117
+
+mealEditorSession er separat runtime-tilstand med editor-ID, fingeravtrykket av oppskriften ved åpning og opprinnelig kilde. editorDiscardOpen styrer forkastingsarket. recipeImportState.tab/expanded styrer valgt modus og åpent/lukket kort; lenke, tekst, forminskede bilder, advarsler og pending beholder eksisterende plass bare i minnet. Ingenting av dette inngår i localStateForStorage, syncPayload eller sikkerhetskopi.
+
+Avbryt/tilbake leser skjemaet før sammenligning, inkludert overskriftsrader og steg. Endret utkast, importresultat eller uferdig importarbeid gir forkastingsark. Fortsett/tilbake fra arket bevarer alt, mens eksplisitt Forkast og lukket/byttet editor forkaster runtime-arbeidet. Besøk i AI-innstillinger fra editoren beholder utgangspunkt og utkast. Konto-/tilgangsbytte nullstiller det.
+
+Sosiale lenker og vanlig vellykket lenkeimport kan fylle tom recipeUrl i utkastet. Eksisterende annen kilde beholdes. Dette er ingen automatisk lagring: bare dagens Lagre-handler lager en meals-patch. Feltnavnet recipeUrl, importens porsjons-/gruppe-/erstatningsregler og alt lagret dataformat er uendret. Minsteversjon forblir 106.

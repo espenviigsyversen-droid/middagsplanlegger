@@ -59,12 +59,12 @@ function testRecipeImportRender() {
   assert.match(renderMealDetailView({ meal, menuOpen:true, importAvailable:false }), /data-import-from-link="linked" disabled/);
   for (const isNew of [true, false]) {
     const html = renderMealEditorView({ meal, isNew, importAvailable: true, aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { url: meal.recipeUrl, showText: true, text: "<script>bad</script>" }, escapeHtml });
-    assert.match(html, /Importer oppskrift/); assert.match(html, /data-import-fetch/); assert.match(html, /data-import-interpret/);
+    assert.match(html, /Fyll ut automatisk/); assert.doesNotMatch(html, /data-import-fetch/); assert.match(html, /data-import-interpret/);
     assert.doesNotMatch(html, /<script>/);
     assert.ok(html.indexOf("recipe-import-panel") < html.indexOf("data-meal-form"));
   }
   const busy = renderMealEditorView({ meal, importAvailable: true, aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { busy: true, showText: true }, escapeHtml });
-  assert.match(busy, /data-import-fetch disabled/); assert.match(busy, /data-import-interpret disabled/);
+  assert.match(busy, /data-import-interpret disabled/);
   assert.match(busy, /Henter oppskrift/);
 }
 testRecipeImportRender();
@@ -171,7 +171,7 @@ function testMealEditorRender() {
     unitOptions: ["", "pakke"],
     escapeHtml,
   });
-  assert.match(html, /Rediger Pasta &lt;god&gt;/);
+  assert.ok(html.includes("<strong>Rediger</strong>"));
   assert.match(html, /name="kidFriendly" checked/);
   assert.match(html, /name="excludeFromSuggestions" checked/);
   assert.match(html, /data-ingredient-row="0"/);
@@ -216,8 +216,8 @@ for (const [ingredients, steps, conflict] of [[true, true, "ingredienser og frem
   assert.match(choice, /data-import-replace>Bytt til de importerte/);
   assert.match(choice, /data-import-keep>Behold mine/);
   assert.doesNotMatch(choice, /0 ingredienser|0 steg/);
-  assert.match(choice, /data-import-fetch >Hent/);
-  assert.match(choice, /data-import-interpret >Tolk tekst/);
+  assert.doesNotMatch(choice, /data-import-fetch/);
+  assert.match(choice, /data-import-interpret[^>]*>Hent fra tekst/);
   assert.match(choice, /Kontroller porsjonene/);
   assert.doesNotMatch(choice, /Ingenting ble endret\./);
 }
@@ -226,10 +226,10 @@ for (const [busy, preparing, available] of [[false, false, true], [true, false, 
   const html = renderMealEditorView({ meal: { title: "Test" }, importAvailable: available,
     aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { busy, preparing, mode: "image", showImages: true,
       images: [{ data: "PRIVATE_IMAGE_BYTES", name: "private.jpg" }, { data: "OTHER_BYTES" }] }, escapeHtml });
-  assert.match(html, /Importer fra bilde/); assert.match(html, /type="file" accept="image\/\*" multiple/);
+  assert.match(html, /Velg bilder eller ta bilde/); assert.match(html, /type="file" accept="image\/\*" multiple/);
   assert.match(html, /Bilde 1/); assert.match(html, /Bilde 2/); assert.match(html, /aria-label="Fjern bilde 2"/);
   assert.doesNotMatch(html, /PRIVATE_IMAGE_BYTES|OTHER_BYTES|private\.jpg|<img/);
-  assert.match(html, busy || preparing || !available ? /data-import-images disabled>Tolk bilder/ : /data-import-images >Tolk bilder/);
+  assert.match(html, busy || preparing || !available ? /data-import-images disabled>Hent fra 2 bilder/ : /data-import-images >Hent fra 2 bilder/);
   if (busy) assert.match(html, /Leser bildene … Det kan ta opptil et minutt/);
   if (preparing) assert.match(html, /Klargjør bilder/);
 }
@@ -241,7 +241,7 @@ assert.match(renderMealDetailView({meal:{title:"Test"},targetServings:1}),/aria-
 assert.match(renderMealDetailView({meal:{title:"Test"},targetServings:30}),/aria-label="Flere porsjoner" disabled/);
 for (const remainingToday of [0, 1, 30, 31, 150, null, -1, 2.5]) {
   const html = renderMealEditorView({ meal: { title: "Test" }, importAvailable: true,
-    aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { remainingToday }, escapeHtml });
+    aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { expanded: true, remainingToday }, escapeHtml });
   if (Number.isInteger(remainingToday) && remainingToday >= 0 && remainingToday <= 30) assert.ok(html.includes(`${remainingToday} importer igjen i dag.`));
   else assert.doesNotMatch(html, /importer igjen i dag/);
 }

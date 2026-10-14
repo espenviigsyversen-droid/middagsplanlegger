@@ -1,10 +1,11 @@
-const CACHE_NAME = "middagsplan-v116";
+const CACHE_NAME = "middagsplan-v117";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./src/domain/meals.js",
+  "./src/domain/meal-editor.js",
   "./src/domain/shopping.js",
   "./src/domain/backup.js",
   "./src/domain/recipe-import.js",
@@ -16,6 +17,7 @@ const ASSETS = [
   "./src/domain/weeks.js",
   "./src/domain/week-view.js",
   "./src/render/meals.js",
+  "./src/render/recipe-import.js",
   "./src/render/icons.js",
   "./src/render/subpage.js",
   "./src/ui/navigation.js",
@@ -47,6 +49,7 @@ const NETWORK_FIRST_ASSETS = [
   "styles.css",
   "app.js",
   "src/domain/meals.js",
+  "src/domain/meal-editor.js",
   "src/domain/shopping.js",
   "src/domain/backup.js",
   "src/domain/recipe-import.js",
@@ -58,6 +61,7 @@ const NETWORK_FIRST_ASSETS = [
   "src/domain/weeks.js",
   "src/domain/week-view.js",
   "src/render/meals.js",
+  "src/render/recipe-import.js",
   "src/render/icons.js",
   "src/render/subpage.js",
   "src/ui/navigation.js",

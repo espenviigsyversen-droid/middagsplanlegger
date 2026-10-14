@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { mealEditorFingerprint, socialRecipeSource } from "../../src/domain/meal-editor.js";
+const meal={title:"Middag",baseServings:4,minDaysBetween:14,recipeUrl:"",categories:[],suitability:[]};
+const rows=[{name:"fisk",amount:"500",unit:"g"}],steps=["Stek"];
+const initial=mealEditorFingerprint(meal,rows,steps);
+assert.equal(initial,mealEditorFingerprint({...meal},structuredClone(rows),[...steps]));
+for(const patch of [{title:"Annet"},{description:"Ny tekst"},{baseServings:5},{recipeUrl:"https://example.com"},{favorite:true},{suitability:["weekend"]}])assert.notEqual(initial,mealEditorFingerprint({...meal,...patch},rows,steps));
+assert.notEqual(initial,mealEditorFingerprint(meal,[{...rows[0],amount:"600"}],steps));
+assert.notEqual(initial,mealEditorFingerprint(meal,[{type:"heading",title:"Saus"},...rows],steps));
+assert.notEqual(initial,mealEditorFingerprint(meal,rows,["Kok"]));
+for(const [host,label]of[["instagram.com","Instagram"],["facebook.com","Facebook"],["fb.watch","Facebook"],["tiktok.com","TikTok"]])for(const prefix of ["","www.","m."])assert.equal(socialRecipeSource(`https://${prefix}${host}/recipe`),label);
+assert.equal(socialRecipeSource("m.instagram.com/p/abc"),"Instagram");
+for(const url of ["https://example.com","https://instagram.com.example.com","https://notinstagram.com","https://instagram.com@evil.example",""])assert.equal(socialRecipeSource(url),"");
+console.log("meal editor domain tests ok");

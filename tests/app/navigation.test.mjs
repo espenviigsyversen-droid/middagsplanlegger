@@ -108,7 +108,8 @@ selectors.set("[data-meal-form]",[form]);
 selectors.set("[data-ingredient-row]",[{querySelector:s=>({value:s.includes('"name"')?"Ulagret ingrediens":s.includes('"amount"')?"3":"g"})}]);
 selectors.set("[data-step-row]",[{querySelector:()=>({value:"Ulagret steg"})}]);
 for(let turn=0;turn<4;turn++) {
-  history.go(-1);flush();assert.equal(index,1);assert.equal(entries.length,2);
+  history.go(-1);flush();assert.equal(index,2);assert.equal(entries.length,3);assert.equal(run("editorDiscardOpen"),true);
+  history.go(-1);flush();assert.equal(index,1);assert.equal(run("editorDiscardOpen"),false);
   assert.equal(run("state.editingMealId"),"wok");assert.equal(run("state.draftMeal.title"),"Ulagret tittel");
   assert.equal(run("state.draftIngredients[0].name"),"Ulagret ingrediens");assert.equal(run("state.draftSteps[0]"),"Ulagret steg");
 }
@@ -118,7 +119,7 @@ const openAi=button();selectors.set("[data-open-ai-settings]",[openAi]);run("bin
 assert.equal(run("state.activeView"),"ai-settings");assert.equal(index,2);assert.match(app.innerHTML,/data-ai-key-return-editor/);
 click("[data-ai-key-return-editor]");assert.equal(run("state.activeView"),"meals");assert.equal(run("state.editingMealId"),"wok");assert.equal(index,1);
 openAi.handlers.click();flush();history.go(-1);flush();assert.equal(run("state.activeView"),"meals");assert.equal(index,1);
-click("[data-cancel-edit]");assert.equal(index,0);
+click("[data-cancel-edit]");assert.equal(index,2);click("[data-editor-discard]");assert.equal(index,0);
 selectors.delete("[data-meal-form]");selectors.delete("[data-ingredient-row]");selectors.delete("[data-step-row]");
 
 // Menu-to-editor transition waits for browser traversal before pushing the editor guard.

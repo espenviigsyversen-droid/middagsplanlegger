@@ -84,7 +84,7 @@ assert.equal(deleted.run("state.pendingLocalSync"), false);
 let acknowledge;
 const concurrent = fixture({ write: () => new Promise(resolve => { acknowledge = resolve; }) });
 await concurrent.start(); const original = concurrent.snapshot("state.meals"); concurrent.server(original); concurrent.calls.length = 0;
-concurrent.run('state.editingMealId="meal-24"; state.draftMeal={title:"Ulagret tittel"}; state.draftIngredients=[{type:"heading",title:"Saus"}]; state.draftSteps=["Ulagret steg"]; resetRecipeImport(); recipeImportState.pending={recipe:{ingredients:[{name:"Ventende import"}],steps:["Ventende steg"]},conflictIngredients:true,conflictSteps:true,valid:()=>true}; const pendingChoice=recipeImportState.pending; const draft=state.draftMeal; setState({meals:state.meals.map(meal=>meal.id==="meal-24"?{...meal,title:"Lokal A"}:meal)}); const untouched = getMeal("meal-00")');
+concurrent.run('state.editingMealId="meal-24"; state.draftMeal={title:"Ulagret tittel"}; state.draftIngredients=[{type:"heading",title:"Saus"}]; state.draftSteps=["Ulagret steg"]; resetRecipeImport(); recipeImportState.expanded=true; recipeImportState.pending={recipe:{ingredients:[{name:"Ventende import"}],steps:["Ventende steg"]},conflictIngredients:true,conflictSteps:true,valid:()=>true}; const pendingChoice=recipeImportState.pending; const draft=state.draftMeal; setState({meals:state.meals.map(meal=>meal.id==="meal-24"?{...meal,title:"Lokal A"}:meal)}); const untouched = getMeal("meal-00")');
 const remote = original.map(meal => meal.id === "meal-25" ? { ...meal, title: "Fjern B" } : meal);
 concurrent.run('render = renderWithDom; aiKeyUi.status = {configured:true,status:"connected"}');
 concurrent.server(remote, false, concurrent.listeners.length - 1, true);

@@ -1,3 +1,5 @@
+import { mealEditorFingerprint, socialRecipeSource } from "./src/domain/meal-editor.js";
+import { renderSocialImportNotice } from "./src/render/recipe-import.js";
 import { canonicalView, weekHeading, weekEligibleDays, weekSwipeDirection, lastPlannedLabel } from "./src/domain/week-view.js";
 import { renderWeekView, renderWeekRow, renderDaySheet, renderWeekMenu, renderWeekClear, weekIcon } from "./src/render/week.js";
 import { renderSubpageBar } from "./src/render/subpage.js";
@@ -217,8 +219,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v116";
-const APP_VERSION_NUMBER = 116;
+const APP_VERSION = "v117";
+const APP_VERSION_NUMBER = 117;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -233,6 +235,7 @@ let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
 let mealPickerReturn = null;
 let pickerOtherPlans = false, weekClearConfirmation = null;
+let mealEditorSession = null, editorDiscardOpen = false;
 const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, suitability: "", category: "all" });
 let pickerFilters = emptyPickerFilters(), planningWindowWeekKey = null;
 let backgroundAt = null, lastVisibleWeekKey = getWeekKeyForOffset(0);
@@ -289,6 +292,7 @@ function navigationLevels() {
   if (state.shoppingReview?.open) levels.push("shopping-review");
   if (editorRowMenu) levels.push(`row-menu:${editorRowMenu.kind}:${editorRowMenu.index}`);
   if (recipeMenuOpen) levels.push("recipe-menu");
+  if (editorDiscardOpen) levels.push("editor-discard");
   return levels;
 }
 
@@ -296,6 +300,7 @@ function navigate(patch) { setState(patch); uiHistory.sync(); }
 
 function backInApp() {
   if (accessState.kind !== "ready") return false;
+  if (editorDiscardOpen) { continueMealEditing(); return true; }
   if (weekClearConfirmation) { cancelWeekClear(); return true; }
   if (recipeMenuOpen) { closeRecipeMenu(); return true; }
   if (editorRowMenu) { closeEditorRowMenu(); return true; }
@@ -308,7 +313,7 @@ function backInApp() {
     const editorId = aiKeyEditorReturn; aiKeyEditorReturn = null;
     setState({ activeView: "meals", editingMealId: editorId }); return true;
   }
-  if (state.activeView === "meals" && state.editingMealId) { syncMealEditorDraftFromDom(); return false; }
+  if (state.activeView === "meals" && state.editingMealId) return requestCancelMealEditor();
   if (state.activeView === "recipe") {
     setState({ activeView: state.previousView || "meals", selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false }); return true;
   }
@@ -1472,14 +1477,15 @@ function renderShoppingList() {
 function renderShell(viewHtml) {
   const displayedSyncStatus = syncStatusText();
   const isRecipeView = state.activeView === "recipe";
+  const isEditorView = state.activeView === "meals" && Boolean(state.editingMealId);
   const settingsViews = new Set(["setup", "account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
   const isSettingsView = settingsViews.has(state.activeView);
-  const isSubpage = isRecipeView || (isSettingsView && state.activeView !== "setup");
+  const isSubpage = isEditorView || isRecipeView || (isSettingsView && state.activeView !== "setup");
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
   const toast = renderToast();
   app.innerHTML = `
-    <div class="app-shell ${isSubpage ? "subpage-mode" : ""} ${isRecipeView ? "recipe-mode" : ""}">
+    <div class="app-shell ${isSubpage ? "subpage-mode" : ""} ${isRecipeView ? "recipe-mode" : ""} ${isEditorView ? "editor-mode" : ""}">
       ${pickerModal}
       ${shoppingReviewModal}
       ${toast}
@@ -1715,6 +1721,7 @@ function renderMealEditor() {
   const isNew = state.editingMealId === "new";
   const baseMeal = isNew ? emptyMeal() : getMeal(state.editingMealId);
   if (!baseMeal) return "";
+  ensureMealEditorSession(baseMeal);
   const meal = getDraftMeal(baseMeal);
   const ingredients = getDraftIngredients(meal);
   const steps = getDraftSteps(meal);
@@ -1730,12 +1737,46 @@ function renderMealEditor() {
     unitOptions: getUnitOptions(),
     recipeImport: recipeImportState,
     rowMenu: editorRowMenu,
+    discardOpen: editorDiscardOpen,
     aiKeyStatus: aiKeyUi.status,
     aiKeyMessage: aiKeyUi.message,
     isAdmin: accessState.role === "admin",
     importAvailable: accessState.kind === "ready" && !accessState.offline && navigator.onLine !== false,
     escapeHtml,
   });
+}
+
+function ensureMealEditorSession(base) {
+  if (mealEditorSession?.id === state.editingMealId) return;
+  const items=normalizeIngredients(base.ingredients,base.keyIngredients);
+  mealEditorSession={id:state.editingMealId,signature:mealEditorFingerprint(base,items.length?ingredientsToEditorRows(items):[{name:"",amount:"",unit:""}],base.steps?.length?base.steps:[""]),source:base.recipeUrl||""};
+  editorDiscardOpen=false;
+}
+
+function hasUnsavedMealEditorChanges() {
+  const base=state.editingMealId==="new"?emptyMeal():getMeal(state.editingMealId); if(!base)return false;
+  ensureMealEditorSession(base);
+  const dirty=mealEditorFingerprint(getDraftMeal(base),getDraftIngredients(base),getDraftSteps(base))!==mealEditorSession.signature;
+  return dirty || String(recipeImportState.url||"").trim()!==mealEditorSession.source.trim() || Boolean(String(recipeImportState.text||"").trim())
+    || Boolean(recipeImportState.images?.length || recipeImportState.pending || recipeImportState.busy || recipeImportState.preparing);
+}
+
+function closeMealEditor() {
+  editorDiscardOpen=false; mealEditorSession=null;
+  navigate({editingMealId:null,draftMeal:null,draftIngredients:null,draftSteps:null});
+}
+
+function requestCancelMealEditor() {
+  syncMealEditorDraftFromDom(); syncRecipeImportFields();
+  if (!hasUnsavedMealEditorChanges()) { closeMealEditor(); return true; }
+  editorRowMenu=null; editorDiscardOpen=true; render();
+  app.querySelector("[data-editor-continue]")?.focus?.({preventScroll:true});
+  return false;
+}
+
+function continueMealEditing() {
+  syncMealEditorDraftFromDom(); syncRecipeImportFields(); editorDiscardOpen=false; render(); uiHistory.sync();
+  app.querySelector("[data-cancel-edit]")?.focus?.({preventScroll:true});
 }
 
 function getDraftMeal(meal) {
@@ -1891,6 +1932,11 @@ function chooseEditorRowAction(action, groupIndex) {
 }
 
 document.addEventListener("keydown", event => {
+  if (editorDiscardOpen) {
+    if (event.key === "Escape") {event.preventDefault();continueMealEditing();return;}
+    if (event.key === "Tab") {const first=app.querySelector("[data-editor-continue]"),last=app.querySelector("[data-editor-discard]");if(first&&last&&(event.shiftKey?document.activeElement===first:document.activeElement===last)){event.preventDefault();(event.shiftKey?last:first).focus({preventScroll:true});}}
+    return;
+  }
   if (!editorRowMenu && !recipeMenuOpen) return;
   if (event.key === "Escape") { event.preventDefault(); recipeMenuOpen ? closeRecipeMenu() : closeEditorRowMenu(); return; }
   if (event.key === "Tab") {
@@ -1935,6 +1981,7 @@ function syncDraftStepsFromDom() {
 }
 
 function syncMealEditorDraftFromDom() {
+  if (!app.querySelector("[data-meal-form]")) return;
   syncDraftMealFromDom();
   syncDraftIngredientsFromDom();
   syncDraftStepsFromDom();
@@ -1943,7 +1990,7 @@ function syncMealEditorDraftFromDom() {
 function resetRecipeImport() {
   recipeImportSerial += 1;
   recipeImportState = { editorId: state.editingMealId, busy: false,
-    preparing: false, mode: "", images: [], showImages: false,
+    preparing: false, mode: "", tab: "url", expanded: state.editingMealId === "new" || mealCanImportFromLink(getMeal(state.editingMealId)), images: [], showImages: false,
     url: getMeal(state.editingMealId)?.recipeUrl || "", text: "", showText: false, message: "", warnings: [], pending: null, remainingToday: null };
 }
 
@@ -1960,7 +2007,7 @@ async function addRecipeImages(files) {
   const selected = Array.from(files || []);
   if (!selected.length) return;
   syncMealEditorDraftFromDom(); syncRecipeImportFields();
-  recipeImportState.showImages = true;
+  recipeImportState.showImages = true; recipeImportState.showText = false; recipeImportState.tab = "image"; recipeImportState.expanded = true;
   if (recipeImportState.images.length + selected.length > 4) {
     recipeImportState.message = IMAGE_LIMIT_MESSAGE; render(); return;
   }
@@ -2046,13 +2093,18 @@ function resolveRecipeImport(replace) {
 }
 
 async function startRecipeImport(mode = "url") {
+  if (recipeImportState.busy || recipeImportState.preparing) return;
+  if (mode === "url" && state.editingMealId && socialRecipeSource(app.querySelector("[data-import-url]")?.value ?? recipeImportState.url)) {
+    syncMealEditorDraftFromDom(); syncRecipeImportFields(); fillRecipeSourceFromImport();
+    recipeImportState.expanded=true; recipeImportState.tab="url"; render(); return;
+  }
   if (!state.editingMealId || recipeImportState.busy || recipeImportState.preparing || accessState.kind !== "ready" || accessState.offline
     || navigator.onLine === false || !firebaseConnection) return;
   if (!aiKeyUi.status?.configured || aiKeyUi.status.status === "invalid") return;
   if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
   syncMealEditorDraftFromDom();
   syncRecipeImportFields();
-  recipeImportState.pending = null;
+  recipeImportState.pending = null; recipeImportState.expanded = true; recipeImportState.tab = mode;
   const url = normalizedRecipeUrl(recipeImportState.url);
   if ((mode === "url" && !url) || (mode === "text" && recipeImportState.text.trim().length < 20)
     || (mode === "image" && !recipeImportState.images.length)) {
@@ -2084,7 +2136,7 @@ async function startRecipeImport(mode = "url") {
     syncMealEditorDraftFromDom();
     if (!result.ok) {
       if (result.code === "NEEDS_TEXT") {
-        recipeImportState.showText = true;
+        recipeImportState.showText = true; recipeImportState.tab = "text";
         recipeImportState.message = "Instagram og Facebook kan ikke hentes automatisk. Lim inn bildeteksten, eller ta et skjermbilde og bruk Importer fra bilde.";
         if (!state.draftMeal?.recipeUrl) state.draftMeal = { ...(state.draftMeal || {}), recipeUrl: url };
       } else recipeImportState.message = result.message || "Kunne ikke importere oppskriften.";
@@ -2095,10 +2147,12 @@ async function startRecipeImport(mode = "url") {
     recipeImportState.remainingToday = Number.isInteger(result.remainingToday) && result.remainingToday >= 0 ? result.remainingToday : null;
     recipeImportState.images = [];
     const importedSteps = result.recipe.steps?.length || 0;
-    const applied = applyRecipeImportToEditor(result.recipe);
+    const source = state.draftMeal?.recipeUrl || result.recipe.recipeUrl || url;
+    const imported = mode === "url" ? { ...result.recipe, recipeUrl: source } : result.recipe;
+    const applied = applyRecipeImportToEditor(imported);
     if (!applied) return;
     if (applied.conflictIngredients || applied.conflictSteps) {
-      recipeImportState.pending = { recipe: result.recipe, valid,
+      recipeImportState.pending = { recipe: imported, valid,
         conflictIngredients: applied.conflictIngredients, conflictSteps: applied.conflictSteps };
     }
     let host = mode === "image" ? "bilde" : "innlimt tekst";
@@ -2118,15 +2172,50 @@ async function startRecipeImport(mode = "url") {
   }
 }
 
+function fillRecipeSourceFromImport() {
+  const base=state.editingMealId==="new"?emptyMeal():getMeal(state.editingMealId);if(!base)return;
+  const draft=getDraftMeal(base),url=String(recipeImportState.url||"").trim();
+  if (!draft.recipeUrl && url) {
+    state.draftMeal={...draft,recipeUrl:url};
+    const source=app.querySelector('[name="recipeUrl"]'); if(source)source.value=url;
+  }
+}
+
+function switchRecipeImportMode(mode) {
+  if(recipeImportState.busy || recipeImportState.preparing || !["url","text","image"].includes(mode))return;
+  syncMealEditorDraftFromDom();syncRecipeImportFields();
+  recipeImportState.expanded=true;recipeImportState.tab=mode;recipeImportState.showText=mode==="text";recipeImportState.showImages=mode==="image";
+  render();
+}
+
+function bindImportModes(root=app) {
+  root.querySelectorAll("[data-import-mode]").forEach(button=>button.addEventListener("click",()=>switchRecipeImportMode(button.dataset.importMode)));
+}
+
+function refreshRecipeImportControls() {
+  const social=socialRecipeSource(recipeImportState.url);
+  if(social)fillRecipeSourceFromImport();
+  const base=state.editingMealId==="new"?emptyMeal():getMeal(state.editingMealId);
+  const feedback=app.querySelector("[data-import-url-feedback]");
+  if(feedback){feedback.innerHTML=renderSocialImportNotice(recipeImportState,getDraftMeal(base||emptyMeal()),escapeHtml);bindImportModes(feedback);}
+  const usable=accessState.kind==="ready"&&!accessState.offline&&navigator.onLine!==false&&aiKeyUi.status?.configured&&aiKeyUi.status.status!=="invalid"&&!recipeImportState.busy&&!recipeImportState.preparing;
+  const fetch=app.querySelector("[data-import-fetch]");if(fetch){fetch.hidden=Boolean(social);fetch.disabled=!usable||!recipeImportState.url.trim();}
+  const text=app.querySelector("[data-import-interpret]");if(text)text.disabled=!usable||recipeImportState.text.trim().length<20;
+}
+
 function bindRecipeImportEvents() {
   const form = app.querySelector("[data-meal-form]");
   for (const event of ["input", "change"]) form?.addEventListener(event, syncMealEditorDraftFromDom);
-  for (const selector of ["[data-import-url]", "[data-import-text]"]) app.querySelector(selector)?.addEventListener("input", syncRecipeImportFields);
+  for (const selector of ["[data-import-url]", "[data-import-text]"]) app.querySelector(selector)?.addEventListener("input", ()=>{ syncMealEditorDraftFromDom(); syncRecipeImportFields(); refreshRecipeImportControls(); });
+  bindImportModes();
+  app.querySelector("[data-import-expand]")?.addEventListener("click",()=>{syncMealEditorDraftFromDom();syncRecipeImportFields();recipeImportState.expanded=true;recipeImportState.tab="url";if(!recipeImportState.url)recipeImportState.url=state.draftMeal?.recipeUrl||"";render();});
+  app.querySelector("[data-import-collapse]")?.addEventListener("click",()=>{syncMealEditorDraftFromDom();syncRecipeImportFields();recipeImportState.expanded=false;render();});
+  app.querySelectorAll("[data-import-pick-images]").forEach(button=>button.addEventListener("click",()=>app.querySelector("[data-import-image-files]")?.click?.()));
   app.querySelector("[data-import-show-text]")?.addEventListener("click", () => {
-    syncMealEditorDraftFromDom(); syncRecipeImportFields(); recipeImportState.showText = true; render();
+    switchRecipeImportMode("text");
   });
   app.querySelector("[data-import-show-images]")?.addEventListener("click", () => {
-    syncMealEditorDraftFromDom(); syncRecipeImportFields(); recipeImportState.showImages = true; render();
+    switchRecipeImportMode("image");
   });
   app.querySelector("[data-import-image-files]")?.addEventListener("change", event => {
     const files = Array.from(event.currentTarget.files || []);
@@ -3211,8 +3300,10 @@ function bindEvents() {
     });
   });
 
+  app.querySelector("[data-editor-continue]")?.addEventListener("click",continueMealEditing);
+  app.querySelector("[data-editor-discard]")?.addEventListener("click",closeMealEditor);
   app.querySelectorAll("[data-cancel-edit]").forEach((button) => {
-    button.addEventListener("click", () => navigate({ editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null }));
+    button.addEventListener("click", () => {requestCancelMealEditor();uiHistory.sync();});
   });
 
   app.querySelectorAll("[data-view-meal]").forEach((button) => {
@@ -3671,6 +3762,7 @@ function render(preserveShoppingInput = true) {
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
+  if (!state.editingMealId || accessState.kind!=="ready" || (state.activeView!=="meals" && !aiKeyEditorReturn)) {mealEditorSession=null;editorDiscardOpen=false;}
   syncAiKeyContext();
   if (!state.editingMealId) aiKeyEditorReturn = null;
   if (recipeImportState.editorId !== state.editingMealId) resetRecipeImport();
@@ -3837,6 +3929,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  mealEditorSession=null;editorDiscardOpen=false;
   planningWindowWeekKey = null; pickerFilters = emptyPickerFilters();
   pickerOtherPlans = false; weekClearConfirmation = null;
   mealPickerReturn = null;
