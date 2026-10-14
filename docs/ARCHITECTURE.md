@@ -34,6 +34,22 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 
 ## Runtime-modell
 
+### Vinduenes rulleposisjon fra v108
+
+render() bruker captureWindowPositions før innerHTML erstattes og restoreWindowPositions etter rendering og hendelsesbinding. Hvert faktisk rullende vinduselement har en stabil data-scroll-key. Kopien av scrollTop ligger bare i dette render-kallet; det finnes ingen varig posisjonshistorikk eller nye state-/lagringsfelt. Når vinduet forsvinner, har neste render ingen gammel nøkkel å hente. En ny åpning starter derfor øverst.
+
+| Nøkkel | Element | Grunnlag i CSS |
+|---|---|---|
+| shopping-review | .shopping-review-backdrop | Fast bakgrunn med overflow-y:auto både på PC og mobil. Modal og body har overflow:visible og ingen maks-høyde som gir egen rulling. |
+| generate-days | .gen-modal-list | overflow-y:auto og flex:1 innenfor høydebegrenset .modal. |
+| planner-day | .planner-sheet-body | overflow-y:auto overstyrer .modal-body sin overflow:hidden; flex:1/min-height:0 gir rullbart innhold i dagsarket. |
+| meal-picker | .meal-picker-list | overflow-y:auto/flex:1 med max-height:60vh på PC; på mobil min-height:0 inne i et 100dvh-vindu med overflow:hidden utenfor listen. |
+| editor-row-menu | .editor-row-menu-actions | overflow-y:auto inni .editor-row-menu med max-height:75vh og overflow:hidden på modalen. |
+
+Fokusbare kontroller har data-focus-key, med identitet fra vare-ID, handledato, plandag eller gruppeindeks ved gjentatte rader. Alle/Ingen, lukkeknapp og bekreftelsesknapp har forskjellige handlingsnøkler. Fokus registreres bare dersom det aktive elementet tilhører samme .modal-backdrop som rullelisten, slik at også topp-/bunnkontroller bevares. Etter utskifting finnes riktig kontroll innenfor samme vindu ved tekstsammenligning av nøklene, og får focus({preventScroll:true}). Deretter settes scrollTop; begge deler skjer synkront før neste tegning. En kontroll som ikke lenger finnes, ignoreres. Tellere og valgt-status kommer fortsatt fra dagens renderer/state, og middagsvelgerens sidelås er uendret.
+
+Nye vinduer med egen rulleliste skal merkes på det faktisk rullende elementet etter gjennomgang av CSS og mobilregler, og kontrollene skal få stabile fokusnøkler. Testene i tests/app/window-scroll.test.mjs kjører ekte render/setState og hendelsesbinding med lokale DOM-stubber som erstatter alle elementer ved innerHTML. Ingen nettverk eller nettleseroppstart er nødvendig. v108 endrer ingen synk, datamodell, regler eller minsteversjon (106).
+
 Appen har ingen bundler og ingen installerte npm-avhengigheter. Lokale moduler importeres direkte som ES-moduler. Firebase SDK lastes dynamisk fra Google CDN i `src/sync/firebase.js`.
 
 Oppstart:

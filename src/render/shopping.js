@@ -33,8 +33,8 @@ export function renderShoppingReviewModalView(options = {}) {
             ${group.subtitle ? `<p>${escapeHtml(group.subtitle)}</p>` : ""}
           </div>
           <div class="shopping-review-group-actions">
-            <button class="text-action quiet" type="button" data-review-group-select="${escapeHtml(group.id)}">Alle</button>
-            <button class="text-action quiet" type="button" data-review-group-clear="${escapeHtml(group.id)}">Ingen</button>
+            <button class="text-action quiet" type="button" data-focus-key="review-all:${escapeHtml(group.id)}" data-review-group-select="${escapeHtml(group.id)}">Alle</button>
+            <button class="text-action quiet" type="button" data-focus-key="review-none:${escapeHtml(group.id)}" data-review-group-clear="${escapeHtml(group.id)}">Ingen</button>
           </div>
         </div>
         <div class="shopping-review-items">
@@ -43,7 +43,7 @@ export function renderShoppingReviewModalView(options = {}) {
             const checked = selectedIds.has(item.id);
             return `
               <label class="shopping-review-item${checked ? " selected" : ""}">
-                <input class="shopping-checkbox" type="checkbox" data-review-item="${escapeHtml(item.id)}" ${checked ? "checked" : ""}>
+                <input class="shopping-checkbox" type="checkbox" data-focus-key="review-item:${escapeHtml(item.id)}" data-review-item="${escapeHtml(item.id)}" ${checked ? "checked" : ""}>
                 <span class="shopping-review-item-name">${escapeHtml(item.name)}</span>
                 ${amountText ? `<span class="shopping-review-item-amount">${escapeHtml(amountText)}</span>` : ""}
               </label>
@@ -56,22 +56,22 @@ export function renderShoppingReviewModalView(options = {}) {
   }).join("");
 
   return `
-    <div class="modal-backdrop shopping-review-backdrop" data-close-shopping-review>
+    <div class="modal-backdrop shopping-review-backdrop" data-scroll-key="shopping-review" data-close-shopping-review>
       <div class="modal shopping-review-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
         <div class="modal-header">
           <div>
             <h3>${escapeHtml(review.title || "Se over varer")}</h3>
             <p class="modal-subtitle">${selectedCount} av ${totalCount} varer er valgt</p>
           </div>
-          <button class="modal-close" type="button" data-close-shopping-review aria-label="Lukk">×</button>
+          <button class="modal-close" type="button" data-focus-key="review-close" data-close-shopping-review aria-label="Lukk">×</button>
         </div>
         <div class="${bodyClass}">
           ${review.missingIngredients?.length ? `<p class="shopping-review-warning" role="status">Mangler ingredienser: ${escapeHtml(review.missingIngredients.join(", "))}</p>` : ""}
           ${groups || `<div class="shopping-empty">Ingen varer å legge til.</div>`}
         </div>
         <div class="modal-footer">
-          <button class="button secondary compact" type="button" data-close-shopping-review>Avbryt</button>
-          <button class="button${selectedCount ? "" : " disabled"}" type="button" data-confirm-shopping-review ${selectedCount ? "" : "disabled"}>${confirmText}</button>
+          <button class="button secondary compact" type="button" data-focus-key="review-cancel" data-close-shopping-review>Avbryt</button>
+          <button class="button${selectedCount ? "" : " disabled"}" type="button" data-focus-key="review-confirm" data-confirm-shopping-review ${selectedCount ? "" : "disabled"}>${confirmText}</button>
         </div>
       </div>
     </div>

@@ -151,6 +151,14 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - På mobil er ⋯ minst 44×44 px. Mengde-/enhetskolonnene gir plass til knappen uten å redusere navnefeltet. Radmenyen vises som et rullbart ark nederst med én handling per linje. Stegnummerering avledes fortsatt fra rekkefølgen.
 - Kjør node tests/app/editor-rows.test.mjs, node tests/domain/meals.test.mjs og node tests/render/meals.test.mjs, samt alle øvrige testskript og syntakskontroller. APP_VERSION/APP_VERSION_NUMBER/cache er v107/107, REQUIRED_MIN_APP_VERSION forblir 106. Ingen endring i functions eller firestore.rules; ingen nettverk, installasjon, publisering eller Git i leveransen.
 
+## Rulleposisjon og fokus i vinduer fra v108
+
+- Nye vinduer med egen rulleliste skal ha en unik, stabil data-scroll-key på elementet som faktisk ruller. Undersøk overflow, høydebegrensninger og foreldre/mobilregler før nøkkelen plasseres. Ikke sett nøkkel på en innholdsbeholder med overflow:visible. Gjennomgangen ruller på .shopping-review-backdrop; øvrige nøkler står på .gen-modal-list, .planner-sheet-body, .meal-picker-list og .editor-row-menu-actions.
+- Fokusbare kontroller i disse vinduene får en stabil data-focus-key. Bruk vare-ID/datonøkkel/dag eller målgruppeindeks ved gjentatte kontroller, og ulike nøkler for ulike handlinger. Identiteten skal ikke avhenge av valgt-status, teller eller knappetekst. Dette gjelder også vinduets topp-/bunnknapper utenfor selve rullelisten.
+- render() tar en lokal kopi av scrollTop og fokusnøkkel før innerHTML erstattes. Etter rendering og binding gjenopprettes fokus innenfor samme vindu med focus({preventScroll:true}), deretter scrollTop synkront i samme render. Match fokusnøklene som tekst, uten interpolering av vilkårlige ID-er i CSS-selektorer. Flere åpne vinduer bevarer hver sin posisjon.
+- Kopien finnes bare i den aktuelle render-kallstakken, aldri i state, localStorage, synk eller backup. En lukket/fjernet nøkkel ignoreres; åpning etter lukking begynner øverst. Manglende/fjernet fokuskontroll ignoreres. syncMealPickerScrollLock og dagens tegneflyt beholdes.
+- Kjør node tests/app/window-scroll.test.mjs og relevante render-/workflow-tester, alle øvrige testskript og node --check. APP_VERSION/APP_VERSION_NUMBER/cache er v108/108; REQUIRED_MIN_APP_VERSION er fortsatt 106. Ingen nettverk, installasjon, publisering, Git eller endring i functions/firestore.rules inngår.
+
 ## Importvalg og blandede tall fra v99
 
 - Ikke bruk window.confirm etter asynkron oppskriftsimport. Vis Erstatt/Behold i importpanelet; fyll tomme deler straks og behold konfliktdeler til valget. Les dagens skjema før erstatning og erstatt bare konfliktområdene. Andre confirm-kall, utløst direkte av klikk, beholdes.

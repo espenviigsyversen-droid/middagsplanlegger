@@ -290,13 +290,13 @@ export function renderEditorRowMenuView({ kind, index, ingredients = [], steps =
   return `<div class="modal-backdrop editor-row-menu-backdrop active" data-editor-menu-close>
     <section class="modal editor-row-menu active" data-editor-menu role="dialog" aria-modal="true" aria-labelledby="editorRowMenuTitle">
       <div class="modal-header"><h3 id="editorRowMenuTitle">${escapeHtml(title)}</h3>
-        <button class="modal-close" type="button" data-editor-menu-close aria-label="Lukk radmeny">×</button></div>
-      <div class="editor-row-menu-actions">
-        <button class="button secondary" type="button" data-editor-menu-action="up" ${index === 0 ? "disabled" : ""}>Flytt opp</button>
-        <button class="button secondary" type="button" data-editor-menu-action="down" ${index === rows.length - 1 ? "disabled" : ""}>Flytt ned</button>
+        <button class="modal-close" type="button" data-focus-key="editor-row-close" data-editor-menu-close aria-label="Lukk radmeny">×</button></div>
+      <div class="editor-row-menu-actions" data-scroll-key="editor-row-menu">
+        <button class="button secondary" type="button" data-focus-key="editor-row-up" data-editor-menu-action="up" ${index === 0 ? "disabled" : ""}>Flytt opp</button>
+        <button class="button secondary" type="button" data-focus-key="editor-row-down" data-editor-menu-action="down" ${index === rows.length - 1 ? "disabled" : ""}>Flytt ned</button>
         ${groups.some(group => group.headingIndex >= 0) ? `<h4>Flytt til</h4>
-          ${targets.map(group => `<button class="button secondary" type="button" data-editor-menu-action="group" data-group-index="${group.headingIndex}">${escapeHtml(group.label)}</button>`).join("") || '<p class="field-hint">Ingen andre grupper.</p>'}` : ""}
-        <button class="button ghost danger" type="button" data-editor-menu-action="remove">Fjern</button>
+          ${targets.map(group => `<button class="button secondary" type="button" data-focus-key="editor-row-group:${group.headingIndex}" data-editor-menu-action="group" data-group-index="${group.headingIndex}">${escapeHtml(group.label)}</button>`).join("") || '<p class="field-hint">Ingen andre grupper.</p>'}` : ""}
+        <button class="button ghost danger" type="button" data-focus-key="editor-row-remove" data-editor-menu-action="remove">Fjern</button>
       </div>
     </section></div>`;
 }

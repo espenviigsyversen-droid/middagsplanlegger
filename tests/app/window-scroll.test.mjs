@@ -1,0 +1,163 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import vm from "node:vm";
+
+// Real rendering and event handlers, with a small local DOM stub that replaces nodes on innerHTML.
+const appUrl = new URL("../../app.js", import.meta.url);
+let source = await readFile(appUrl, "utf8");
+const imports = /import\s+(\{[\s\S]*?\})\s+from\s+"([^"]+)";/g, bindings = {};
+for (const match of source.matchAll(imports)) {
+  const module = await import(new URL(match[2], appUrl));
+  for (const entry of match[1].slice(1, -1).split(",").filter(item => item.trim())) {
+    const [name, alias = name] = entry.trim().split(/\s+as\s+/); bindings[alias] = module[name];
+  }
+}
+source = source.replace(imports, "").replace(/render\(\);\s*initFirebaseSync\(\);\s*$/, "");
+const decode = value => value.replaceAll("&quot;", '"').replaceAll("&#039;", "'")
+  .replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+const document = { activeElement: null, addEventListener() {}, visibilityState: "visible",
+  documentElement: { scrollTop: 0 }, body: { style: {} } };
+const classes = new Set();
+document.body.classList = { contains: key => classes.has(key), add: key => classes.add(key), remove: key => classes.delete(key),
+  toggle: (key, on) => on ? classes.add(key) : classes.delete(key) };
+const focusCalls = [], scrollWrites = [], storage = new Map();
+class Node {
+  constructor(tag = "div", attrs = {}) {
+    this.tagName = tag; this.attrs = attrs; this.children = []; this.parent = null; this.style = {}; this.handlers = {};
+    this.dataset = Object.fromEntries(Object.entries(attrs).filter(([key]) => key.startsWith("data-"))
+      .map(([key, value]) => [key.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()), value]));
+    this.checked = "checked" in attrs; this.value = attrs.value || ""; this.disabled = "disabled" in attrs; this._scrollTop = 0;
+  }
+  get scrollTop() { return this._scrollTop; }
+  set scrollTop(value) { this._scrollTop = value; scrollWrites.push([this.dataset.scrollKey, value]); }
+  matches(selector) {
+    if (selector.startsWith(".")) return (this.attrs.class || "").split(/\s+/).includes(selector.slice(1));
+    if (selector.startsWith("#")) return this.attrs.id === selector.slice(1);
+    const attribute = /^\[([^=\]]+)(?:="([^"]*)")?\]$/.exec(selector);
+    return attribute ? attribute[1] in this.attrs && (attribute[2] === undefined || this.attrs[attribute[1]] === attribute[2])
+      : this.tagName === selector;
+  }
+  querySelectorAll(selector) { return this.children.flatMap(child => [...(child.matches(selector) ? [child] : []), ...child.querySelectorAll(selector)]); }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+  closest(selector) { return this.matches(selector) ? this : this.parent?.closest(selector) || null; }
+  contains(node) { return node === this || this.children.some(child => child.contains(node)); }
+  addEventListener(type, fn) { this.handlers[type] = fn; }
+  focus(options) {
+    document.activeElement = this; focusCalls.push({ key: this.dataset.focusKey, options });
+    // Model the unwanted scroll when focus() is called without preventScroll.
+    if (!options?.preventScroll) { const scroller = this.closest("[data-scroll-key]"); if (scroller) scroller.scrollTop = 0; }
+  }
+  select() {}
+  setSelectionRange() {}
+  scrollIntoView() {}
+  set innerHTML(html) {
+    this.html = html; this.children = [];
+    const stack = [this], voidTags = new Set(["input", "br", "hr", "img", "path", "circle", "rect"]);
+    for (const match of html.matchAll(/<\/?([a-z][\w-]*)\b([^>]*)>/gi)) {
+      const tag = match[1].toLowerCase();
+      if (match[0].startsWith("</")) {
+        if (stack.at(-1)?.tagName === tag) stack.pop();
+        continue;
+      }
+      const attrs = Object.fromEntries([...match[2].matchAll(/([\w-]+)(?:="([^"]*)"|='([^']*)')?/g)]
+        .map(attribute => [attribute[1], decode(attribute[2] ?? attribute[3] ?? "")]));
+      const child = new Node(tag, attrs); child.parent = stack.at(-1); child.parent.children.push(child);
+      if (!voidTags.has(tag) && !match[0].endsWith("/>")) stack.push(child);
+    }
+    if (!this.contains(document.activeElement)) document.activeElement = null;
+  }
+  get innerHTML() { return this.html || ""; }
+}
+const app = new Node();
+document.querySelector = selector => selector === "#app" ? app : null;
+const pageScrolls = [];
+const window = { addEventListener() {}, scrollY: 330, scrollTo: (x, y) => { pageScrolls.push([x, y]); window.scrollY = y; } };
+const context = vm.createContext({ ...bindings, structuredClone, Date, Blob, File, URL, console, document, window,
+  navigator: { onLine: false }, setTimeout() {}, clearTimeout() {},
+  localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } });
+vm.runInContext(source, context);
+const run = code => vm.runInContext(code, context);
+run('accessState={kind:"ready",offline:true}; loadAiKeyStatus=async()=>{}; state.activeView="shopping";');
+const scroller = key => app.querySelector(`[data-scroll-key="${key}"]`);
+const control = key => app.querySelectorAll("[data-focus-key]").find(node => node.dataset.focusKey === key) || null;
+const activate = (key, type = "click", configure = () => {}) => {
+  const target = control(key); assert.ok(target, key); target.focus({preventScroll:true}); configure(target);
+  target.handlers[type]({ target, currentTarget: target, preventDefault() {} });
+};
+const expectFocus = key => {
+  assert.equal(document.activeElement, control(key));
+  assert.equal(focusCalls.at(-1).key, key); assert.equal(focusCalls.at(-1).options.preventScroll, true);
+};
+
+const review = { open: true, mode: "meal", title: "Legg til fra Lang oppskrift", groups: [
+  { id: 'group:"a', title: "Mat", items: Array.from({length:23}, (_, index) => ({id:`item:${index}`,name:`Vare ${index}`,amount:"1",unit:"stk"})) },
+], selectedItemIds: Array.from({length:23}, (_, index) => `item:${index}`) };
+context.review = review; run("setState({shoppingReview:structuredClone(review)})");
+const oldReview = scroller("shopping-review"); oldReview.scrollTop = 860;
+activate("review-item:item:20", "change", node => { node.checked = false; });
+assert.notEqual(scroller("shopping-review"), oldReview, "The render actually replaces DOM nodes");
+assert.equal(scroller("shopping-review").scrollTop, 860); expectFocus("review-item:item:20");
+assert.match(app.innerHTML, /22 av 23 varer er valgt/); assert.match(app.innerHTML, /22 av 23 valgt/);
+assert.match(app.innerHTML, /Legg til 22 varer/);
+activate("review-item:item:21", "change", node => { node.checked = false; });
+assert.equal(scroller("shopping-review").scrollTop, 860); expectFocus("review-item:item:21");
+assert.match(app.innerHTML, /21 av 23 varer er valgt/); assert.match(app.innerHTML, /Legg til 21 varer/);
+activate('review-none:group:"a');
+assert.equal(scroller("shopping-review").scrollTop, 860); expectFocus('review-none:group:"a');
+assert.match(app.innerHTML, /0 av 23 valgt/); assert.match(app.innerHTML, /Legg til 0 varer/);
+activate('review-all:group:"a');
+assert.equal(scroller("shopping-review").scrollTop, 860); expectFocus('review-all:group:"a');
+assert.match(app.innerHTML, /23 av 23 valgt/); assert.match(app.innerHTML, /Legg til 23 varer/);
+activate("review-cancel"); assert.equal(scroller("shopping-review"), null);
+run("setState({shoppingReview:structuredClone(review)})");
+assert.equal(scroller("shopping-review").scrollTop, 0, "No position retained after closure");
+
+// Days modal: actual checkbox change plus button count update, with a fresh scroller after closure.
+run('setState({shoppingReview:{open:false},generateModal:{open:true,selectedDays:[]}})');
+const daysScroller = scroller("generate-days"); assert.ok(daysScroller); daysScroller.scrollTop = 430;
+const dayCheckbox = daysScroller.querySelectorAll("[data-modal-day]").at(-1);
+activate(dayCheckbox.dataset.focusKey, "change", node => { node.checked = true; });
+assert.equal(scroller("generate-days").scrollTop, 430); expectFocus(dayCheckbox.dataset.focusKey);
+assert.match(app.innerHTML, /Generer liste \(1 dager\)/);
+activate("generate-cancel"); run('setState({generateModal:{open:true,selectedDays:[]}})');
+assert.equal(scroller("generate-days").scrollTop, 0);
+
+// Planner body and a footer button outside the scroller keep position/focus.
+run('setState({generateModal:{open:false},activeView:"planner",plannerDaySheet:{open:true,dayIndex:2}})');
+assert.ok(scroller("planner-day")); scroller("planner-day").scrollTop = 250;
+activate("planner-servings:2", "change", node => { node.value = "6"; });
+assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-servings:2");
+activate("planner-lock:2"); assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-lock:2");
+assert.match(app.innerHTML, /Lås opp dagen/);
+
+// Picker restores list position despite its existing automatic search focus. Page lock is unchanged.
+run('setState({mealPicker:{open:true,dayIndex:2,query:""}})');
+assert.equal(classes.has("meal-picker-open"), true); assert.equal(document.body.style.top, "-330px");
+scroller("meal-picker").scrollTop = 360; control("picker-search").focus({preventScroll:true}); run("render()");
+assert.equal(scroller("meal-picker").scrollTop, 360); expectFocus("picker-search");
+assert.equal(scroller("planner-day").scrollTop, 250, "Multiple windows retain their own positions");
+assert.equal(pageScrolls.length, 0, "Rerender does not unlock or move the underlying page");
+activate("picker-close"); assert.equal(classes.has("meal-picker-open"), false);
+assert.deepEqual(pageScrolls, [[0,330]]);
+run('setState({mealPicker:{open:true,dayIndex:2,query:""}})');
+assert.equal(scroller("meal-picker").scrollTop, 0);
+
+// Row-menu list, unrelated focus, and a focused control that disappears.
+run('setState({mealPicker:{open:false,dayIndex:null,query:""},plannerDaySheet:{open:false},activeView:"meals",editingMealId:"new",draftMeal:emptyMeal(),draftIngredients:[{type:"heading",title:"Mat"},{name:"gulrot"},{type:"heading",title:"Saus"},{name:"vann"}],draftSteps:[""]})');
+run('editorRowMenu={editorId:"new",kind:"ingredient",index:1}; render()');
+scroller("editor-row-menu").scrollTop = 140; control("editor-row-group:2").focus({preventScroll:true}); run("render()");
+assert.equal(scroller("editor-row-menu").scrollTop, 140); expectFocus("editor-row-group:2");
+document.activeElement = app.querySelector("[data-add-ingredient]");
+const focusCount = focusCalls.length; run("render()");
+assert.equal(focusCalls.length, focusCount, "No window focus restored when focus was outside it");
+assert.equal(scroller("editor-row-menu").scrollTop, 140);
+control("editor-row-group:2").focus({preventScroll:true});
+run('state.draftIngredients=state.draftIngredients.slice(0,2); render()');
+assert.equal(control("editor-row-group:2"), null); assert.equal(scroller("editor-row-menu").scrollTop, 140);
+run('editorRowMenu=null; render(); editorRowMenu={editorId:"new",kind:"ingredient",index:1}; render()');
+assert.equal(scroller("editor-row-menu").scrollTop, 0);
+run("saveState()");
+assert.doesNotMatch(storage.get("middagsapp-state"), /scrollTop|scrollKey|focusKey/);
+assert.doesNotMatch(run("JSON.stringify(syncPayload())"), /scrollTop|scrollKey|focusKey/);
+assert.ok(scrollWrites.length > 0);
+console.log("window scroll/focus app tests ok");

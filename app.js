@@ -222,8 +222,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v107";
-const APP_VERSION_NUMBER = 107;
+const APP_VERSION = "v108";
+const APP_VERSION_NUMBER = 108;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -679,7 +679,7 @@ function renderMealPickerModal() {
       <div class="modal bottom-sheet meal-picker-modal active" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h3>Velg middag for ${escapeHtml(dayName)}</h3>
-          <button class="modal-close" type="button" data-close-meal-picker aria-label="Lukk">×</button>
+          <button class="modal-close" type="button" data-focus-key="picker-close" data-close-meal-picker aria-label="Lukk">×</button>
         </div>
         <div class="modal-body">
           <div class="meal-picker-search-wrap">
@@ -689,12 +689,13 @@ function renderMealPickerModal() {
               placeholder="Søk i oppskrifter (f.eks. taco, laks...)" 
               value="${escapeHtml(query)}" 
               data-meal-picker-search 
+              data-focus-key="picker-search"
               autocomplete="off"
               autofocus
             />
-            <button class="search-clear-btn" type="button" data-clear-search-input style="${query ? '' : 'display: none;'}">×</button>
+            <button class="search-clear-btn" type="button" data-focus-key="picker-clear" data-clear-search-input style="${query ? '' : 'display: none;'}">×</button>
           </div>
-          <div class="meal-picker-list">
+          <div class="meal-picker-list" data-scroll-key="meal-picker">
             ${renderMealPickerListItems(query, dayIndex)}
           </div>
         </div>
@@ -723,7 +724,7 @@ function renderMealPickerListItems(query = "", dayIndex) {
   const quickTitle = quickMealTitleForQuery(query, state.meals);
 
   let html = quickTitle ? `
-    <button class="meal-picker-item quick-meal-item" type="button" data-create-quick-meal>
+    <button class="meal-picker-item quick-meal-item" type="button" data-focus-key="picker-quick-meal" data-create-quick-meal>
       <span class="meal-picker-item-details">
         <span class="meal-picker-item-title">+ Legg til «${escapeHtml(quickTitle)}» som ny middag</span>
         <span class="meal-picker-item-desc">Oppskriften kan fylles ut senere</span>
@@ -1201,7 +1202,7 @@ function renderGenerateModal() {
     const dateStr = formatDate(d.date);
     return `
       <label class="gen-modal-row${isChecked ? " selected" : ""}">
-        <input type="checkbox" class="gen-modal-check" data-modal-day="${escapeHtml(d.dateKey)}" ${isChecked ? "checked" : ""}>
+        <input type="checkbox" class="gen-modal-check" data-focus-key="generate-day:${escapeHtml(d.dateKey)}" data-modal-day="${escapeHtml(d.dateKey)}" ${isChecked ? "checked" : ""}>
         <div class="gen-modal-day">
           <span class="gen-modal-dayname">${shortDay}</span>
           <span class="gen-modal-date">${dateStr}</span>
@@ -1218,14 +1219,14 @@ function renderGenerateModal() {
       <div class="modal" role="dialog" aria-modal="true">
         <div class="modal-header">
           <h3>Velg dager å handle for</h3>
-          <button class="modal-close" data-close-modal aria-label="Lukk">×</button>
+          <button class="modal-close" data-focus-key="generate-close" data-close-modal aria-label="Lukk">×</button>
         </div>
-        <div class="gen-modal-list">
+        <div class="gen-modal-list" data-scroll-key="generate-days">
           ${rows}
         </div>
         <div class="modal-footer">
-          <button class="button secondary compact" data-close-modal>Avbryt</button>
-          <button class="button${anySelected ? "" : " disabled"}" data-confirm-generate ${anySelected ? "" : "disabled"}>
+          <button class="button secondary compact" data-focus-key="generate-cancel" data-close-modal>Avbryt</button>
+          <button class="button${anySelected ? "" : " disabled"}" data-focus-key="generate-confirm" data-confirm-generate ${anySelected ? "" : "disabled"}>
             Generer liste (${selected.length} dager)
           </button>
         </div>
@@ -3597,7 +3598,30 @@ function bindEvents() {
   });
 }
 
+function captureWindowPositions() {
+  const active = document.activeElement;
+  return [...app.querySelectorAll("[data-scroll-key]")].map(element => {
+    const windowRoot = element.closest(".modal-backdrop") || element;
+    return { key: element.dataset.scrollKey, scrollTop: element.scrollTop,
+      focusKey: windowRoot.contains(active) ? active?.dataset?.focusKey : null };
+  });
+}
+
+function restoreWindowPositions(positions) {
+  const previous = new Map(positions.map(position => [position.key, position]));
+  for (const element of app.querySelectorAll("[data-scroll-key]")) {
+    const position = previous.get(element.dataset.scrollKey);
+    if (!position) continue;
+    const windowRoot = element.closest(".modal-backdrop") || element;
+    const focused = position.focusKey ? [...windowRoot.querySelectorAll("[data-focus-key]")]
+      .find(control => control.dataset.focusKey === position.focusKey) : null;
+    focused?.focus({ preventScroll: true });
+    element.scrollTop = position.scrollTop;
+  }
+}
+
 function render(preserveShoppingInput = true) {
+  const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
   syncAiKeyContext();
@@ -3656,6 +3680,7 @@ function render(preserveShoppingInput = true) {
       if (draft.start != null) newInput.setSelectionRange(draft.start, draft.end, draft.direction);
     }
   }
+  restoreWindowPositions(windowPositions);
   hideLoadingScreen();
 }
 

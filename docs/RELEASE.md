@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v108 – rulleposisjon i vinduer
+
+v108 bevarer rulleposisjon og fokus i handlelistegjennomgangen, Velg dager å handle for, planleggerens dagsark, middagsvelgeren og editorens radmeny gjennom render. Bare klienten endres; ingen serverpublisering er nødvendig. REQUIRED_MIN_APP_VERSION er fortsatt 106.
+
+Etter eiers publisering: kontroller v108 på PC og iPhone. Rull langt ned i Legg til fra en oppskrift, huk av flere varer og bruk Alle/Ingen per gruppe. Listen skal stå stille mens tellerne og Legg til-knappen oppdateres. På PC skal tastaturfokus bli på samme kontroll. Gjenta for handledager og dagsarket. Lukk og åpne igjen; vinduet skal starte øverst. Kontroller middagsvelgerens sidelås og radmenyen. Se docs/LEVERANSE_V108.md for filoversikt og lokale resultater.
+
 ### v107 – radvalg i oppskriftsredigeringen
 
 v107 flytter ingredienser og steg i editorens utkast uten nytt dataformat eller endret synk. REQUIRED_MIN_APP_VERSION forblir 106. Ingen serverpublisering er nødvendig. Eier tar med filene i docs/LEVERANSE_V107.md i GitHub Desktop og publiserer klienten som vanlig.
@@ -28,6 +34,7 @@ node tests/domain/weeks.test.mjs
 node tests/render/calendar.test.mjs
 node tests/render/meals.test.mjs
 node tests/app/editor-rows.test.mjs
+node tests/app/window-scroll.test.mjs
 node tests/render/planner.test.mjs
 node tests/render/setup.test.mjs
 node tests/render/shopping.test.mjs

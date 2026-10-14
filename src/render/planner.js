@@ -76,24 +76,24 @@ export function renderPlannerDaySheetView(options = {}) {
             <h3>${escapeHtml(day)}</h3>
             <p class="modal-subtitle">${escapeHtml(dateLabel)}</p>
           </div>
-          <button class="modal-close" type="button" data-close-planner-day aria-label="Lukk">×</button>
+          <button class="modal-close" type="button" data-focus-key="planner-close" data-close-planner-day aria-label="Lukk">×</button>
         </div>
-        <div class="modal-body planner-sheet-body">
+        <div class="modal-body planner-sheet-body" data-scroll-key="planner-day">
           <label class="planner-control">
             <span>Plan</span>
-            <select class="select compact-select" data-day-mode="${index}" aria-label="Plan for ${escapeHtml(day)}">
+            <select class="select compact-select" data-focus-key="planner-mode:${index}" data-day-mode="${index}" aria-label="Plan for ${escapeHtml(day)}">
               ${planModeEntries.map(([value, option]) => `<option value="${escapeHtml(value)}" ${dayMode === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
             </select>
           </label>
           ${!isPlannedMeal ? `
             <label class="planner-control wide">
               <span>Notat</span>
-              <input class="input" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="F.eks. bursdag, rester eller middag ute">
+              <input class="input" data-focus-key="planner-note:${index}" data-day-note="${index}" value="${escapeHtml(dayNote)}" placeholder="F.eks. bursdag, rester eller middag ute">
             </label>
           ` : `
             <label class="planner-control">
               <span>Middag</span>
-              <button class="select select-trigger-btn" type="button" data-open-meal-picker="${index}">
+              <button class="select select-trigger-btn" type="button" data-focus-key="planner-meal:${index}" data-open-meal-picker="${index}">
                 <span>${mealTitle ? escapeHtml(mealTitle) : "Velg middag..."}</span>
                 <span class="chevron">▾</span>
               </button>
@@ -101,22 +101,22 @@ export function renderPlannerDaySheetView(options = {}) {
             <div class="planner-sheet-grid">
               <label class="planner-control">
                 <span>Type</span>
-                <select class="select compact-select" data-day-type="${index}" aria-label="Dagstype for ${escapeHtml(day)}">
+                <select class="select compact-select" data-focus-key="planner-type:${index}" data-day-type="${index}" aria-label="Dagstype for ${escapeHtml(day)}">
                   ${suitabilityEntries.map(([value, label]) => `<option value="${escapeHtml(value)}" ${dayType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
                 </select>
               </label>
               <label class="planner-control persons">
                 <span>Porsjoner</span>
-                <input class="input compact-input" type="number" min="1" max="30" data-day-servings="${index}" value="${dayServings}">
+                <input class="input compact-input" type="number" min="1" max="30" data-focus-key="planner-servings:${index}" data-day-servings="${index}" value="${dayServings}">
               </label>
               <div class="planner-control planner-servings-help"><span class="field-hint">${ownServings ? "Endret for denne dagen" : "Følger standarden"}</span>
-                ${ownServings ? `<button class="button secondary compact" type="button" data-use-standard-servings="${index}">Bruk standard (${escapeHtml(standardServings)})</button>` : ""}</div>
+                ${ownServings ? `<button class="button secondary compact" type="button" data-focus-key="planner-standard:${index}" data-use-standard-servings="${index}">Bruk standard (${escapeHtml(standardServings)})</button>` : ""}</div>
             </div>
           `}
         </div>
         <div class="modal-footer planner-sheet-footer">
-          <button class="button secondary" type="button" data-lock-day="${index}">${locked ? "Lås opp dagen" : "Lås dagen"}</button>
-          ${isPlannedMeal ? `<button class="button" type="button" data-random-day="${index}" ${locked ? "disabled" : ""}>Foreslå ny</button>` : ""}
+          <button class="button secondary" type="button" data-focus-key="planner-lock:${index}" data-lock-day="${index}">${locked ? "Lås opp dagen" : "Lås dagen"}</button>
+          ${isPlannedMeal ? `<button class="button" type="button" data-focus-key="planner-random:${index}" data-random-day="${index}" ${locked ? "disabled" : ""}>Foreslå ny</button>` : ""}
         </div>
       </section>
     </div>
