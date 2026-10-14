@@ -77,6 +77,9 @@ const context = vm.createContext({ ...bindings, structuredClone, Date, Blob, Fil
   localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } });
 vm.runInContext(source, context);
 const run = code => vm.runInContext(code, context);
+context.checkExclusiveWindows = () => assert.equal(run("Boolean(state.plannerDaySheet?.open && state.mealPicker?.open)"), false,
+  "The picker and day sheet must never be open in the same render");
+run("const renderWithWindows = render; render = (...args) => { checkExclusiveWindows(); renderWithWindows(...args); };");
 run('accessState={kind:"ready",offline:true}; loadAiKeyStatus=async()=>{}; state.activeView="shopping";');
 const scroller = key => app.querySelector(`[data-scroll-key="${key}"]`);
 const control = key => app.querySelectorAll("[data-focus-key]").find(node => node.dataset.focusKey === key) || null;
@@ -130,17 +133,52 @@ assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-servi
 activate("planner-lock:2"); assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-lock:2");
 assert.match(app.innerHTML, /Lås opp dagen/);
 
-// Picker restores list position despite its existing automatic search focus. Page lock is unchanged.
-run('setState({mealPicker:{open:true,dayIndex:2,query:""}})');
+// The day sheet is suspended, and only the picker is rendered. Its own rerenders still preserve scroll/focus.
+activate("planner-meal:2");
+assert.equal(run("state.plannerDaySheet.open"), false); assert.equal(scroller("planner-day"), null);
+assert.deepEqual(JSON.parse(run("JSON.stringify(navigationLevels())")), ["planner-day:2", "picker:2"]);
 assert.equal(classes.has("meal-picker-open"), true); assert.equal(document.body.style.top, "-330px");
 scroller("meal-picker").scrollTop = 360; control("picker-search").focus({preventScroll:true}); run("render()");
 assert.equal(scroller("meal-picker").scrollTop, 360); expectFocus("picker-search");
-assert.equal(scroller("planner-day").scrollTop, 250, "Multiple windows retain their own positions");
+assert.equal(scroller("planner-day"), null, "No hidden day-sheet DOM behind the picker");
 assert.equal(pageScrolls.length, 0, "Rerender does not unlock or move the underlying page");
 activate("picker-close"); assert.equal(classes.has("meal-picker-open"), false);
 assert.deepEqual(pageScrolls, [[0,330]]);
-run('setState({mealPicker:{open:true,dayIndex:2,query:""}})');
+assert.equal(run("state.plannerDaySheet.dayIndex"), 2); assert.equal(scroller("planner-day").scrollTop, 250);
+expectFocus("planner-meal:2"); assert.equal(run("mealPickerReturn"), null);
+
+activate("planner-meal:2");
+const pickerBackdrop = app.querySelector("[data-close-meal-picker]");
+pickerBackdrop.handlers.click({target:scroller("meal-picker"),currentTarget:pickerBackdrop});
+assert.equal(run("state.mealPicker.open"), true, "An inside click must not dismiss the picker");
+pickerBackdrop.handlers.click({target:pickerBackdrop,currentTarget:pickerBackdrop});
+assert.equal(run("state.mealPicker.open"), false); assert.equal(run("state.plannerDaySheet.open"), true);
+assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:2");
+
+// Selecting and clearing dinner returns to the same sheet, showing the latest plan and restoring its position.
+run('state.meals=normalizeMeals([{...emptyMeal(),id:"pick",title:"Valgt middag"}]);');
+activate("planner-meal:2");
+const selected = app.querySelectorAll("[data-select-meal]").find(node => node.dataset.selectMeal === "pick");
+assert.ok(selected); scroller("meal-picker").handlers.click({target:selected});
+assert.equal(run("currentPlan()[2]"), "pick"); assert.equal(run("state.mealPicker.open"), false);
+assert.equal(run("state.plannerDaySheet.open"), true); assert.match(app.innerHTML, /Valgt middag/);
+assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:2");
+activate("planner-meal:2");
+const emptyChoice = app.querySelectorAll("[data-select-meal]").find(node => node.dataset.selectMeal === "");
+scroller("meal-picker").handlers.click({target:emptyChoice});
+assert.equal(run("currentPlan()[2]"), ""); assert.equal(run("state.plannerDaySheet.open"), true);
+assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:2");
+
+// Creating a quick meal follows the same return flow and keeps scroll through the toast render.
+activate("planner-meal:2");
+run('state.mealPicker.query="Helt ny middag"; addQuickMealForPicker()');
+assert.equal(run("getMeal(currentPlan()[2]).title"), "Helt ny middag");
+assert.equal(scroller("planner-day").scrollTop, 250); expectFocus("planner-meal:2");
+
+// Direct row opening has no sheet return context and starts the picker at the top.
+run('openMealPicker(2)');
 assert.equal(scroller("meal-picker").scrollTop, 0);
+assert.equal(run("mealPickerReturn"), null); activate("picker-close"); assert.equal(run("state.plannerDaySheet.open"), false);
 
 // Row-menu list, unrelated focus, and a focused control that disappears.
 run('setState({mealPicker:{open:false,dayIndex:null,query:""},plannerDaySheet:{open:false},activeView:"meals",editingMealId:"new",draftMeal:emptyMeal(),draftIngredients:[{type:"heading",title:"Mat"},{name:"gulrot"},{type:"heading",title:"Saus"},{name:"vann"}],draftSteps:[""]})');
@@ -158,6 +196,7 @@ run('editorRowMenu=null; render(); editorRowMenu={editorId:"new",kind:"ingredien
 assert.equal(scroller("editor-row-menu").scrollTop, 0);
 run("saveState()");
 assert.doesNotMatch(storage.get("middagsapp-state"), /scrollTop|scrollKey|focusKey/);
+assert.doesNotMatch(storage.get("middagsapp-state"), /mealPickerReturn/);
 assert.doesNotMatch(run("JSON.stringify(syncPayload())"), /scrollTop|scrollKey|focusKey/);
 assert.ok(scrollWrites.length > 0);
 console.log("window scroll/focus app tests ok");

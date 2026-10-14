@@ -161,6 +161,8 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 
 ## Undersider og tilbake fra v109
 
+- Fra v111 bruker dagsark → middagsvelger openMealPicker/closeMealPicker. Bare ett av vinduene er åpent. mealPickerReturn er runtime-tilstand med returdag og v108-posisjon/fokus, aldri domenedata/lokal kopi/backup. navigationLevels beholder dagsarket som logisk forelder mens det er skjult. Valg, tømt valg, hurtigmiddag, ×, bakgrunn og tilbake gjenåpner samme dagsark; direkte radåpning gjør det ikke. Returen forkastes ved visnings-/tilgangsbytte eller synkstopp. Kjør tests/app/navigation.test.mjs og tests/app/window-scroll.test.mjs ved slike endringer.
+
 - src/render/subpage.js er eneste toppstripe for oppskrift og alle Innstillinger-undersider. Den har sticky posisjon, safe-area-padding og ‹ Tilbake til venstre; oppskriften har ⋯ til høyre. Undersidene bruker stripen i stedet for globalt brand-toppfelt. Oppskriftseditoren beholder Avbryt/Lagre nederst og får ingen slik stripe.
 - Oppskriften har tittel, eventuell beskrivelse, porsjonslinje, én hovedknapp og Hold skjermen på som role=switch/aria-checked. Uten ingredienser åpner hovedknappen redigeringen. Rediger/Åpne lenke/Hent fra lenke ligger i runtime-menyen recipeMenuOpen. Den har data-scroll-key=recipe-menu, fokusnøkler, Escape/fokuslås og samme mønster som radmenyen. Ingen lagret menytilstand.
 - descriptionRepeatsTitle i domain/meals.js sammenligner små bokstaver, bindestreker som mellomrom og fjernet tegnsetting/emoji med sammenslåtte mellomrom. Skjul bare gjentatt beskrivelse ved rendering; lagrede data skal aldri ryddes av visningsfunksjonen.

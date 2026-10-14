@@ -74,6 +74,34 @@ for(const [patch,open] of [
   history.go(-1);flush();assert.equal(run(open),false);assert.equal(index,0);
 }
 
+// v111: the sheet stays in history, but is not open behind the picker.
+const chooseDinner = mealId => {
+  const list=button(),item={dataset:{selectMeal:mealId},closest:selector=>selector==="[data-select-meal]"?item:null};
+  selectors.set(".meal-picker-list",[list]);run("bindEvents()");list.handlers.click({target:item});selectors.delete(".meal-picker-list");flush();
+};
+for(const fromCalendar of [false,true]) {
+  if(fromCalendar) click("[data-calendar-day]",{calendarDay:"3"});
+  else run('navigate({activeView:"planner",plannerDaySheet:{open:true,dayIndex:3}})');
+  flush();assert.equal(index,1);
+  run('openMealPicker(3,true)');flush();
+  assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(run("state.mealPicker.open"),true);assert.equal(index,2);
+  assert.deepEqual(json("navigationLevels()"),["planner-day:3","picker:3"]);
+  assert.doesNotMatch(app.innerHTML,/class="modal planner-sheet active"/);
+  history.go(-1);flush();assert.equal(run("state.plannerDaySheet.open"),true);assert.equal(run("state.plannerDaySheet.dayIndex"),3);
+  assert.equal(run("state.mealPicker.open"),false);assert.equal(index,1);
+  run('openMealPicker(3,true)');flush();click("[data-close-meal-picker]");assert.equal(index,1);
+  assert.equal(run("state.plannerDaySheet.open"),true);
+  run('openMealPicker(3,true)');flush();chooseDinner("wok");
+  assert.equal(run("currentPlan()[3]"),"wok");assert.equal(index,1);assert.equal(run("state.plannerDaySheet.dayIndex"),3);
+  run('openMealPicker(3,true)');flush();chooseDinner("");assert.equal(run("currentPlan()[3]"),"");assert.equal(index,1);
+  for(let turn=0;turn<4;turn++) {
+    run('openMealPicker(3,true)');flush();click("[data-close-meal-picker]");assert.equal(index,1);assert.equal(entries.length,3);
+  }
+  history.go(-1);flush();assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(run("state.activeView"),"planner");assert.equal(index,0);
+}
+run('openMealPicker(1)');flush();assert.equal(index,1);assert.equal(run("mealPickerReturn"),null);
+chooseDinner("wok");assert.equal(run("currentPlan()[1]"),"wok");assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(index,0);
+
 // Editor guard: collect unsaved DOM values, restore history entry and leave the editor intact.
 click("[data-edit-meal]",{editMeal:"wok"});
 selectors.set("[data-meal-form]",[form]);

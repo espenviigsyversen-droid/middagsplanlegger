@@ -223,8 +223,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v110";
-const APP_VERSION_NUMBER = 110;
+const APP_VERSION = "v111";
+const APP_VERSION_NUMBER = 111;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -237,6 +237,7 @@ const pendingRemoteScopes = new Set();
 let applyingRemoteState = false;
 let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
+let mealPickerReturn = null;
 let shoppingSyncStatus = null;
 let mealsSyncStatus = null;
 let weeksSyncStatus = null;
@@ -279,7 +280,11 @@ function navigationLevels() {
   if (state.activeView === "recipe") levels.push(`recipe:${state.selectedMealId}`);
   else if (SUBPAGE_VIEWS.has(state.activeView)) levels.push(`page:${state.activeView}`);
   if (state.plannerActionsOpen && state.activeView === "planner") levels.push("planner-actions");
-  if (state.plannerDaySheet?.open && state.activeView === "planner") levels.push(`planner-day:${state.plannerDaySheet.dayIndex}`);
+  if (state.activeView === "planner") {
+    const sheetDay = state.plannerDaySheet?.open ? state.plannerDaySheet.dayIndex
+      : state.mealPicker?.open ? mealPickerReturn?.dayIndex : null;
+    if (sheetDay !== null && sheetDay !== undefined) levels.push(`planner-day:${sheetDay}`);
+  }
   if (state.mealPicker?.open) levels.push(`picker:${state.mealPicker.dayIndex}`);
   if (state.generateModal?.open && state.activeView === "shopping") levels.push("generate-days");
   if (state.shoppingReview?.open) levels.push("shopping-review");
@@ -296,7 +301,7 @@ function backInApp() {
   if (editorRowMenu) { closeEditorRowMenu(); return true; }
   if (state.shoppingReview?.open) { closeShoppingReview(); return true; }
   if (state.generateModal?.open && state.activeView === "shopping") { setState({ generateModal: { open: false, selectedDays: [] } }); return true; }
-  if (state.mealPicker?.open) { setState({ mealPicker: { open: false, dayIndex: null, query: "" } }); return true; }
+  if (state.mealPicker?.open) { closeMealPicker(); return true; }
   if (state.plannerDaySheet?.open && state.activeView === "planner") { setState({ plannerDaySheet: { open: false, dayIndex: null } }); return true; }
   if (state.plannerActionsOpen && state.activeView === "planner") { setState({ plannerActionsOpen: false }); return true; }
   if (state.activeView === "ai-settings" && aiKeyEditorReturn) {
@@ -316,6 +321,25 @@ function navigateBack() { backInApp(); uiHistory.sync(); }
 function closeRecipeMenu() {
   recipeMenuOpen = false; render(); uiHistory.sync();
   app.querySelector("[data-open-recipe-menu]")?.focus?.({ preventScroll: true });
+}
+
+function openMealPicker(dayIndex, fromDaySheet = false) {
+  if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex > 6) return;
+  const returnsToSheet = fromDaySheet && state.activeView === "planner" && state.plannerDaySheet?.open
+    && state.plannerDaySheet.dayIndex === dayIndex;
+  mealPickerReturn = returnsToSheet ? { dayIndex, positions: captureWindowPositions()
+    .filter(position => position.key === "planner-day")
+    .map(position => ({ ...position, focusKey: `planner-meal:${dayIndex}` })) } : null;
+  navigate({ mealPicker: { open: true, dayIndex, query: "" }, plannerDaySheet: { open: false, dayIndex: null } });
+}
+
+function closeMealPicker(patch = {}) {
+  if (!state.mealPicker?.open) return;
+  const returnTo = mealPickerReturn;
+  mealPickerReturn = null;
+  navigate({ ...patch, mealPicker: { open: false, dayIndex: null, query: "" },
+    ...(returnTo ? { plannerDaySheet: { open: true, dayIndex: returnTo.dayIndex } } : {}) });
+  if (returnTo) restoreWindowPositions(returnTo.positions);
 }
 
 function maybeTransitionServings() {
@@ -864,10 +888,9 @@ function addQuickMealForPicker() {
   const meal = createQuickMeal(title, makeMealId(title));
   const weekKey = getWeekKey();
   const plan = { ...currentPlan(), [picker.dayIndex]: meal.id };
-  navigate({
+  closeMealPicker({
     meals: [...state.meals, meal],
     plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: plan },
-    mealPicker: { open: false, dayIndex: null, query: "" },
   });
   showToast(`«${title}» er lagt til. Oppskriften kan fylles ut senere.`);
 }
@@ -2975,18 +2998,14 @@ function bindEvents() {
   app.querySelectorAll("[data-open-meal-picker]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const dayIndex = Number(btn.dataset.openMealPicker);
-      navigate({
-        mealPicker: { open: true, dayIndex, query: "" }
-      });
+      openMealPicker(dayIndex, Boolean(btn.closest?.(".planner-sheet")));
     });
   });
 
   // Close meal picker modal (backdrop or close btn)
   app.querySelectorAll("[data-close-meal-picker]").forEach((el) => {
-    el.addEventListener("click", () => {
-      navigate({
-        mealPicker: { open: false, dayIndex: null, query: "" }
-      });
+    el.addEventListener("click", event => {
+      if (event.target === el) closeMealPicker();
     });
   });
 
@@ -3053,9 +3072,8 @@ function bindEvents() {
         if (dayIndex !== null) {
           const weekKey = getWeekKey();
           const plan = { ...currentPlan(), [dayIndex]: mealId };
-          navigate({
+          closeMealPicker({
             plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: plan },
-            mealPicker: { open: false, dayIndex: null, query: "" }
           });
         }
       }
@@ -3661,6 +3679,7 @@ function restoreWindowPositions(positions) {
 }
 
 function render(preserveShoppingInput = true) {
+  if (!state.mealPicker?.open || state.activeView !== "planner" || accessState.kind !== "ready") mealPickerReturn = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeMenuOpen = false;
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
@@ -3826,6 +3845,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  mealPickerReturn = null;
   recipeMenuOpen = false;
   uiHistory.reset();
   editorRowMenu = null;
