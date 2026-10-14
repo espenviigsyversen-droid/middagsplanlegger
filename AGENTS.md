@@ -274,3 +274,9 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - suggestionScoreBreakdown i domain/suggestions.js er bare for tester/feilsøking. Delpoeng vises aldri i UI. 52-lørdagstesten skal oppfylle eiers presiserte grenser og rapportere faktisk resultat.
 - pickerFilters og pickerOtherPlans er runtime. Filtre gjelder kun velgeren, nullstilles ved lukking/tilgang og lagres aldri. Filterraden ruller vannrett; capture/restoreWindowPositions bevarer scrollLeft sammen med scrollTop. Planpanelet erstatter footerknappen med overskrift, egne valg og Avbryt. Keyboard-click fokuserer første valg, aldri søket på touch.
 - Kjør suggestions-, week-, window-scroll- og local-store-testene samt alle øvrige tester og syntakskontroller. v114/114, REQUIRED_MIN_APP_VERSION 106. Endringen i sync/local-store.js gjelder bare lokal cache, ingen skysynk eller datamodellendring.
+
+## Passer til-filter fra v115
+
+- Filterraden bruker suitabilityEntries() i samme rekkefølge og med samme navn som Innstillinger, etter Favoritter og før kategoriene. To aria-hidden skillelinjer er 1 px --line og 24 px høye; raden ruller fortsatt vannrett på én linje.
+- pickerFilters.suitability er én nøkkel eller tom streng. Bytte erstatter forrige valg; trykk på aktivt valg slår det av. mealMatchesPickerFilters krever at meal.suitability inneholder nøkkelen; uten merker vises ikke middagen. Filtrene og søket gjelder både forslag og liste, før fast plass velges.
+- Feltet er kun runtime som øvrige velgerfiltre. Lukking, Fjern filtre og tilgangsbytte nullstiller det. Ingen ny lagring, datamodell eller poengmodell. Kontroller suggestions-, window-scroll- og week-render-testene samt alle øvrige tester og syntakskontroller. v115/115, REQUIRED_MIN_APP_VERSION 106.

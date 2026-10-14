@@ -154,4 +154,17 @@ assert.equal(Object.hasOwn(selectPickerSuggestions(tenWeekCandidates.slice(0,3))
 assert.deepEqual(selectPickerSuggestions([]),[]);
 assert.equal(selectPickerSuggestions(prioritized.slice(0,1)).length,1);
 
+
+// v115: suitability is one exact, optional marker and combines with every other filter.
+assert.equal(mealMatchesPickerFilters({suitability:["weekend"]},{suitability:"weekend"}),true);
+assert.equal(mealMatchesPickerFilters({suitability:["weekday"]},{suitability:"weekend"}),false);
+assert.equal(mealMatchesPickerFilters({suitability:[]},{suitability:"weekend"}),false);
+assert.equal(mealMatchesPickerFilters({},{suitability:"weekend"}),false);
+assert.equal(mealMatchesPickerFilters({suitability:[]},{suitability:""}),true);
+const weekendQuickFish={suitability:["weekend","guests"],prepTime:"quick",kidFriendly:true,favorite:true,categories:["fisk"]};
+assert.equal(mealMatchesPickerFilters(weekendQuickFish,{suitability:"weekend",quick:true,kidFriendly:true,favorite:true,category:"fisk"}),true);
+assert.equal(mealMatchesPickerFilters({...weekendQuickFish,prepTime:"long"},{suitability:"weekend",quick:true,category:"fisk"}),false);
+assert.equal(mealMatchesPickerFilters(weekendQuickFish,{suitability:"weekday",quick:true,category:"fisk"}),false);
+assert.equal(mealMatchesPickerFilters({suitability:["custom-day"]},{suitability:"custom-day"}),true);
+
 console.log("suggestions domain tests ok");

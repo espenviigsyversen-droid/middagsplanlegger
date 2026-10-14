@@ -4,6 +4,13 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v115 – Passer til i middagsvelgeren
+
+Eier publiserer klientfilene i docs/LEVERANSE_V115.md. Ingen server-/regelpublisering er nødvendig, og minsteversjonen forblir 106. Alle 49 testskript og 41 syntakskontroller består lokalt.
+
+Etter publisering: kontroller v115 på PC og telefon. Passer til-knappene står mellom Favoritter og kategoriene, med to diskrete skillelinjer. Helg/Hverdag kan byttes og slås av; middager uten merker utelates. Prøv Rask + Helg + kategori + søk, tomtilstand/Fjern filtre, vannrett rulling og nullstilling ved lukking. Nye valg fra Innstillinger skal vises med samme navn/rekkefølge. Ekte touch og visuell plassering gjenstår på telefon.
+
+
 ### v114 – ukevalg, forslag og velgerfiltre
 
 Bare klienten publiseres av eier. Filoversikt, testresultater og lørdagssimulering står i docs/LEVERANSE_V114.md. Minsteversjonen forblir 106.

@@ -440,3 +440,11 @@ Simuleringen bruker 52 lørdager, tre gamle helg/favoritt/barnevennlige middager
 Versjon/cache er v114/114; minsteversjonen er 106. Ingen functions, Firestore-regler, skysynk eller datamodell er endret.
 
 Retting før v114-publisering: aldri planlagte prioriteres foran gamle favoritter i den faste plassen. Med tre favoritter sist planlagt for henholdsvis 12, 5 og 2 uker siden, pluss 22 aldri planlagte middager, har velgeren en ny middag 52/52 lørdager i alle tre simuleringene. Uten aldri planlagte får en kandidat borte i 10 uker den faste plassen og riktig linje. Første/to beste beholdes, filtrene testes også gjennom appens rendering. Versjonen og øvrige v114-flyter er uendret.
+
+## Passer til-filter fra v115
+
+renderPickerFilters bygger tre grupper: Rask/Barnevennlig/Favoritter, suitabilityEntries() og kategorier. Passer til har samme metadata-navn og rekkefølge som Innstillinger; nye valg vises automatisk. Gruppene skilles med aria-hidden span, 1 px --line og 24 px høy, i den samme vannrett rullende énlinjeraden.
+
+pickerFilters.suitability er en enkelt valgt nøkkel eller tom streng. togglePickerFilter erstatter forrige verdi eller slår aktivt valg av. Det rene mealMatchesPickerFilters krever arraymedlemskap i meal.suitability; tomme/manglende merker filtreres bort. Alle andre filtre og søket kombineres som før for både forslag og resultatliste. Eksisterende fast plass velges etter filtrering; poeng og forslagkommandoer er uendret.
+
+Runtime-feltet bruker samme lukking/nullstilling, aria-pressed, tomtilstand, scrollLeft-/fokusbevaring og Fjern filtre som øvrige filtre. App/cache er v115/115, minimum fortsatt 106. Ingen ny modul, asset-listendring, datamodell, skysynk eller serverendring.

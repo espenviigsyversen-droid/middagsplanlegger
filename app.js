@@ -217,8 +217,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v114";
-const APP_VERSION_NUMBER = 114;
+const APP_VERSION = "v115";
+const APP_VERSION_NUMBER = 115;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -233,7 +233,7 @@ let syncStatus = "Kobler til synk";
 let mealPickerScrollY = 0;
 let mealPickerReturn = null;
 let pickerOtherPlans = false, weekClearConfirmation = null;
-const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, category: "all" });
+const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, suitability: "", category: "all" });
 let pickerFilters = emptyPickerFilters(), planningWindowWeekKey = null;
 let backgroundAt = null, lastVisibleWeekKey = getWeekKeyForOffset(0);
 let shoppingSyncStatus = null;
@@ -863,15 +863,21 @@ function renderMealPickerModal() {
   `;
 }
 
-function pickerFiltersActive() { return pickerFilters.quick || pickerFilters.kidFriendly || pickerFilters.favorite || pickerFilters.category !== "all"; }
+function pickerFiltersActive() { return pickerFilters.quick || pickerFilters.kidFriendly || pickerFilters.favorite || Boolean(pickerFilters.suitability) || pickerFilters.category !== "all"; }
 
 function renderPickerFilters() {
-  const entries = [["quick","Rask"],["kidFriendly","Barnevennlig"],["favorite","Favoritter"], ...Object.entries(getCategoryLabels()).map(([key,label])=>["category:"+key,label])];
-  return '<div class="picker-filters" data-scroll-key="picker-filters" aria-label="Filtrer middager">' + entries.map(([key,label])=>{
-    const category = key.startsWith("category:"), value = category ? key.slice(9) : key;
-    const selected = category ? pickerFilters.category === value : pickerFilters[value];
+  const groups = [
+    [["quick","Rask"],["kidFriendly","Barnevennlig"],["favorite","Favoritter"]],
+    suitabilityEntries().map(([key,label])=>["suitability:"+key,label]),
+    Object.entries(getCategoryLabels()).map(([key,label])=>["category:"+key,label]),
+  ];
+  const renderButton = ([key,label]) => {
+    const selected = key.startsWith("category:") ? pickerFilters.category === key.slice(9)
+      : key.startsWith("suitability:") ? pickerFilters.suitability === key.slice("suitability:".length) : pickerFilters[key];
     return '<button class="picker-filter" type="button" data-focus-key="picker-filter:'+escapeHtml(key)+'" data-picker-filter="'+escapeHtml(key)+'" aria-pressed="'+Boolean(selected)+'">'+escapeHtml(label)+'</button>';
-  }).join("")+'</div>';
+  };
+  return '<div class="picker-filters" data-scroll-key="picker-filters" aria-label="Filtrer middager">'
+    + groups.map(entries=>entries.map(renderButton).join("")).join('<span class="picker-filter-divider" aria-hidden="true"></span>') + '</div>';
 }
 
 function renderPickerPlans() {
@@ -883,6 +889,7 @@ function renderPickerPlans() {
 
 function togglePickerFilter(key) {
   if (key.startsWith("category:")) { const category = key.slice(9); pickerFilters.category = pickerFilters.category === category ? "all" : category; }
+  else if (key.startsWith("suitability:")) { const suitability = key.slice("suitability:".length); pickerFilters.suitability = pickerFilters.suitability === suitability ? "" : suitability; }
   else if (["quick","kidFriendly","favorite"].includes(key)) pickerFilters[key] = !pickerFilters[key];
   render();
 }

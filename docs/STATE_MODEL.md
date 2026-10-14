@@ -309,6 +309,8 @@ weekOffset er kun runtime/UI-state: ingen lokal lagring eller gjenoppretting. no
 
 planningWindowWeekKey binder åpne dagsark, velger, ukemeny og bekreftelse til uka de ble åpnet for. Underliggende Uke-visning bruker det nullstilte ukevalget, mens vinduets datoer, porsjoner og middagsvalg fortsatt gjelder den opprinnelige uka. Retur mellom vinduer beholder konteksten, og siste lukking/tilgangsstopp forkaster den. Oppskriftens eksisterende selectedRecipeContext bevares.
 
-pickerFilters er bare i minnet: quick, kidFriendly, favorite og én category. Åpning/lukking og tilgangsbytte nullstiller dem. De påvirker forslag og resultatlista sammen med søket, men ikke de øvrige Foreslå-handlingene eller oppskriftslistens lagrede filters. pickerOtherPlans styrer fortsatt bare footerens planvalg. Ingen av disse runtime-feltene inngår i lokal kopi, synk eller sikkerhetskopi.
+pickerFilters er bare i minnet: quick, kidFriendly, favorite, én suitability fra v115 og én category. Åpning/lukking og tilgangsbytte nullstiller dem. De påvirker forslag og resultatlista sammen med søket, men ikke de øvrige Foreslå-handlingene eller oppskriftslistens lagrede filters. pickerOtherPlans styrer fortsatt bare footerens planvalg. Ingen av disse runtime-feltene inngår i lokal kopi, synk eller sikkerhetskopi.
 
 Den faste forslagplassen er avledet fra planhistorikk og lagres ikke i oppskriften. Poeng/delpoeng er ikke synkede data og vises aldri i appen. Domeneformat, null-porsjoner, Firestore-stier og minsteversjon 106 er uendret.
+
+Fra v115 er pickerFilters.suitability en enkelt nøkkel fra metadata.suitabilityLabels eller tom streng. Den finnes bare i minnet og nullstilles sammen med øvrige velgerfiltre. Oppskriftens lagrede suitability og metadataformatet er uendret.

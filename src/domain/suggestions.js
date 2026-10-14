@@ -82,6 +82,7 @@ export function mealMatchesPickerFilters(meal, filters = {}) {
   return (!filters.quick || meal.prepTime === "quick")
     && (!filters.kidFriendly || meal.kidFriendly)
     && (!filters.favorite || meal.favorite)
+    && (!filters.suitability || (meal.suitability || []).includes(filters.suitability))
     && (!filters.category || filters.category === "all" || (meal.categories || []).includes(filters.category));
 }
 

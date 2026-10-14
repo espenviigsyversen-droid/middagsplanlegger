@@ -55,4 +55,8 @@ assert.match(css,/\.picker-filters\s*\{[^}]*flex-wrap:\s*nowrap[^}]*overflow-x:\
 assert.match(css,/\.picker-filter\s*\{[^}]*min-height:\s*44px/);
 assert.match(css,/\.picker-filter\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--brand\)[^}]*color:\s*white/);
 assert.match(css,/\.picker-plan-option\s*\{[^}]*background:\s*var\(--surface-strong\)[^}]*border:\s*1px solid var\(--brand\)[^}]*color:\s*var\(--brand-dark\)/);
+
+const dividerStyle=/\.picker-filter-divider\s*\{([^}]+)\}/.exec(css)?.[1];
+assert.match(dividerStyle,/width:\s*1px/);assert.match(dividerStyle,/height:\s*24px/);assert.match(dividerStyle,/background:\s*var\(--line\)/);assert.match(dividerStyle,/flex-shrink:\s*0/);
+
 console.log("week render tests ok");

@@ -2637,3 +2637,6 @@ button {
 .picker-plan-option { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: var(--surface-strong); border: 1px solid var(--brand); border-radius: 12px; color: var(--brand-dark); font-weight: 700; font-size: 14px; text-align: left; }
 .picker-plan-cancel { min-height: 44px; justify-self: center; padding: 0 16px; }
 .meal-picker-list > [data-clear-picker-filters] { min-height: 44px; }
+
+/* v115: separate flags, suitability and categories without wrapping the row. */
+.picker-filter-divider { width: 1px; height: 24px; background: var(--line); flex-shrink: 0; align-self: center; }
