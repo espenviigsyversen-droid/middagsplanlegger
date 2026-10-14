@@ -1,5 +1,7 @@
 # Firebase-oppsett fra v95
 
+Fra v120 er gjeldende REQUIRED_MIN_APP_VERSION **120**. Administrator på nett hever app/meta.minAppVersion før `_note` tas i bruk; v106–v119 tolker denne reserverte planverdien som Middag hjemme og må stenges. Nytt oppsett/restore skriver minimum 120. Porsjonsovergangen beholder servingsDefaultsV106 og kvitteringsvernet, men krever serverbekreftet minimum 120. Dette er bare klient-/meta-versjonsstyring: ingen nye dokumentstier, Firestore-regler eller serverfunksjoner skal publiseres. De eldre versjonsavsnittene nedenfor beskriver historiske leveranser.
+
 Appen bruker det egne prosjektet `middagsplanlegger-6db4e`, med familie-ID `familien`. Konfigurasjonen i app.js er offentlig Firebase-klientkonfigurasjon. Tilgang beskyttes av Authentication og `firestore.rules`. Det gamle prosjektet er arkiv; v95 kontakter det ikke, og ingen data overføres automatisk derfra.
 
 ## Prosjekt og innlogging

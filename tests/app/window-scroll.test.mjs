@@ -271,7 +271,7 @@ assert.equal(run('pickerFiltersActive()'),false);assert.doesNotMatch(app.innerHT
 activate('picker-filter:quick');run('closeMealPicker(); openMealPicker(0)');assert.equal(run('pickerFiltersActive()'),false);
 // Keyboard activation shows a heading instead of the trigger, and focuses the first choice.
 const trigger=control('picker-other-plans');trigger.focus({preventScroll:true});trigger.handlers.click({detail:0});
-assert.equal(control('picker-other-plans'),null);assert.match(app.innerHTML,/IKKE MIDDAG HJEMME/);
+assert.equal(control('picker-other-plans'),null);assert.match(app.innerHTML,/ANNEN PLAN/);
 assert.ok(control('picker-plan:away').attrs.class.includes('picker-plan-option'));expectFocus('picker-plan:away');
 control('picker-plan-cancel').handlers.click({detail:0});assert.ok(control('picker-other-plans'));expectFocus('picker-other-plans');
 // Long background resets the underlying week, never the open picker's target week.

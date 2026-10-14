@@ -4,6 +4,16 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v120 – Annen plan og eget notat
+
+Eier publiserer filene i docs/LEVERANSE_V120.md, inkludert src/render/picker-plans.js i begge asset-listene. App/cache og REQUIRED_MIN_APP_VERSION er 120. Ingen server-/regelpublisering er nødvendig. Alle 56 testskript og 46 kildefilers syntakskontroller består lokalt.
+
+Åpne først v120 på nett som administrator, slik at app/meta.minAppVersion heves til 120 før Eget notat brukes. Lukk/oppdater øvrige enheter og kontroller v120. V106–v119 tolker ukjent `_note` som Middag hjemme og skal ikke fortsette å skrive. Behold eksisterende servingsDefaultsV106-merke; ikke endre det manuelt. Eventuell uferdig porsjonsovergang venter fortsatt på serverprofil/ukebilde og kvitteringer, nå med minimum 120.
+
+Etter publisering: Annen plan skal skille seg fra kortene med beige/grønn knapp og footer-skygge. Eget notat åpner feltet med dagens tekst, grense 60 og tastatur; tom Legg inn er deaktivert/grå. Prøv Enter og Legg inn med Cup, tilbake fra feltet, lukking og retur til dagsark. Ukeraden viser Cup som tittel, ikke to ganger. Velg middag etterpå: home og Cup som underlinje. Forslag/telling/Generer skal hoppe over notatdager, og Innstillinger → Planvalg skal ikke ha `_note`. Kontroller backup/restore, uke-/kontobytte og minAppVersion-vakt.
+
+375 px-visningene er tegnet i lokal Chrome med nettverk blokkert og ligger under docs/screenshots. Ekte iPhone/Safari-tastatur, zoom og visual viewport er ikke prøvd og gjenstår på enhet. Ingen publisering er utført av agenten.
+
 ### v119 – rulleposisjon ved skjermbytte
 
 Eier publiserer filene i docs/LEVERANSE_V119.md, inkludert ny src/ui/page-scroll.js i begge asset-listene. App/cache er v119, minimum fortsatt 106. Ingen server-/regelpublisering er nødvendig. Alle 54 testskript og 45 kildefilers syntakskontroller består lokalt.

@@ -1,2 +1,2 @@
-// Old clients write whole weeks/recipe collections and must be blocked after rollout.
-export const REQUIRED_MIN_APP_VERSION = 106;
+// Older clients also interpret the reserved _note plan as dinner at home.
+export const REQUIRED_MIN_APP_VERSION = 120;

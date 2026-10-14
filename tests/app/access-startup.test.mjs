@@ -69,7 +69,7 @@ for (const [config, kind, text] of [
   [{ role: null }, "denied", /Du har ikke tilgang ennå/],
   [{ meta: null }, "setup", /data-restore-file/],
   [{ meta: null, role: "member" }, "setup", /En administrator må gjøre det først/],
-  [{ meta: { initializedAt: 1, minAppVersion: 120 } }, "update", /Appen må oppdateres/],
+  [{ meta: { initializedAt: 1, minAppVersion: 121 } }, "update", /Appen må oppdateres/],
 ]) {
   const f = fixture(config); await f.run("initFirebaseSync()"); await f.auth(user);
   assert.equal(f.run("accessState.kind"), kind);
@@ -91,7 +91,7 @@ assert.equal(minimum96.run("accessState.kind"), "ready");
 assert.equal(ready.run("accessState.kind"), "ready");
 assert.equal(ready.watchers.length, 7); // meta, shoppingItems, meals, weeks, and three domain scopes
 assert.equal(ready.writes.length, 1, "Admin startup raises the minimum once, without uploading domain data");
-assert.equal(ready.writes[0][0], "meta"); assert.equal(ready.writes[0][1].minAppVersion, 106);
+assert.equal(ready.writes[0][0], "meta"); assert.equal(ready.writes[0][1].minAppVersion, 120);
 assert.match(ready.app.innerHTML, /data-shopping-input/);
 const regular = fixture({ role: "member" }); await regular.run("initFirebaseSync()"); await regular.auth(user);
 regular.run('state.pendingLocalSync = true; state.clientUpdatedAt = 100;');
@@ -113,7 +113,7 @@ assert.equal(ready.writes.length, 1, "Cancelled timers remain inert; only the in
 await ready.auth(user);
 assert.equal(ready.watchers.filter(w => !w.stopped).length, 7);
 ready.watchers.filter(w => !w.stopped).find(w => w.ref === "meta").callback({
-  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 120 }), metadata: { fromCache: false },
+  exists: () => true, data: () => ({ initializedAt: 1, minAppVersion: 121 }), metadata: { fromCache: false },
 });
 assert.ok(ready.watchers.every(w => w.stopped));
 assert.match(ready.app.innerHTML, /Appen må oppdateres/);
@@ -162,7 +162,7 @@ let acknowledge; const confirmation=new Promise(resolve=>{acknowledge=resolve;})
 migrating.api.setDoc=(...args)=>{migrating.writes.push(args);return confirmation;};
 migrating.api.updateDoc=async(ref,data)=>{migrating.writes.push([ref,data]);if(ref==="meta")Object.assign(transitionMeta,data);};
 await migrating.run("initFirebaseSync()");await migrating.auth(user);
-assert.equal(transitionMeta.minAppVersion,106);
+assert.equal(transitionMeta.minAppVersion,120);
 const week = migrating.run("getWeekKeyForOffset(0)"), oldWeek=migrating.run("weekKeyOffset(getWeekKeyForOffset(0),-1)"), futureWeek=migrating.run("weekKeyOffset(getWeekKeyForOffset(0),1)");
 const weekDocs=()=>[ [oldWeek,{servings:{0:5,1:4}}],[week,{servings:{0:5,1:4,2:7}}],[futureWeek,{servings:{0:5}}] ].map(([id,data])=>({id,data:()=>data}));
 const weeksWatch=migrating.watchers.find(w=>w.ref==="weeks");

@@ -171,4 +171,7 @@ try {
 } finally {
   globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear;
 }
+const noteReading = weeksFromDocs([doc(w, {dayModes:{2:"_note"},dayNotes:{2:"Cup"}})]);
+assert.equal(noteReading.dayModesByWeek[w][2],"_note");assert.equal(noteReading.dayNotesByWeek[w][2],"Cup");
+assert.deepEqual(diffWeeks({},noteReading),{[w]:{dayModes:{2:"_note"},dayNotes:{2:"Cup"}}});
 console.log("weeks sync tests ok (day/field diffs, merge, coalescing, overlays, acknowledgements and stop)");

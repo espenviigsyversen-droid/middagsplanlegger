@@ -330,3 +330,13 @@ pageScroll i app.js er en runtime-kontroller med siste skjermnøkkel og en Map a
 mealEditorReturn beholder bare editorens opprinnelige UI-skjerm, selectedMealId, selectedRecipeContext og previousView i minnet. Den gjør at Avbryt/tilbake fra redigering åpnet i en oppskrift viser samme oppskrift og dagskontekst igjen. Listen er retur når editoren ble åpnet der. Lagre åpner lagret oppskrift; sletting går til den opprinnelige liste-/uke-/handlevisningen. Returtilstanden forkastes når editoren er avsluttet, ved fane-/tilgangsbytte, men beholdes ved besøk i AI-innstillinger.
 
 Skjermnøkkelen avhenger av faktisk helskjermvisning, ikke vinduer oppå. V108-vindusposisjoner og v117-forkastingsark er fortsatt separat runtime/UI. Ingen endring i oppskriftsfelter, ukedata, domenesynk eller minimum 106.
+
+## Eget notat fra v120
+
+dayModesByWeek[week][day] kan ha den reserverte strengen `_note`. Samme verdi ligger i weeks/<week>.dayModes.<day>. Selve teksten bruker eksisterende dayNotesByWeek/ukedokumentets dayNotes, mens plan[day] tømmes. Ingen nye dokumenter eller felt. Nøkkelen ligger aldri i metadata.planModeOptions; den tilhørende interne typen note beregnes i planModeOption, og betyr ikke middag hjemme.
+
+pickerNote er bare et runtime-utkast {text}. Det forhåndsutfylles ved åpning og er begrenset til 60 tegn i velgeren. Før Legg inn er ingenting lagt i domenestate, localStorage, synk eller backup. Legg inn/Enter lager én patch i de tre eksisterende ukekartene. Back/lukking forkaster utkastet; konto-/tilgangs-/visningsbytte gjør det samme. planningWindowWeekKey binder lagringen til uka velgeren ble åpnet for også etter bakgrunnsretur.
+
+Valg av middag/hurtigmiddag setter dayMode home, og notatet beholdes. Endring til andre planvalg beholder notatet. Tøm uke nullstiller også `_note` og tekst gjennom eksisterende standardkart. Backup og restore bevarer begge strengfeltene uten konvertering.
+
+Minsteversjonen er nå 120. Meta-heving er fortsatt bare for administrator på nett, og restore skriver 120. Porsjonsovergangen bruker den samme minsteversjonskonstanten, men beholder servingsDefaultsV106-navnet og øvrige vern. Eldre klienter stoppes for å unngå at `_note` tolkes som home. Ingen endring i ukesynkens dokument-/celleformat eller i Firestore-reglene.

@@ -45,12 +45,12 @@ export function renderWeekView({ heading, offset, emptyCount, rowsHtml, windowsH
 
 export function renderDaySheet({ day, dateLabel, index, locked, home, meal, planLabel, dayMode, dayType, dayNote,
   servings, ownServings, standard, modes, types, escapeHtml: e }) {
-  const description = meal && !descriptionRepeatsTitle(meal.title, meal.description) ? meal.description || "" : "";
+  const description = home && meal && !descriptionRepeatsTitle(meal.title, meal.description) ? meal.description || "" : "";
   return `<div class="modal-backdrop week-backdrop" data-close-planner-day><section class="modal week-sheet week-day-sheet" role="dialog" aria-modal="true" aria-label="Endre ${e(day)}">
     <div class="week-sheet-handle" aria-hidden="true"></div><div class="modal-header"><div><h3>${e(day)}</h3><p class="modal-subtitle">${e(dateLabel)}</p></div><button class="modal-close" type="button" data-focus-key="planner-close" data-close-planner-day aria-label="Lukk">×</button></div>
     <div class="week-sheet-body" data-scroll-key="planner-day">
       <div class="week-meal-card"><h4>${e(home ? meal?.title || "Ingen middag valgt" : planLabel)}</h4>
-        <p>${e([description, `${servings} porsjoner`].filter(Boolean).join(" · "))}</p>
+        ${dayMode === "_note" ? "" : `<p>${e([description, `${servings} porsjoner`].filter(Boolean).join(" · "))}</p>`}
         ${home ? meal ? `<button class="button" type="button" data-focus-key="planner-recipe:${index}" data-view-meal="${e(meal.id)}" data-recipe-day="${index}">Åpne oppskrift ›</button>`
           : `<button class="button" type="button" data-focus-key="planner-card-pick:${index}" data-open-meal-picker="${index}">Velg middag</button>` : ""}</div>
       ${home ? `<div class="week-day-actions"><button class="week-outline" type="button" data-focus-key="planner-meal:${index}" data-open-meal-picker="${index}">${weekIcon("swap")} Bytt middag</button>
