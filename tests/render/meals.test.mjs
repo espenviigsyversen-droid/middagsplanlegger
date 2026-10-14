@@ -49,11 +49,12 @@ function testMealCardRender() {
 
 function testRecipeImportRender() {
   const meal = { id: "linked", title: "Lenke", description: "", recipeUrl: "https://example.com/recipe", ingredients: [], steps: [] };
-  const linked = renderMealDetailView({ meal, importAvailable: true, escapeHtml });
+  const linked = renderMealDetailView({ meal, menuOpen: true, importAvailable: true, escapeHtml });
   assert.match(linked, /data-import-from-link="linked"/);
   assert.match(linked, /Hent fra lenke/);
-  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, ingredients: [{ name: "Fisk" }] }, escapeHtml }), /data-import-from-link/);
-  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, recipeUrl: "" }, escapeHtml }), /data-import-from-link/);
+  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, ingredients: [{ name: "Fisk" }] }, menuOpen:true, escapeHtml }), /data-import-from-link/);
+  assert.doesNotMatch(renderMealDetailView({ meal: { ...meal, recipeUrl: "" }, menuOpen:true, escapeHtml }), /data-import-from-link/);
+  assert.match(renderMealDetailView({ meal, menuOpen:true, importAvailable:false }), /data-import-from-link="linked" disabled/);
   for (const isNew of [true, false]) {
     const html = renderMealEditorView({ meal, isNew, importAvailable: true, aiKeyStatus: { configured: true, status: "connected" }, recipeImport: { url: meal.recipeUrl, showText: true, text: "<script>bad</script>" }, escapeHtml });
     assert.match(html, /Importer oppskrift/); assert.match(html, /data-import-fetch/); assert.match(html, /data-import-interpret/);
@@ -119,12 +120,28 @@ function testMealDetailRender() {
   assert.match(html, /Oppskrift til 4 porsjoner/);
   assert.match(html, /Tomat/);
   assert.match(html, /Kok pasta/);
-  assert.match(html, /Åpne lenke/);
+  assert.match(html, /aria-label="Flere valg"/);
+  assert.doesNotMatch(html, /Åpne lenke/);
+  assert.match(renderMealDetailView({meal:{id:"a",title:"A",recipeUrl:"https://example.com"},menuOpen:true}), /target="_blank" rel="noopener">Åpne lenke/);
   assert.doesNotMatch(html, /Ingen oppskrift lagt inn ennå/);
   const missingDetail = renderMealDetailView({ meal: { id: "ny", title: "Ny" } });
   assert.match(missingDetail, /Ingen oppskrift lagt inn ennå/);
   assert.match(missingDetail, /data-edit-meal="ny">Legg inn oppskrift/);
 }
+
+for (const description of ["Pasta", "PASTA 🍝", "  PASTA!!! "]) {
+  const html = renderMealDetailView({meal:{id:"p",title:"Pasta",description}});
+  assert.doesNotMatch(html, /<p>[^<]*PASTA|<p>Pasta/);
+}
+const duplicate = renderMealDetailView({meal:{title:"Cheesy Alfredo pasta med saftig kylling",description:"CHEESY ALFREDO-PASTA MED SAFTIG KYLLING 🍝🍗🧀"}});
+assert.doesNotMatch(duplicate,/CHEESY|🍝/);
+assert.match(renderMealDetailView({meal:{title:"Pasta",description:"Kremet middag"}}), /<p>Kremet middag/);
+for (const checked of [true,false]) {
+  const html=renderMealDetailView({meal:{id:"a",title:"A"},wakeSupported:true,keepScreenAwake:checked});
+  assert.match(html,new RegExp(`role="switch" aria-checked="${checked}"`));
+  assert.match(html,/Hold skjermen på/);
+}
+assert.match(renderMealDetailView({meal:{title:"A"},wakeSupported:false}), /data-toggle-wake disabled/);
 
 function testMealEditorRender() {
   const html = renderMealEditorView({

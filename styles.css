@@ -301,48 +301,6 @@ button {
   padding-bottom: 4px;
 }
 
-.today-summary {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 22px 20px;
-  margin-bottom: 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  border-left: 4px solid var(--brand);
-  background: var(--surface-strong);
-  box-shadow: var(--shadow);
-}
-
-.today-kicker {
-  display: block;
-  color: var(--brand-dark);
-  font-size: 0.82rem;
-  font-weight: 800;
-  margin-bottom: 8px;
-}
-
-.today-summary h3 {
-  margin: 0 0 6px;
-  font-size: clamp(1.45rem, 4vw, 2rem);
-  line-height: 1.15;
-}
-
-.today-summary p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.today-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .calendar-view-header {
   margin-bottom: 12px;
 }
@@ -382,7 +340,7 @@ button {
 
 .week-row {
   display: grid;
-  grid-template-columns: 90px 1fr auto;
+  grid-template-columns: 70px minmax(0, 1fr) 24px;
   align-items: center;
   gap: 12px;
   padding: 11px 16px;
@@ -418,11 +376,6 @@ button {
   color: var(--muted);
 }
 
-.week-row-action {
-  min-width: 82px;
-  display: flex;
-  justify-content: flex-end;
-}
 
 .week-nav {
   display: flex;
@@ -1914,10 +1867,47 @@ button {
   padding: 18px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
-  align-items: flex-start;
+  align-items: start;
+}
+
+/* Felles undersidetopp og ryddige oppskriftshandlinger fra v109. */
+.subpage-mode .content { padding-top: 0; }
+.subpage-mode :is(.button, .icon-button, .text-action, .toggle-chip, .input, .select, .checkbox-line) {
+  min-width: 44px; min-height: 44px;
+}
+.subpage-bar {
+  position: sticky; top: 0; z-index: 85; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin: 0 -18px 14px; padding: calc(8px + env(safe-area-inset-top)) 18px 8px;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.subpage-back { display: inline-flex; gap: 6px; align-items: center; background: transparent;
+  border: none; padding: 0 10px 0 0; min-width: 44px; min-height: 44px; color: var(--brand-dark); font: inherit; font-weight: 750; }
+.subpage-back > span { font-size: 2rem; line-height: 1; }
+.subpage-action .icon-button { width: 44px; height: 44px; font-size: 1.6rem; }
+.recipe-primary { justify-self: start; min-height: 44px; }
+.wake-switch { display: inline-flex; align-items: center; gap: 10px; justify-self: start;
+  min-width: 44px; min-height: 44px; padding: 0; background: transparent; border: none; color: var(--text); font: inherit; }
+.wake-switch:disabled { opacity: 0.55; cursor: not-allowed; }
+.switch-track { width: 44px; height: 26px; border-radius: 20px; background: var(--muted); padding: 3px; flex-shrink: 0; }
+.switch-track > span { display: block; background: var(--surface); width: 20px; height: 20px; border-radius: 50%; }
+.wake-switch[aria-checked="true"] .switch-track { background: var(--brand); }
+.wake-switch[aria-checked="true"] .switch-track > span { transform: translateX(18px); }
+.week-row { width: 100%; min-height: 64px; background: var(--surface); color: var(--text); font: inherit;
+  text-align: left; border: none; border-bottom: 1px solid var(--line); border-radius: 0; }
+.week-row.is-today { background: var(--surface-strong); box-shadow: inset 4px 0 var(--brand); }
+.week-row-meal { display: grid; min-width: 0; gap: 3px; }
+.week-row-note { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: .82rem; }
+.week-row-chevron { font-size: 1.6rem; color: var(--brand-dark); justify-self: end; }
+.week-today-badge { color: var(--brand-dark); font-weight: 800; font-size: .75rem; }
+.calendar-week-nav .text-action { min-width: 44px; min-height: 44px; }
+.calendar-week-nav .week-arrow-btn { width: 44px; height: 44px; }
+@media (max-width: 640px) {
+  .recipe-primary { width: 100%; }
+  .subpage-bar { margin-left: -14px; margin-right: -14px; padding-left: 14px; padding-right: 14px; }
+  .week-row { grid-template-columns: 62px minmax(0, 1fr) 18px; gap: 10px; padding: 12px; }
 }
 
 .recipe-hero h2 {
@@ -1938,25 +1928,6 @@ button {
   font-size: 0.92rem;
   font-weight: 750;
   color: var(--brand-dark) !important;
-}
-
-.recipe-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  min-width: 260px;
-}
-
-.wake-button.active {
-  background: var(--brand);
-  color: white;
-  border-color: var(--brand);
-}
-
-.wake-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .wake-note {
@@ -2429,18 +2400,7 @@ button {
     display: grid;
   }
 
-  .recipe-actions {
-    justify-content: flex-start;
-    min-width: 0;
-  }
 
-  .today-summary {
-    display: grid;
-  }
-
-  .today-actions {
-    justify-content: flex-start;
-  }
 
   .week-nav .button {
     flex: 1;

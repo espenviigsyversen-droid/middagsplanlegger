@@ -1,4 +1,5 @@
-import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex } from "../domain/meals.js";
+import { mealNeedsRecipe, mealCanImportFromLink, ingredientBaseName, ingredientsToEditorRows, ingredientEditorGroups, ingredientEditorGroupIndex, descriptionRepeatsTitle } from "../domain/meals.js";
+import { renderSubpageBar } from "./subpage.js";
 
 function renderIngredientList(ingredients, { scaleAmount, baseServings, targetServings, escapeHtml }) {
   let previous = "";
@@ -167,7 +168,6 @@ export function renderMealDetailView(options = {}) {
     ingredients = [],
     wakeSupported = false,
     keepScreenAwake = false,
-    wakeText = "Hold skjermen på",
     leftoversText = "",
     servingText = "",
     servingScope = "",
@@ -176,15 +176,17 @@ export function renderMealDetailView(options = {}) {
     shoppingIconHtml = "",
     scaleAmount = (amount) => amount,
     importAvailable = false,
+    menuOpen = false,
     escapeHtml = String,
   } = options;
 
   return `
+    ${renderSubpageBar({ backAttribute: "data-close-meal", actionHtml: '<button class="icon-button" type="button" data-open-recipe-menu aria-label="Flere valg" aria-haspopup="dialog">⋯</button>' })}
     <section class="recipe-detail">
       <div class="recipe-hero">
         <div>
           <h2>${escapeHtml(meal.title)}</h2>
-          <p>${escapeHtml(meal.description || "Ingen beskrivelse er lagt inn ennå.")}</p>
+          ${meal.description && !descriptionRepeatsTitle(meal.title, meal.description) ? `<p>${escapeHtml(meal.description)}</p>` : ""}
           <p class="recipe-serving-note">${escapeHtml(servingText)}</p>
           <div class="recipe-servings-control" aria-label="Juster porsjoner">
             <button class="button secondary" type="button" data-recipe-servings="-1" aria-label="Færre porsjoner" ${(targetServings ?? baseServings) <= 1 ? "disabled" : ""}>−</button>
@@ -193,14 +195,11 @@ export function renderMealDetailView(options = {}) {
           </div>
           ${servingScope ? `<p class="field-hint">${escapeHtml(servingScope)}</p>` : ""}
         </div>
-        <div class="recipe-actions">
-          <button class="button ghost" data-close-meal>Tilbake</button>
-          <button class="button secondary wake-button ${keepScreenAwake ? "active" : ""}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>${escapeHtml(wakeText)}</button>
-          ${meal.recipeUrl ? `<a class="button secondary" href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
-          <button class="button secondary" data-add-to-shopping="${escapeHtml(meal.id)}">${shoppingIconHtml} Legg i handleliste</button>
-          ${mealCanImportFromLink(meal) ? `<button class="button" data-import-from-link="${escapeHtml(meal.id)}" ${importAvailable ? "" : "disabled"}>Hent fra lenke</button>` : ""}
-          <button class="button ${mealNeedsRecipe(meal) ? "" : "secondary"}" data-edit-meal="${escapeHtml(meal.id)}">${mealNeedsRecipe(meal) ? "Legg inn oppskrift" : "Rediger"}</button>
-        </div>
+        ${ingredients.length ? `<button class="button recipe-primary" type="button" data-add-to-shopping="${escapeHtml(meal.id)}">${shoppingIconHtml} Legg i handleliste</button>`
+          : `<button class="button recipe-primary" type="button" data-edit-meal="${escapeHtml(meal.id)}">Legg inn oppskrift</button>`}
+        <button class="wake-switch" type="button" role="switch" aria-checked="${keepScreenAwake}" data-toggle-wake ${wakeSupported ? "" : "disabled"}>
+          <span class="switch-track" aria-hidden="true"><span></span></span> Hold skjermen på
+        </button>
       </div>
       ${wakeSupported ? "" : '<p class="wake-note">Denne nettleseren støtter ikke å holde skjermen våken fra web-appen.</p>'}
       ${mealNeedsRecipe(meal) ? '<p class="empty-recipe-text">Ingen oppskrift lagt inn ennå</p>' : ""}
@@ -227,7 +226,21 @@ export function renderMealDetailView(options = {}) {
         </section>
       </div>
     </section>
+    ${menuOpen ? renderRecipeMenuView({ meal, importAvailable, escapeHtml }) : ""}
   `;
+}
+
+export function renderRecipeMenuView({ meal, importAvailable = false, escapeHtml = String }) {
+  return `<div class="modal-backdrop editor-row-menu-backdrop active" data-close-recipe-menu>
+    <section class="modal editor-row-menu active" data-recipe-menu role="dialog" aria-modal="true" aria-labelledby="recipeMenuTitle">
+      <div class="modal-header"><h3 id="recipeMenuTitle">Flere valg</h3>
+        <button class="modal-close" type="button" data-focus-key="recipe-menu-close" data-close-recipe-menu aria-label="Lukk flere valg">×</button></div>
+      <div class="editor-row-menu-actions" data-scroll-key="recipe-menu">
+        <button class="button secondary" type="button" data-focus-key="recipe-menu-edit" data-edit-meal="${escapeHtml(meal.id)}">Rediger</button>
+        ${meal.recipeUrl ? `<a class="button secondary" data-focus-key="recipe-menu-link" data-recipe-menu-link href="${escapeHtml(meal.recipeUrl)}" target="_blank" rel="noopener">Åpne lenke</a>` : ""}
+        ${mealCanImportFromLink(meal) ? `<button class="button secondary" type="button" data-focus-key="recipe-menu-import" data-import-from-link="${escapeHtml(meal.id)}" ${importAvailable ? "" : "disabled"}>Hent fra lenke</button>` : ""}
+      </div>
+    </section></div>`;
 }
 
 function renderOption(value, label, selected, escapeHtml = String) {

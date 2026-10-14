@@ -1,29 +1,3 @@
-export function renderTodaySummaryView(options = {}) {
-  const {
-    dateLabel = "",
-    title = "",
-    description = "",
-    mealId = "",
-    dayIndex = 0,
-    showRecipe = false,
-    escapeHtml = String,
-  } = options;
-
-  return `
-    <section class="today-summary">
-      <div>
-        <span class="today-kicker">I dag · ${escapeHtml(dateLabel)}</span>
-        <h3>${escapeHtml(title)}</h3>
-        <p>${escapeHtml(description)}</p>
-      </div>
-      <div class="today-actions">
-        ${showRecipe ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${dayIndex}">Oppskrift</button>` : ""}
-        <button class="button secondary compact" data-view="planner">Planlegger</button>
-      </div>
-    </section>
-  `;
-}
-
 export function renderWeekRowView(options = {}) {
   const {
     shortDay = "",
@@ -32,34 +6,28 @@ export function renderWeekRowView(options = {}) {
     mealId = "",
     dayIndex = 0,
     showRecipe = false,
-    showPlanner = false,
+    day = shortDay,
+    isToday = false,
+    note = "",
     escapeHtml = String,
   } = options;
 
   return `
-    <div class="week-row">
-      <div class="week-row-day">
-        <span class="week-row-name">${escapeHtml(shortDay)}</span>
-        <span class="week-row-date">${escapeHtml(dateLabel)}</span>
-      </div>
-      <div class="week-row-meal${!title ? " muted" : ""}">
-        ${escapeHtml(title || "Ikke planlagt")}
-      </div>
-      <div class="week-row-action">
-        ${showRecipe
-          ? `<button class="button secondary compact" data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${dayIndex}">Oppskrift</button>`
-          : showPlanner
-            ? `<button class="button secondary compact" data-view="planner">Planlegg</button>`
-            : ""}
-      </div>
-    </div>
+    <button class="week-row${isToday ? " is-today" : ""}" type="button"
+      ${showRecipe ? `data-view-meal="${escapeHtml(mealId)}" data-recipe-day="${dayIndex}"` : `data-calendar-day="${dayIndex}"`}
+      aria-label="${escapeHtml(day)} ${escapeHtml(dateLabel)}, ${escapeHtml(title || "Ikke planlagt")}, ${showRecipe ? "åpne oppskrift" : "åpne planlegger"}">
+      <span class="week-row-day"><span class="week-row-name">${escapeHtml(shortDay)}</span>
+        <span class="week-row-date">${escapeHtml(dateLabel)}</span>${isToday ? '<span class="week-today-badge">I dag</span>' : ""}</span>
+      <span class="week-row-meal${!title ? " muted" : ""}"><span>${escapeHtml(title || "Ikke planlagt")}</span>
+        ${note ? `<span class="week-row-note">${escapeHtml(note)}</span>` : ""}</span>
+      <span class="week-row-chevron" aria-hidden="true">›</span>
+    </button>
   `;
 }
 
 export function renderCalendarView(options = {}) {
   const {
     weekRangeLabel = "",
-    todayCardHtml = "",
     weekRowsHtml = "",
     isCurrentWeek = false,
     escapeHtml = String,
@@ -78,7 +46,6 @@ export function renderCalendarView(options = {}) {
         </div>
       </div>
     </section>
-    ${todayCardHtml}
     <section class="week-list">
       <h4 class="week-list-heading">${listHeading}</h4>
       ${weekRowsHtml}

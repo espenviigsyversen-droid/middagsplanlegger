@@ -34,6 +34,20 @@ Middagsapp er en statisk nettapp/PWA uten byggsystem. Den kan kjøres direkte fr
 
 ## Runtime-modell
 
+### Undersidetopp og navigasjon fra v109
+
+src/render/subpage.js gir én felles sticky toppstripe med ‹ Tilbake, safe-area-padding og valgfri handling til høyre. Oppskrift og alle Innstillinger-undersider bruker den; globalt brand-toppfelt skjules der, slik at tilbake ligger øverst til venstre. Editorens Avbryt/Lagre-flyt er beholdt. Oppskriften viser tittel, eventuell beskrivelse, porsjoner, hovedknapp og wake-lock-bryter før innholdet. Manglende ingredienser gir Legg inn oppskrift. recipeMenuOpen ligger bare i minnet og samler Rediger/Åpne lenke/valgfri Hent fra lenke i en rullbar meny med v108-nøkkel og fokusvern. descriptionRepeatsTitle i domain/meals.js skjuler beskrivelser som gjentar tittelen etter normalisering, uten å endre lagrede oppskrifter.
+
+src/ui/navigation.js håndterer history.pushState, replaceState, go og popstate uten avhengighet til synk eller domenemodell. Eksisterende oppstartsoppføring merkes med replaceState; oppstart legger ikke til noen ny oppføring. app.js sin navigate() er inngangen fra brukerhandlinger og kaller dagens setState før historikkens sync. Vanlig setState, render og sky-/statuscallbacks lager ingen oppføringer.
+
+navigationLevels avleder aktive UI-nivåer: oppskrift/underside, editorvern og åpne vinduer. Historikken lagrer øktmerke og nivå-ID-er, aldri domenedata/utkast. Nye nivåer legges med pushState. Når et nivå lukkes av appen, konsumeres eksisterende oppføringer med go; controlleren venter på popstate før et eventuelt nytt nivå legges inn. Under ventingen beholdes brukerens siste UI-mål. Tilbake + ny åpning erstatter framoverdelen, slik at antall oppføringer ikke øker for hver runde. Framover gjenåpner ikke forkastet redigering eller gamle vinduer. Ved tilgangs-/synkstopp byttes øktmerket med replaceState; ingen push skjer.
+
+backInApp deles av ‹ Tilbake og popstate. Prioriteten er oppskriftsmeny/radmeny, handlelistegjennomgang, handledager, middagsvelger, dagsark/forslagsark, deretter foreldrevisning. Oppskrift går til previousView, Innstillinger-underside til setup, og AI åpnet fra editor tilbake til den editoren. Er editoren selv åpen, leses ulagret skjema og tilbake avvises; browserens editoroppføring gjeninnsettes. Tilbake lukker derfor radmenyen først, og neste tilbake bevarer utkastet. Nye vinduer skal registreres både i navigationLevels og backInApp, og UI-handlingene skal bruke navigate/sync.
+
+Kalender har kun ukeliste etter v109. renderTodaySummary/renderTodaySummaryView og tilhørende CSS er fjernet. Hele dagsraden er en knapp med beskrivende aria-label og ›. Planlagt middag bruker eksisterende oppskriftsåpning med dag-/ukekontekst; ellers åpnes Planlegger med dagsarket. Dagens merke gjelder bare faktisk dato i den valgte uken. dayNotes vises på én linje med ellipsis. Ingen ukedata eller synk endres.
+
+Lokale tester bruker DOM- og asynkrone History-stubber. iPhone-hjemskjermappens systemgester, Safari/Android tilbake, safe-area ved rotering og fysisk wake lock må prøves på ekte enhet etter eiers publisering. Ny subpage.js/navigation.js står i begge service worker-listene, uten strategiendring. Klienten er v109/109 og minsteversjonen forblir 106.
+
 ### Vinduenes rulleposisjon fra v108
 
 render() bruker captureWindowPositions før innerHTML erstattes og restoreWindowPositions etter rendering og hendelsesbinding. Hvert faktisk rullende vinduselement har en stabil data-scroll-key. Kopien av scrollTop ligger bare i dette render-kallet; det finnes ingen varig posisjonshistorikk eller nye state-/lagringsfelt. Når vinduet forsvinner, har neste render ingen gammel nøkkel å hente. En ny åpning starter derfor øverst.

@@ -1,3 +1,5 @@
+import { renderSubpageBar } from "./src/render/subpage.js";
+import { createNavigationHistory } from "./src/ui/navigation.js";
 import {
   createQuickMeal,
   makeSlug,
@@ -83,7 +85,6 @@ import { createServingsDefaultsTransition } from "./src/sync/servings-defaults.j
 import { buildRemoteWrites } from "./src/sync/writes.js";
 import {
   renderCalendarView,
-  renderTodaySummaryView,
   renderWeekRowView,
 } from "./src/render/calendar.js";
 import {
@@ -222,8 +223,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v108";
-const APP_VERSION_NUMBER = 108;
+const APP_VERSION = "v109";
+const APP_VERSION_NUMBER = 109;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -242,6 +243,7 @@ let weeksSyncStatus = null;
 let servingsTransition = null, weeksServerReady = false, profileServerReady = false;
 let recipeServingsView = { key: null, value: null };
 let editorRowMenu = null;
+let recipeMenuOpen = false;
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
 let currentAuthUser = null;
@@ -264,6 +266,57 @@ let aiKeyUi = { status: null, loading: false, busy: false, busyAction: "", model
 let shoppingSync = makeShoppingSync();
 let mealsSync = makeMealsSync();
 let weeksSync = makeWeeksSync();
+
+const SUBPAGE_VIEWS = new Set(["account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences",
+  "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
+const uiHistory = createNavigationHistory({ history: window.history, getLevels: navigationLevels, onBack: backInApp });
+window.addEventListener("popstate", event => uiHistory.pop(event));
+
+function navigationLevels() {
+  if (accessState.kind !== "ready") return [];
+  const levels = [];
+  if (state.editingMealId && (state.activeView === "meals" || aiKeyEditorReturn)) levels.push(`editor:${state.editingMealId}`);
+  if (state.activeView === "recipe") levels.push(`recipe:${state.selectedMealId}`);
+  else if (SUBPAGE_VIEWS.has(state.activeView)) levels.push(`page:${state.activeView}`);
+  if (state.plannerActionsOpen && state.activeView === "planner") levels.push("planner-actions");
+  if (state.plannerDaySheet?.open && state.activeView === "planner") levels.push(`planner-day:${state.plannerDaySheet.dayIndex}`);
+  if (state.mealPicker?.open) levels.push(`picker:${state.mealPicker.dayIndex}`);
+  if (state.generateModal?.open && state.activeView === "shopping") levels.push("generate-days");
+  if (state.shoppingReview?.open) levels.push("shopping-review");
+  if (editorRowMenu) levels.push(`row-menu:${editorRowMenu.kind}:${editorRowMenu.index}`);
+  if (recipeMenuOpen) levels.push("recipe-menu");
+  return levels;
+}
+
+function navigate(patch) { setState(patch); uiHistory.sync(); }
+
+function backInApp() {
+  if (accessState.kind !== "ready") return false;
+  if (recipeMenuOpen) { closeRecipeMenu(); return true; }
+  if (editorRowMenu) { closeEditorRowMenu(); return true; }
+  if (state.shoppingReview?.open) { closeShoppingReview(); return true; }
+  if (state.generateModal?.open && state.activeView === "shopping") { setState({ generateModal: { open: false, selectedDays: [] } }); return true; }
+  if (state.mealPicker?.open) { setState({ mealPicker: { open: false, dayIndex: null, query: "" } }); return true; }
+  if (state.plannerDaySheet?.open && state.activeView === "planner") { setState({ plannerDaySheet: { open: false, dayIndex: null } }); return true; }
+  if (state.plannerActionsOpen && state.activeView === "planner") { setState({ plannerActionsOpen: false }); return true; }
+  if (state.activeView === "ai-settings" && aiKeyEditorReturn) {
+    const editorId = aiKeyEditorReturn; aiKeyEditorReturn = null;
+    setState({ activeView: "meals", editingMealId: editorId }); return true;
+  }
+  if (state.activeView === "meals" && state.editingMealId) { syncMealEditorDraftFromDom(); return false; }
+  if (state.activeView === "recipe") {
+    setState({ activeView: state.previousView || "meals", selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false }); return true;
+  }
+  if (SUBPAGE_VIEWS.has(state.activeView)) { setState({ activeView: "setup" }); return true; }
+  return false;
+}
+
+function navigateBack() { backInApp(); uiHistory.sync(); }
+
+function closeRecipeMenu() {
+  recipeMenuOpen = false; render(); uiHistory.sync();
+  app.querySelector("[data-open-recipe-menu]")?.focus?.({ preventScroll: true });
+}
 
 function maybeTransitionServings() {
   void servingsTransition?.run({ role: accessState.role, offline: accessState.offline,
@@ -811,7 +864,7 @@ function addQuickMealForPicker() {
   const meal = createQuickMeal(title, makeMealId(title));
   const weekKey = getWeekKey();
   const plan = { ...currentPlan(), [picker.dayIndex]: meal.id };
-  setState({
+  navigate({
     meals: [...state.meals, meal],
     plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: plan },
     mealPicker: { open: false, dayIndex: null, query: "" },
@@ -1103,7 +1156,7 @@ function shoppingReviewItemCount(review = state.shoppingReview) {
 }
 
 function closeShoppingReview() {
-  setState({ shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] } });
+  navigate({ shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] } });
 }
 
 function showToast(message) {
@@ -1278,15 +1331,16 @@ function renderShell(viewHtml) {
   const isRecipeView = state.activeView === "recipe";
   const settingsViews = new Set(["setup", "account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
   const isSettingsView = settingsViews.has(state.activeView);
+  const isSubpage = isRecipeView || (isSettingsView && state.activeView !== "setup");
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
   const toast = renderToast();
   app.innerHTML = `
-    <div class="app-shell ${isRecipeView ? "recipe-mode" : ""}">
+    <div class="app-shell ${isSubpage ? "subpage-mode" : ""} ${isRecipeView ? "recipe-mode" : ""}">
       ${pickerModal}
       ${shoppingReviewModal}
       ${toast}
-      ${isRecipeView ? "" : `<header class="topbar">
+      ${isSubpage ? "" : `<header class="topbar">
         <div class="topbar-inner">
           <div class="brand">
             <div class="brand-mark">M</div>
@@ -1331,10 +1385,6 @@ function renderCalendar() {
   const todayIndex = getTodayIndexInCurrentWeek();
   const isCurrentWeek = todayIndex >= 0;
 
-  const todayCard = isCurrentWeek
-    ? renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex)
-    : "";
-
   const weekRows = dayNames.map((day, index) => {
     const meal = getMeal(plan[index]);
     const isPlannedMeal = dayPlansMeal(dayModes[index]);
@@ -1344,6 +1394,9 @@ function renderCalendar() {
 
     return renderWeekRowView({
       shortDay: day.substring(0, 3),
+      day,
+      isToday: index === todayIndex,
+      note: dayNotes[index] || "",
       dateLabel: formatDate(dates[index]),
       title,
       mealId: meal?.id || "",
@@ -1356,7 +1409,6 @@ function renderCalendar() {
 
   return renderCalendarView({
     weekRangeLabel: weekRangeLabel(),
-    todayCardHtml: todayCard,
     weekRowsHtml: weekRows,
     isCurrentWeek,
     escapeHtml,
@@ -1366,29 +1418,6 @@ function renderCalendar() {
 function getTodayIndexInCurrentWeek() {
   const todayKey = localDateKey(new Date());
   return getWeekDates().findIndex((date) => localDateKey(date) === todayKey);
-}
-
-function renderTodaySummary(dates, plan, dayModes, dayNotes, todayIndex) {
-  const index = todayIndex >= 0 ? todayIndex : 0;
-  const day = todayIndex >= 0 ? "I dag" : dayNames[index];
-  const meal = getMeal(plan[index]);
-  const isPlannedMeal = dayPlansMeal(dayModes[index]);
-  const note = dayNotes[index] || "";
-  const title = !isPlannedMeal ? planModeLabel(dayModes[index]) : meal ? meal.title : "Ikke planlagt";
-  const description = !isPlannedMeal
-    ? (note || "Ingen detaljer lagt inn.")
-    : meal
-      ? (meal.description || "Ingen beskrivelse lagt inn.")
-      : "Gå til Planlegger for å legge inn middag.";
-  return renderTodaySummaryView({
-    dateLabel: `${day} · ${formatDate(dates[index])}`.replace(/^I dag · /, ""),
-    title,
-    description,
-    mealId: meal?.id || "",
-    dayIndex: index,
-    showRecipe: Boolean(meal && isPlannedMeal),
-    escapeHtml,
-  });
 }
 
 function renderPlanner() {
@@ -1584,7 +1613,6 @@ function renderMealDetail() {
   const steps = meal.steps?.length ? meal.steps : ["Ingen fremgangsmåte er lagt inn ennå."];
   const ingredients = normalizeIngredients(meal.ingredients, meal.keyIngredients);
   const wakeSupported = "wakeLock" in navigator;
-  const wakeText = state.keepScreenAwake ? "Skjermen holdes på" : "Hold skjermen på";
   const leftoversText = leftoversLabel(meal.leftovers);
   const baseServings = mealBaseServings(meal);
   const targetServings = recipeTargetServings();
@@ -1602,7 +1630,6 @@ function renderMealDetail() {
     ingredients,
     wakeSupported,
     keepScreenAwake: state.keepScreenAwake,
-    wakeText,
     leftoversText,
     servingText,
     servingScope,
@@ -1610,6 +1637,7 @@ function renderMealDetail() {
     targetServings,
     shoppingIconHtml: icon("shopping"),
     scaleAmount,
+    menuOpen: recipeMenuOpen,
     importAvailable: accessState.kind === "ready" && !accessState.offline && navigator.onLine !== false,
     escapeHtml,
   });
@@ -1720,7 +1748,7 @@ function saveMealFromForm(form) {
   const meals = isNew
     ? [...state.meals, meal]
     : state.meals.map((item) => item.id === meal.id ? meal : item);
-  setState({ meals, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: meal.id });
+  navigate({ meals, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: meal.id });
 }
 
 function makeMealId(title) {
@@ -1771,7 +1799,7 @@ function changeIngredientEditorRows(action, index = -1, delta = 0) {
   }
   else if (action === "remove") rows = rows.filter((_, rowIndex) => rowIndex !== index);
   if (!rows.length) rows = [{ amount: "", unit: "", name: "" }];
-  setState({ draftMeal: state.draftMeal, draftIngredients: rows, draftSteps: state.draftSteps });
+  navigate({ draftMeal: state.draftMeal, draftIngredients: rows, draftSteps: state.draftSteps });
   if (focusIndex !== null) focusEditorRow("ingredient", focusIndex, focusField);
 }
 
@@ -1789,21 +1817,21 @@ function openEditorRowMenu(kind, index) {
   const rows = kind === "ingredient" ? state.draftIngredients : state.draftSteps;
   if (!rows?.[index] && rows?.[index] !== "") return;
   editorRowMenu = { editorId: state.editingMealId, kind, index };
-  render();
+  render(); uiHistory.sync();
   app.querySelector("[data-editor-menu-action]:not([disabled])")?.focus?.();
 }
 
 function closeEditorRowMenu() {
   if (!editorRowMenu) return;
   const { kind, index } = editorRowMenu;
-  syncMealEditorDraftFromDom(); editorRowMenu = null; render(); focusEditorRow(kind, index);
+  syncMealEditorDraftFromDom(); editorRowMenu = null; render(); uiHistory.sync(); focusEditorRow(kind, index);
 }
 
 function changeStepEditorRows(action, index, delta = 0) {
   syncMealEditorDraftFromDom(); editorRowMenu = null;
   const steps = state.draftSteps || [""];
   const next = action === "remove" ? removeStepEditorRow(steps, index) : moveStepEditorRow(steps, index, delta);
-  setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps: next });
+  navigate({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps: next });
   focusEditorRow("step", action === "remove" ? Math.min(index, next.length - 1) : Math.max(0, Math.min(next.length - 1, index + delta)));
 }
 
@@ -1816,10 +1844,11 @@ function chooseEditorRowAction(action, groupIndex) {
 }
 
 document.addEventListener("keydown", event => {
-  if (!editorRowMenu) return;
-  if (event.key === "Escape") { event.preventDefault(); closeEditorRowMenu(); }
+  if (!editorRowMenu && !recipeMenuOpen) return;
+  if (event.key === "Escape") { event.preventDefault(); recipeMenuOpen ? closeRecipeMenu() : closeEditorRowMenu(); return; }
   if (event.key === "Tab") {
-    const buttons = [...app.querySelectorAll("[data-editor-menu] button:not([disabled])")];
+    const buttons = recipeMenuOpen ? [...(app.querySelector("[data-recipe-menu]")?.querySelectorAll("[data-focus-key]") || [])].filter(element => !element.disabled)
+      : [...app.querySelectorAll("[data-editor-menu] button:not([disabled])")];
     const first = buttons[0], last = buttons.at(-1);
     if (first && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
       event.preventDefault(); (event.shiftKey ? last : first).focus();
@@ -2067,7 +2096,7 @@ function bindRecipeImportEvents() {
     if (accessState.kind !== "ready" || accessState.offline || navigator.onLine === false) return;
     const meal = getMeal(button.dataset.importFromLink);
     if (!mealCanImportFromLink(meal)) return;
-    setState({ activeView: "meals", previousView: "meals", editingMealId: meal.id, draftMeal: null,
+    navigate({ activeView: "meals", previousView: "meals", editingMealId: meal.id, draftMeal: null,
       draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
     await loadAiKeyStatus();
     if (state.editingMealId === meal.id && state.activeView === "meals") await startRecipeImport("url");
@@ -2154,12 +2183,9 @@ function bindAiKeyEvents() {
     if (app.querySelector("[data-meal-form]")) syncMealEditorDraftFromDom();
     syncRecipeImportFields();
     aiKeyEditorReturn = state.editingMealId;
-    setState({ activeView: "ai-settings" });
+    navigate({ activeView: "ai-settings" });
   });
-  app.querySelector("[data-ai-key-return-editor]")?.addEventListener("click", () => {
-    const editorId = aiKeyEditorReturn; aiKeyEditorReturn = null;
-    setState({ activeView: "meals", editingMealId: editorId });
-  });
+  app.querySelector("[data-ai-key-return-editor]")?.addEventListener("click", navigateBack);
 }
 
 function refreshAiKeyNetworkUi() {
@@ -2184,7 +2210,7 @@ function deleteCurrentMeal() {
     Object.fromEntries(Object.entries(plan).map(([day, plannedId]) => [day, plannedId === mealId ? "" : plannedId])),
   ]));
   const meals = state.meals.filter((meal) => meal.id !== mealId);
-  setState({ meals, plansByWeek, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null });
+  navigate({ meals, plansByWeek, editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null });
 }
 
 function renderSetup() {
@@ -2236,12 +2262,13 @@ function preferenceGoalFor(category) {
 
 function renderMealPreferencesSetup() {
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">Middagspreferanser</h2>
         <p class="view-lead">Definer hva dere helst vil ha i en vanlig uke. Tomme felt betyr ingen regel.</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">
       <form class="preference-list" data-meal-preferences-form>
@@ -2340,12 +2367,13 @@ function renderSuitabilitySetup() {
 
 function renderPlanModesSetup() {
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">Plan</h2>
         <p class="view-lead">Planvalg brukes i ukeplanen. Typen forteller appen om dagen skal ha oppskrift, være spise-borte-dag eller være rester.</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">
       <div class="metadata-list">
@@ -2403,12 +2431,13 @@ function renderIngredientMappingsSetup() {
   })).filter((cat) => cat.rows.length);
 
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">Vareoppslag</h2>
         <p class="view-lead">Koble matvarer til butikkategorier. Oppslagene brukes når handlelisten sorteres.</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">
       <div class="mapping-groups">
@@ -2455,12 +2484,13 @@ function renderStoreCategoriesSetup() {
     </div>
   `).join("");
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">Butikkategorier</h2>
         <p class="view-lead">Legg kategoriene i den rekkefølgen dere går gjennom butikken. Rekkefølgen styrer handlelisten.</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">
       <div class="metadata-list">${rows}</div>
@@ -2888,7 +2918,7 @@ function bindMealResultActions(root = app) {
     button.addEventListener("click", (event) => {
       if (button.tagName === "BUTTON") event.stopPropagation();
       const dayIndex = button.dataset.recipeDay;
-      setState({
+      navigate({
         activeView: "recipe",
         previousView: state.activeView === "recipe" ? state.previousView : state.activeView,
         selectedMealId: button.dataset.viewMeal,
@@ -2901,7 +2931,7 @@ function bindMealResultActions(root = app) {
   root.querySelectorAll("[data-edit-meal]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      setState({
+      navigate({
         activeView: "meals",
         previousView: "meals",
         editingMealId: button.dataset.editMeal,
@@ -2917,6 +2947,18 @@ function bindMealResultActions(root = app) {
 }
 
 function bindEvents() {
+  app.querySelectorAll("[data-subpage-back]").forEach(button => button.addEventListener("click", navigateBack));
+  app.querySelector("[data-open-recipe-menu]")?.addEventListener("click", () => {
+    recipeMenuOpen = true; render(); uiHistory.sync();
+    app.querySelector('[data-focus-key="recipe-menu-edit"]')?.focus?.({ preventScroll: true });
+  });
+  app.querySelectorAll("[data-close-recipe-menu]").forEach(element => element.addEventListener("click", event => {
+    if (event.target === element) closeRecipeMenu();
+  }));
+  app.querySelector("[data-recipe-menu-link]")?.addEventListener("click", closeRecipeMenu);
+  app.querySelectorAll("[data-calendar-day]").forEach(button => button.addEventListener("click", () => {
+    navigate({ activeView: "planner", plannerDaySheet: { open: true, dayIndex: Number(button.dataset.calendarDay) } });
+  }));
   app.querySelectorAll("[data-editor-row-menu]").forEach(button => button.addEventListener("click", () => openEditorRowMenu(button.dataset.editorRowMenu, Number(button.dataset.rowIndex))));
   app.querySelectorAll("[data-editor-menu-action]").forEach(button => button.addEventListener("click", () => chooseEditorRowAction(button.dataset.editorMenuAction, button.dataset.groupIndex)));
   app.querySelectorAll("[data-editor-menu-close]").forEach(element => element.addEventListener("click", event => {
@@ -2926,14 +2968,14 @@ function bindEvents() {
   app.querySelectorAll("[data-recipe-servings]").forEach(button => button.addEventListener("click", () => changeRecipeServings(Number(button.dataset.recipeServings))));
   app.querySelectorAll("[data-use-standard-servings]").forEach(button => button.addEventListener("click", () => updateDayServings(Number(button.dataset.useStandardServings), null)));
   app.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => setState({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false }));
+    button.addEventListener("click", () => navigate({ activeView: button.dataset.view, selectedMealId: null, selectedRecipeContext: null, editingMealId: null, keepScreenAwake: false }));
   });
 
   // Open meal picker modal
   app.querySelectorAll("[data-open-meal-picker]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const dayIndex = Number(btn.dataset.openMealPicker);
-      setState({
+      navigate({
         mealPicker: { open: true, dayIndex, query: "" }
       });
     });
@@ -2942,7 +2984,7 @@ function bindEvents() {
   // Close meal picker modal (backdrop or close btn)
   app.querySelectorAll("[data-close-meal-picker]").forEach((el) => {
     el.addEventListener("click", () => {
-      setState({
+      navigate({
         mealPicker: { open: false, dayIndex: null, query: "" }
       });
     });
@@ -3011,7 +3053,7 @@ function bindEvents() {
         if (dayIndex !== null) {
           const weekKey = getWeekKey();
           const plan = { ...currentPlan(), [dayIndex]: mealId };
-          setState({
+          navigate({
             plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: plan },
             mealPicker: { open: false, dayIndex: null, query: "" }
           });
@@ -3046,39 +3088,39 @@ function bindEvents() {
   app.querySelectorAll("[data-edit-planner-day]").forEach((card) => {
     card.addEventListener("click", (event) => {
       if (event.target.closest("button, a, input, select, textarea")) return;
-      setState({ plannerDaySheet: { open: true, dayIndex: Number(card.dataset.editPlannerDay) } });
+      navigate({ plannerDaySheet: { open: true, dayIndex: Number(card.dataset.editPlannerDay) } });
     });
   });
 
   app.querySelectorAll("[data-close-planner-day]").forEach((element) => {
-    element.addEventListener("click", () => setState({ plannerDaySheet: { open: false, dayIndex: null } }));
+    element.addEventListener("click", () => navigate({ plannerDaySheet: { open: false, dayIndex: null } }));
   });
 
   app.querySelectorAll("[data-open-planner-actions]").forEach((button) => {
-    button.addEventListener("click", () => setState({ plannerActionsOpen: true }));
+    button.addEventListener("click", () => navigate({ plannerActionsOpen: true }));
   });
 
   app.querySelectorAll("[data-close-planner-actions]").forEach((element) => {
-    element.addEventListener("click", () => setState({ plannerActionsOpen: false }));
+    element.addEventListener("click", () => navigate({ plannerActionsOpen: false }));
   });
 
   app.querySelectorAll("[data-fill-week]").forEach((button) => {
     button.addEventListener("click", () => {
       fillWeek();
-      if (state.plannerActionsOpen) setState({ plannerActionsOpen: false });
+      if (state.plannerActionsOpen) navigate({ plannerActionsOpen: false });
     });
   });
   app.querySelectorAll("[data-replace-open-week]").forEach((button) => {
     button.addEventListener("click", () => {
       replaceOpenWeek();
-      if (state.plannerActionsOpen) setState({ plannerActionsOpen: false });
+      if (state.plannerActionsOpen) navigate({ plannerActionsOpen: false });
     });
   });
   app.querySelector("[data-clear-week]")?.addEventListener("click", () => {
     const confirmed = window.confirm("Er du sikker på at du vil tømme denne uken? Middager og låser for valgt uke fjernes.");
     if (!confirmed) return;
     const weekKey = getWeekKey();
-    setState({
+    navigate({
       plansByWeek: { ...(state.plansByWeek || {}), [weekKey]: emptyWeekPlan() },
       lockedPlansByWeek: { ...(state.lockedPlansByWeek || {}), [weekKey]: emptyWeekLocks() },
       dayTypesByWeek: { ...(state.dayTypesByWeek || {}), [weekKey]: emptyWeekDayTypes() },
@@ -3097,7 +3139,7 @@ function bindEvents() {
   app.querySelectorAll("[data-week]").forEach((button) => {
     button.addEventListener("click", () => {
       const value = Number(button.dataset.week);
-      setState({
+      navigate({
         weekOffset: value === 0 ? 0 : state.weekOffset + value,
         plannerDaySheet: { open: false, dayIndex: null },
         plannerActionsOpen: false,
@@ -3108,7 +3150,7 @@ function bindEvents() {
   app.querySelectorAll("[data-filter]").forEach((field) => {
     field.addEventListener("change", () => {
       state.filters = { ...state.filters, [field.dataset.filter]: field.value };
-      setState({ filters: state.filters });
+      navigate({ filters: state.filters });
     });
   });
 
@@ -3158,19 +3200,19 @@ function bindEvents() {
   app.querySelectorAll("[data-edit-meal]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      setState({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
+      navigate({ activeView: "meals", previousView: "meals", editingMealId: button.dataset.editMeal, draftMeal: null, draftIngredients: null, draftSteps: null, selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
     });
   });
 
   app.querySelectorAll("[data-cancel-edit]").forEach((button) => {
-    button.addEventListener("click", () => setState({ editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null }));
+    button.addEventListener("click", () => navigate({ editingMealId: null, draftMeal: null, draftIngredients: null, draftSteps: null }));
   });
 
   app.querySelectorAll("[data-view-meal]").forEach((button) => {
     const dayIndex = button.dataset.recipeDay === undefined ? null : Number(button.dataset.recipeDay);
     button.addEventListener("click", (event) => {
       if (button.tagName === "BUTTON") event.stopPropagation();
-      setState({
+      navigate({
         activeView: "recipe",
         previousView: state.activeView === "recipe" ? state.previousView : state.activeView,
         selectedMealId: button.dataset.viewMeal,
@@ -3181,12 +3223,10 @@ function bindEvents() {
     });
   });
 
-  app.querySelector("[data-close-meal]")?.addEventListener("click", () => {
-    setState({ activeView: state.previousView || "meals", selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false });
-  });
+  app.querySelector("[data-close-meal]")?.addEventListener("click", navigateBack);
 
   app.querySelector("[data-toggle-wake]")?.addEventListener("click", () => {
-    setState({ keepScreenAwake: !state.keepScreenAwake });
+    navigate({ keepScreenAwake: !state.keepScreenAwake });
   });
 
   app.querySelectorAll("[data-add-to-shopping]").forEach((button) => {
@@ -3194,7 +3234,7 @@ function bindEvents() {
       const meal = getMeal(button.dataset.addToShopping);
       if (!meal?.ingredients?.length) return;
       const review = createMealShoppingReview(meal);
-      if (review) setState({ shoppingReview: review });
+      if (review) navigate({ shoppingReview: review });
     });
   });
 
@@ -3211,7 +3251,7 @@ function bindEvents() {
       const selectedItemIds = checkbox.checked
         ? [...new Set([...current, itemId])]
         : current.filter((id) => id !== itemId);
-      setState({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
+      navigate({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
     });
   });
 
@@ -3220,7 +3260,7 @@ function bindEvents() {
       const group = (state.shoppingReview?.groups || []).find((entry) => entry.id === button.dataset.reviewGroupSelect);
       if (!group) return;
       const selectedItemIds = [...new Set([...(state.shoppingReview?.selectedItemIds || []), ...group.items.map((item) => item.id)])];
-      setState({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
+      navigate({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
     });
   });
 
@@ -3230,7 +3270,7 @@ function bindEvents() {
       if (!group) return;
       const groupIds = new Set(group.items.map((item) => item.id));
       const selectedItemIds = (state.shoppingReview?.selectedItemIds || []).filter((id) => !groupIds.has(id));
-      setState({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
+      navigate({ shoppingReview: { ...state.shoppingReview, selectedItemIds } });
     });
   });
 
@@ -3240,7 +3280,7 @@ function bindEvents() {
     if (!review?.open || !selectedItems.length) return;
 
     if (review.mode === "week") {
-      setState({
+      navigate({
         shoppingList: { items: mergeGeneratedShoppingItems(selectedItems), generatedForWeek: getWeekKey() },
         generateModal: { open: false, selectedDays: [] },
         shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
@@ -3249,7 +3289,7 @@ function bindEvents() {
       return;
     }
 
-    setState({
+    navigate({
       shoppingList: { ...state.shoppingList, items: mergeShoppingItems(state.shoppingList?.items || [], selectedItems) },
       shoppingReview: { open: false, mode: null, title: "", groups: [], selectedItemIds: [] },
     });
@@ -3266,7 +3306,7 @@ function bindEvents() {
   app.querySelector("[data-add-ingredient]")?.addEventListener("click", () => {
     syncMealEditorDraftFromDom();
     const draftIngredients = [...(state.draftIngredients || []), { amount: "", unit: "", name: "" }];
-    setState({ draftMeal: state.draftMeal, draftIngredients, draftSteps: state.draftSteps });
+    navigate({ draftMeal: state.draftMeal, draftIngredients, draftSteps: state.draftSteps });
   });
 
   app.querySelector("[data-add-ingredient-heading]")?.addEventListener("click", () => changeIngredientEditorRows("heading"));
@@ -3281,7 +3321,7 @@ function bindEvents() {
   app.querySelector("[data-add-step]")?.addEventListener("click", () => {
     syncMealEditorDraftFromDom();
     const draftSteps = [...(state.draftSteps || []), ""];
-    setState({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps });
+    navigate({ draftMeal: state.draftMeal, draftIngredients: state.draftIngredients, draftSteps });
   });
 
   app.querySelectorAll("[data-family]").forEach((field) => {
@@ -3289,7 +3329,7 @@ function bindEvents() {
       const value = field.dataset.family === "familySize" ? Math.max(1, Math.min(30, Number(field.value) || 1))
         : field.type === "number" ? Number(field.value) : field.value;
       state.family = { ...state.family, [field.dataset.family]: value };
-      setState({ family: state.family });
+      navigate({ family: state.family });
     });
   });
 
@@ -3359,12 +3399,12 @@ function bindEvents() {
     const preselected = upcoming
       .filter((d) => dayPlansMeal(d.dayMode) && d.meal)
       .map((d) => d.dateKey);
-    setState({ generateModal: { open: true, selectedDays: preselected } });
+    navigate({ generateModal: { open: true, selectedDays: preselected } });
   });
 
   app.querySelectorAll("[data-close-modal]").forEach((el) => {
     el.addEventListener("click", (e) => {
-      if (e.target === el) setState({ generateModal: { open: false, selectedDays: [] } });
+      if (e.target === el) navigate({ generateModal: { open: false, selectedDays: [] } });
     });
   });
 
@@ -3375,7 +3415,7 @@ function bindEvents() {
       const selectedDays = checkbox.checked
         ? [...current, dateKey]
         : current.filter((d) => d !== dateKey);
-      setState({ generateModal: { ...state.generateModal, selectedDays } });
+      navigate({ generateModal: { ...state.generateModal, selectedDays } });
     });
   });
 
@@ -3384,7 +3424,7 @@ function bindEvents() {
     const selectedDays = getUpcomingDays(9).filter((d) => selectedKeys.has(d.dateKey));
     const review = createWeekShoppingReview(selectedDays);
     if (review?.open) {
-      setState({ generateModal: { open: false, selectedDays: [] }, shoppingReview: review });
+      navigate({ generateModal: { open: false, selectedDays: [] }, shoppingReview: review });
     } else {
       showToast("Ingen av de valgte middagene har ingredienser.");
     }
@@ -3400,14 +3440,14 @@ function bindEvents() {
 
   app.querySelectorAll("[data-edit-shopping-item]").forEach((button) => {
     button.addEventListener("click", () => {
-      setState({ editingShoppingItemId: button.dataset.editShoppingItem });
+      navigate({ editingShoppingItemId: button.dataset.editShoppingItem });
     });
   });
 
   app.querySelectorAll("[data-close-shopping-editor]").forEach((el) => {
     el.addEventListener("click", (event) => {
       if (event.target === el || el.matches("button")) {
-        setState({ editingShoppingItemId: null });
+        navigate({ editingShoppingItemId: null });
       }
     });
   });
@@ -3425,7 +3465,7 @@ function bindEvents() {
       item.id === itemId ? { ...item, name, amount, unit, category } : item
     ));
     const mappings = { ...(state.metadata?.ingredientMappings || {}), [name.toLowerCase()]: category };
-    setState({
+    navigate({
       shoppingList: { ...state.shoppingList, items },
       metadata: { ...state.metadata, ingredientMappings: mappings },
       editingShoppingItemId: null,
@@ -3435,7 +3475,7 @@ function bindEvents() {
   app.querySelector("[data-delete-shopping-item]")?.addEventListener("click", (event) => {
     const itemId = event.currentTarget.dataset.deleteShoppingItem;
     const items = (state.shoppingList?.items || []).filter((item) => item.id !== itemId);
-    setState({ shoppingList: { ...state.shoppingList, items }, editingShoppingItemId: null });
+    navigate({ shoppingList: { ...state.shoppingList, items }, editingShoppingItemId: null });
   });
 
   const shoppingInput = app.querySelector("[data-shopping-input]");
@@ -3456,20 +3496,20 @@ function bindEvents() {
       const items = (state.shoppingList?.items || []).map((item) =>
         item.id === checkbox.dataset.toggleItem ? { ...item, checked: checkbox.checked } : item
       );
-      setState({ shoppingList: { ...state.shoppingList, items } });
+      navigate({ shoppingList: { ...state.shoppingList, items } });
     });
   });
 
   app.querySelector("[data-clear-checked]")?.addEventListener("click", () => {
     const items = (state.shoppingList?.items || []).filter((item) => !item.checked);
-    setState({ shoppingList: { ...state.shoppingList, items } });
+    navigate({ shoppingList: { ...state.shoppingList, items } });
   });
 
   app.querySelectorAll("[data-toggle-family]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.toggleFamily;
       state.family = { ...state.family, [key]: !state.family[key] };
-      setState({ family: state.family });
+      navigate({ family: state.family });
     });
   });
 
@@ -3480,7 +3520,7 @@ function bindEvents() {
         ? state.family.quickDays.filter((item) => item !== day)
         : [...state.family.quickDays, day];
       state.family = { ...state.family, quickDays };
-      setState({ family: state.family });
+      navigate({ family: state.family });
     });
   });
 
@@ -3495,7 +3535,7 @@ function bindEvents() {
     const allKeys = Object.fromEntries(getStoreCategories().map((c) => [c.key, c.label]));
     const nextKey = uniqueMetadataKey(key, allKeys);
     const storeCategoryOrder = [...getStoreCategories().map((category) => category.key), nextKey];
-    setState({ metadata: {
+    navigate({ metadata: {
       ...state.metadata,
       storeCategories: [...configured.filter((c) => c.key !== nextKey), { key: nextKey, label }],
       storeCategoryOrder,
@@ -3511,7 +3551,7 @@ function bindEvents() {
       if (!key || !label) return;
       const configured = Array.isArray(state.metadata?.storeCategories) ? state.metadata.storeCategories : [];
       const storeCategories = [...configured.filter((cat) => cat.key !== key), { key, label }];
-      setState({ metadata: { ...state.metadata, storeCategories } });
+      navigate({ metadata: { ...state.metadata, storeCategories } });
     });
   });
 
@@ -3531,7 +3571,7 @@ function bindEvents() {
         catKey === key ? "other" : catKey,
       ]));
       const items = (state.shoppingList?.items || []).map((item) => item.category === key ? { ...item, category: "other" } : item);
-      setState({
+      navigate({
         metadata: { ...state.metadata, storeCategories, storeCategoryOrder, ingredientMappings: mappings },
         shoppingList: { ...state.shoppingList, items },
       });
@@ -3552,7 +3592,7 @@ function bindEvents() {
       const mappings = ingredientName
         ? { ...(state.metadata?.ingredientMappings || {}), [ingredientName]: newCat }
         : state.metadata?.ingredientMappings || {};
-      setState({
+      navigate({
         shoppingList: { ...state.shoppingList, items },
         metadata: { ...state.metadata, ingredientMappings: mappings },
       });
@@ -3567,7 +3607,7 @@ function bindEvents() {
     const cat = String(formData.get("ingredientCategory") || "").trim();
     if (!name || !cat) return;
     const mappings = { ...(state.metadata?.ingredientMappings || {}), [name]: cat };
-    setState({ metadata: { ...state.metadata, ingredientMappings: mappings } });
+    navigate({ metadata: { ...state.metadata, ingredientMappings: mappings } });
     e.currentTarget.reset();
   });
 
@@ -3578,7 +3618,7 @@ function bindEvents() {
       const select = app.querySelector(`[data-mapping-cat="${CSS.escape(ingredient)}"]`);
       if (!select) return;
       const mappings = { ...(state.metadata?.ingredientMappings || {}), [ingredient]: select.value };
-      setState({ metadata: { ...state.metadata, ingredientMappings: mappings } });
+      navigate({ metadata: { ...state.metadata, ingredientMappings: mappings } });
     });
   });
 
@@ -3593,7 +3633,7 @@ function bindEvents() {
       } else {
         delete mappings[ingredient];
       }
-      setState({ metadata: { ...state.metadata, ingredientMappings: mappings } });
+      navigate({ metadata: { ...state.metadata, ingredientMappings: mappings } });
     });
   });
 }
@@ -3621,6 +3661,7 @@ function restoreWindowPositions(positions) {
 }
 
 function render(preserveShoppingInput = true) {
+  if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeMenuOpen = false;
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
@@ -3785,6 +3826,8 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  recipeMenuOpen = false;
+  uiHistory.reset();
   editorRowMenu = null;
   servingsTransition = null; weeksServerReady = false; profileServerReady = false;
   recipeServingsView = { key: null, value: null };

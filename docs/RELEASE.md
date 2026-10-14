@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v109 – tilbake, oppskrift og Kalender
+
+Bare klienten publiseres; ingen server-/regelpublisering er nødvendig. Minsteversjonen er fortsatt 106. Filene står i docs/LEVERANSE_V109.md.
+
+Etter eiers publisering: kontroller v109 på PC og iPhone/Android. Prøv ‹ Tilbake og telefon/nettleser-tilbake i oppskrift og hver Innstillinger-underside, med åpne vinduer og med ulagret redigering. Vinduet skal lukkes først; editoren skal ikke miste tekst. AI-siden åpnet fra editor skal gå tilbake dit. Gjenta inn/ut flere ganger. Kontroller sticky stripe/safe-area og 44 px trykkflater, ⋯-meny, hovedknapp og Hold skjermen på. I Kalender skal dagens merke/notat ligge i raden, og hver rad åpne riktig oppskrift eller dagsark. Visuell kontroll ved 375 px, systemgester og fysisk wake lock gjenstår på ekte enhet.
+
 ### v108 – rulleposisjon i vinduer
 
 v108 bevarer rulleposisjon og fokus i handlelistegjennomgangen, Velg dager å handle for, planleggerens dagsark, middagsvelgeren og editorens radmeny gjennom render. Bare klienten endres; ingen serverpublisering er nødvendig. REQUIRED_MIN_APP_VERSION er fortsatt 106.
@@ -35,6 +41,7 @@ node tests/render/calendar.test.mjs
 node tests/render/meals.test.mjs
 node tests/app/editor-rows.test.mjs
 node tests/app/window-scroll.test.mjs
+node tests/app/navigation.test.mjs
 node tests/render/planner.test.mjs
 node tests/render/setup.test.mjs
 node tests/render/shopping.test.mjs

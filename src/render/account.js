@@ -1,3 +1,4 @@
+import { renderSubpageBar } from "./subpage.js";
 export function renderAccessScreen({ access, summary, busy = false, escapeHtml = String }) {
   const e = escapeHtml;
   const retry = '<button class="button secondary" data-access-retry>Prøv igjen</button>';
@@ -39,8 +40,8 @@ export function renderAccessScreen({ access, summary, busy = false, escapeHtml =
 
 export function renderAccountView({ email = "", role, members = [], message = "", offline = false, busy = false, escapeHtml = String }) {
   const e = escapeHtml;
-  return `<section class="view-header"><div><h2 class="view-title">Konto og medlemmer</h2>
-    <p class="view-lead">Innlogget som ${e(email)}</p></div><button class="button secondary" data-view="setup">Tilbake</button></section>
+  return `${renderSubpageBar()}<section class="view-header"><div><h2 class="view-title">Konto og medlemmer</h2>
+    <p class="view-lead">Innlogget som ${e(email)}</p></div></section>
     <section class="panel account-panel"><button class="button secondary" data-sign-out>Logg ut</button>
       ${message ? `<p class="account-message" role="status">${e(message)}</p>` : ""}
       ${offline ? '<p>Medlemslisten krever nett. Lokale data er tilgjengelige.</p>' : `<h3>Medlemmer</h3>

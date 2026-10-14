@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { descriptionRepeatsTitle } from "../../src/domain/meals.js";
+assert.equal(descriptionRepeatsTitle("Alfredo pasta", " ALFREDO-PASTA 🍝!!! "), true);
+assert.equal(descriptionRepeatsTitle("Alfredo pasta", "Kremet pasta"), false);
+assert.equal(descriptionRepeatsTitle("", ""), false);
 import { ingredientBaseName, ingredientsToEditorRows, editorRowsToIngredients, moveIngredientEditorRow,
   ingredientEditorGroups, ingredientEditorGroupIndex, moveIngredientToGroup, insertIngredientInGroup,
   moveStepEditorRow, removeStepEditorRow } from "../../src/domain/meals.js";

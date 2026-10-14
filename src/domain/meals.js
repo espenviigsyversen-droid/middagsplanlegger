@@ -15,6 +15,13 @@ export function ingredientBaseName(name) {
   return whole.split(",", 1)[0].trim() || whole;
 }
 
+export function descriptionRepeatsTitle(title, description) {
+  const normalize = value => String(value || "").toLocaleLowerCase("nb")
+    .replace(/[-–—]/g, " ").replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
+  const text = normalize(description);
+  return Boolean(text) && text === normalize(title);
+}
+
 // Shared by startup, per-document diffs and remote recipe snapshots.
 export function normalizeMeals(meals = []) {
   return (Array.isArray(meals) ? meals : []).map((value) => {

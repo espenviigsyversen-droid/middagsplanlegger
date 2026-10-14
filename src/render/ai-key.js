@@ -1,3 +1,4 @@
+import { renderSubpageBar } from "./subpage.js";
 export function aiKeyStatusLabel(status) {
   if (!status) return "Kontrollerer tilkobling …";
   if (!status.configured) return "Ikke satt opp";
@@ -5,8 +6,8 @@ export function aiKeyStatusLabel(status) {
 }
 export function renderAiKeyView({ status = null, isAdmin = false, available = false, busy = false, busyAction = "", modelValue = null, returnToEditor = false, message = "", escapeHtml = String } = {}) {
   const disabled = !available || busy ? "disabled" : "";
-  return `<section class="view-header"><div><h2 class="view-title">AI og oppskriftsimport</h2></div>
-    <button class="button ghost" ${returnToEditor ? "data-ai-key-return-editor" : 'data-view="setup"'}>Tilbake</button></section>
+  return `${renderSubpageBar({ backAttribute: returnToEditor ? "data-ai-key-return-editor" : "data-subpage-back" })}<section class="view-header"><div><h2 class="view-title">AI og oppskriftsimport</h2></div>
+</section>
     <section class="panel account-panel"><h3>OpenAI <span class="chip" role="status">${escapeHtml(aiKeyStatusLabel(status))}</span></h3>
     ${status?.masked ? `<p>API-nøkkel: ${escapeHtml(status.masked)}</p>` : ""}
     <p>Modell: ${escapeHtml(status?.model || "Kontrollerer …")}</p>

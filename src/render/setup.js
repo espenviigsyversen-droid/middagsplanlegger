@@ -1,3 +1,4 @@
+import { renderSubpageBar } from "./subpage.js";
 export function renderSetupView(options = {}) {
   const {
     family = {},
@@ -76,12 +77,13 @@ export function renderFamilySettingsView(options = {}) {
   } = options;
 
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">Familie</h2>
         <p class="view-lead">Familienavn, porsjoner, raske dager og forslagregler.</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">
       <div class="settings-grid">
@@ -122,12 +124,13 @@ export function renderAppSettingsView(options = {}) {
   } = options;
 
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">Oppdatering og versjon</h2>
         <p class="view-lead">Bruk oppdatering etter publisering hvis appen ikke henter siste versjon automatisk.</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">
       ${localStoreFailed ? '<p class="status-note">Nettleserens lagring er full. Appen virker, men kan ikke startes uten nett på denne enheten.</p>' : ""}
@@ -179,12 +182,13 @@ export function renderSetupPageView(options = {}) {
     escapeHtml = String,
   } = options;
   return `
+    ${renderSubpageBar()}
     <section class="view-header">
       <div>
         <h2 class="view-title">${escapeHtml(title)}</h2>
         <p class="view-lead">${escapeHtml(lead)}</p>
       </div>
-      <button class="button secondary" data-view="setup">Tilbake</button>
+
     </section>
     <section class="panel setup-section">${bodyHtml}</section>
   `;
