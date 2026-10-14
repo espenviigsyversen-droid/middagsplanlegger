@@ -207,4 +207,40 @@ assert.doesNotMatch(storage.get("middagsapp-state"), /scrollTop|scrollKey|focusK
 assert.doesNotMatch(storage.get("middagsapp-state"), /mealPickerReturn/);
 assert.doesNotMatch(run("JSON.stringify(syncPayload())"), /scrollTop|scrollKey|focusKey/);
 assert.ok(scrollWrites.length > 0);
+
+// v113: automatic search focus belongs to desktop opening, never ordinary binding/render.
+let finePointer = false;
+const pointerQueries = [];
+window.matchMedia = query => { pointerQueries.push(query); return { matches: finePointer }; };
+run('editorRowMenu=null; setState({activeView:"week",editingMealId:null,mealPicker:{open:false,dayIndex:null,query:""},plannerDaySheet:{open:false}})');
+document.activeElement = null;
+focusCalls.length = 0;
+run('openMealPicker(0)');
+assert.equal(focusCalls.length,0,'Touch opening must not request focus or open the keyboard');
+assert.equal(document.activeElement,null);
+assert.doesNotMatch(run('renderMealPickerModal()'),/\bautofocus\b/);
+assert.ok(control('picker-other-plans'),'Fixed footer remains available');
+run('render()'); assert.equal(focusCalls.length,0,'v108 restoration must not invent focus on first touch opening');
+// A user who deliberately taps the search keeps focus and scroll through a later render.
+control('picker-search').focus({preventScroll:true});
+scroller('meal-picker').scrollTop=175; run('render()'); expectFocus('picker-search');
+assert.equal(scroller('meal-picker').scrollTop,175);
+run('closeMealPicker()');
+document.activeElement=null; focusCalls.length=0; finePointer=true;
+run('openMealPicker(0)'); expectFocus('picker-search');
+assert.equal(focusCalls.length,1,'Fine pointer opening focuses the search once');
+// Rebinding/rendering must not steal focus from footer buttons, even on desktop.
+activate('picker-other-plans'); expectFocus('picker-other-plans');
+assert.equal(document.activeElement,control('picker-other-plans'));
+run('render()'); expectFocus('picker-other-plans');
+assert.ok(pointerQueries.every(query=>query==='(pointer: fine)'));
+run('closeMealPicker()');
+finePointer=false; document.activeElement=null; focusCalls.length=0;
+run('openDaySheet(0)');
+control('planner-note:0').focus({preventScroll:true});
+const beforeTouchReopen=focusCalls.length;
+run('openMealPicker(0,true)');
+assert.equal(focusCalls.length,beforeTouchReopen,'A focused note in the old day sheet must not focus the new picker');
+assert.equal(document.activeElement,null);
+
 console.log("window scroll/focus app tests ok");

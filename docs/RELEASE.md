@@ -4,6 +4,13 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v113 – middagsvelger på telefon og anonyme eksempler
+
+Bare klienten publiseres av eier. Filoversikt og resultater står i docs/LEVERANSE_V113.md. Minsteversjonen er fortsatt 106. Alle 49 testskript og 41 kildefilers syntakskontroller består lokalt.
+
+Etter eiers publisering: kontroller v113 på iPhone. Åpne velgeren fra en tom dag og dagsarket: tastaturet skal være lukket og Ikke middag hjemme tilgjengelig nederst. Trykk søket selv og prøv søk, tømming og rulling. Uvalgte kort skal ha vanlig ramme og mørke titler; bare dagens middag har valgt-ramme. På PC: søket får fokus ved åpning, tastaturfokus er tydelig og andre knapper beholder fokus gjennom render. Kontroller den anonyme notatplassholderen og dagsark/ukemeny. Ekte iPhone-tastatur, Safari-farger og hover/fokus er ikke verifisert av DOM-stubbene.
+
+
 ### v112 – Uke erstatter Kalender og Planlegger
 
 Bare klienten publiseres av eier. Ta med alle endrede/nye filer og slettingene i docs/LEVERANSE_V112.md. App, HTML-parametre og cache er v112; REQUIRED_MIN_APP_VERSION forblir 106. Ingen server-/regelpublisering er nødvendig. Handle er fremdeles startside.

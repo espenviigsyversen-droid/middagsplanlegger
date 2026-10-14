@@ -215,8 +215,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v112";
-const APP_VERSION_NUMBER = 112;
+const APP_VERSION = "v113";
+const APP_VERSION_NUMBER = 113;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -327,6 +327,12 @@ function openMealPicker(dayIndex, fromDaySheet = false) {
     .filter(position => position.key === "planner-day")
     .map(position => ({ ...position, focusKey: `planner-meal:${dayIndex}` })) } : null;
   navigate({ mealPicker: { open: true, dayIndex, query: "" }, plannerDaySheet: { open: false, dayIndex: null }, plannerActionsOpen: false });
+  // Only desktop opening requests search focus. Later renders restore the user's actual focus.
+  if (window.matchMedia?.("(pointer: fine)")?.matches) {
+    const input = app.querySelector("[data-meal-picker-search]");
+    input?.focus({ preventScroll: true });
+    input?.select();
+  }
 }
 
 function closeMealPicker(patch = {}) {
@@ -834,7 +840,6 @@ function renderMealPickerModal() {
               data-meal-picker-search 
               data-focus-key="picker-search"
               autocomplete="off"
-              autofocus
             />
             <button class="search-clear-btn" type="button" data-focus-key="picker-clear" aria-label="Tøm søk" data-clear-search-input style="${query ? '' : 'display: none;'}">×</button>
           </div>
@@ -3007,9 +3012,6 @@ function bindEvents() {
       }
     });
 
-    // Automatically focus input field and select all text to make editing swift
-    searchInput.focus();
-    searchInput.select();
   }
 
   // Clear search query

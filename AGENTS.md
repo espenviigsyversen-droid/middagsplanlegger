@@ -7,6 +7,7 @@ Dette prosjektet er en lokal, statisk PWA for middagsplanlegging. Appen er forel
 - Arbeidsmappen er Git-klonen `C:\Users\espen\Documents\GitHub\middagsplanlegger`. Eier håndterer commit og publisering med GitHub Desktop.
 - Ikke bruk git-kommandoer i denne lokale prosjektkopien.
 - Jobb kun innenfor prosjektmappen.
+- Eksempeltekster, plassholdere og testdata som vises i appen skal aldri inneholde ekte navn på familiemedlemmer.
 - Bruk trygge lokale kontroller, særlig `node --check app.js` og `node --check service-worker.js`.
 - Etter endringer i oppskrifts-/måltidslogikk: kjør `node tests/domain/meals.test.mjs`.
 - Etter endringer i handleliste-/mengdelogikk: kjør `node tests/domain/shopping.test.mjs`.
@@ -257,3 +258,9 @@ Se `docs/ARCHITECTURE.md`, `docs/STATE_MODEL.md` og `docs/RELEASE.md` før stør
 - Dagsark, middagsvelger, ukemeny og bekreftelse vises ett om gangen. Plan/type og Ikke middag hjemme velges inne i eksisterende vindu. plannerDaySheet/plannerActionsOpen beholder interne UI-navn. mealPickerReturn og weekClearConfirmation bevarer skjult logisk forelder og rulleposisjon/fokus: velger → dagsark → Uke, bekreftelse → ukemeny → Uke. Tøm uka bruker aldri window.confirm og lukker begge nivåer etter bekreftelse.
 - weekClearConfirmation og pickerOtherPlans er runtime-tilstand, aldri lokal kopi/synk/backup. Oppskrift åpnet fra Uke beholder ukedagkontekst og samme weekOffset; tilbake går til Uke. render/setState/skydata oppretter ikke historikk. Nye vinduer skal få tilbakehåndtering og data-scroll-key på faktisk rullende element, med stabile data-focus-key-kontroller. Fra v112: planner-day på .week-sheet-body, week-menu, week-clear og picker-plans på sine rullbare beholdere.
 - Kjør de tre week-testene, tests/app/navigation.test.mjs, tests/app/window-scroll.test.mjs, tests/app/weeks-sync.test.mjs og alle øvrige tests/ og functions/tests/ samt node --check av kildefilene. De fjernede kalender-/planlegger-render-testene er erstattet av week.test.mjs. Nye domain/week-view.js og render/week.js står i begge service worker-listene; gamle render/calendar.js og render/planner.js fjernes. v112/112, REQUIRED_MIN_APP_VERSION 106; ingen endring i synk, datamodell, functions eller regler.
+
+## Middagsvelger på telefon fra v113
+
+- Ingen autofocus-attributt eller ubetinget søkefokus i bindEvents. openMealPicker fokuserer/selecter søket bare når matchMedia("(pointer: fine)") stemmer, med preventScroll. På berøringsskjerm åpnes velgeren uten automatisk fokus. Vanlig render beholder bare faktisk fokus fra v108, også når brukeren selv har åpnet tastaturet.
+- Middagskort og forslagstitler bruker --text. Grønn valgt-ramme styres bare av .selected for dagens middag; hover endrer bare bakgrunn på enheter med hover og fin peker. Tastaturfokus tegnes med :focus-visible, og fokus fra berøring skal ikke se ut som et valgt kort.
+- Knappen Ikke middag hjemme ligger fortsatt i fast footer. Notatfeltets plassholder er anonym. Kjør tests/app/window-scroll.test.mjs, tests/app/week.test.mjs og tests/render/week.test.mjs samt alle øvrige testskript og syntakskontroller. Klienten er v113/113; REQUIRED_MIN_APP_VERSION forblir 106.

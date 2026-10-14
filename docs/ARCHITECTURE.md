@@ -401,3 +401,11 @@ navigationLevels/backInApp registrerer også week-clear. Den eksisterende Histor
 Sveip på dagslisten bruker passive touch-hendelser: én finger, start minst 24 px fra kanten, minst 60 px vannrett og mer enn 1,5 ganger loddrett avstand. Gjenkjent sveip undertrykker radens etterfølgende klikk; loddrett rulling og sveip fra kanten bytter ikke uke. Telefonens systemgest, virkelig rulling, skjermtastatur og safe-area må kontrolleres på ekte enhet. CSS følger skissene ved 375 px og sentrerer samme innhold med maks 720 px på PC.
 
 Klienten/cache er v112/112, minsteversjonen er 106. Begge asset-listene har domain/week-view.js og render/week.js i stedet for de gamle kalender-/planleggermodulene. Ingen endring i service worker-strategi, synkmoduler, dokumentformat, functions eller firestore.rules.
+
+## Middagsvelgerens fokus og farger fra v113
+
+openMealPicker ber om fokus i søket bare når matchMedia("(pointer: fine)") stemmer, med preventScroll. Autofocus-attributtet og fokuskallet i bindEvents er fjernet. Berøringsåpning har ingen automatisk fokus/tastatur; når brukeren selv trykker søket, bevarer eksisterende data-focus-key/data-scroll-key dette gjennom senere render. Fine-pointer-fokus skjer ved åpning, ikke ved hver render, slik at footer og kort kan beholde faktisk brukerfokus. Fast picker-footer og sidelåsen er uendret.
+
+Middagskortene har eksplisitt --text, inkludert strong-titlene i forslagene. Den tidligere ubetingede hover-regelen kunne gi grønn ramme på et uvalgt kort; hover endrer nå bare bakgrunn og bare ved hover + fin peker. Valgt ramme tilhører bare .selected for dagens middag. :focus-visible gir egen tastaturkontur, og :focus:not(:focus-visible) fjerner kontur ved annen fokus. Knappene i dagsark/ukemeny beholder sine eksplisitte tekst-, merke-, hvite og dempede farger.
+
+Notatfeltet bruker anonym plassholder. Eksempeltekster, plassholdere og testdata som vises i appen skal aldri inneholde ekte navn på familiemedlemmer. Familiens eget navn fra data er uendret. Klient/cache er v113/113, minsteversjonen fortsatt 106. Ingen endring i domenedata, historikk, synk eller service worker-strategi.

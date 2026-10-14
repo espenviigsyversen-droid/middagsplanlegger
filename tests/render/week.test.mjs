@@ -33,4 +33,21 @@ assert.match(renderWeekClear({heading,escapeHtml:e}),/planvalg, dagstyper, porsj
 const css=readFileSync(new URL('../../styles.css',import.meta.url),'utf8');
 assert.match(css,/repeat\(3, minmax\(0, 1fr\)\)/);assert.match(css,/#e3efe8/);assert.match(css,/\.week-view \{ max-width: 720px/);
 assert.doesNotMatch(css,/\.planner-fab|\.calendar-view-header|\.planner-day-card/);
+
+// v113: anonymous examples and explicit picker colors/focus rules.
+assert.match(sheet,/placeholder="F.eks. spiser tidlig, trening eller gjester"/);
+const pickerBase=/\.meal-picker-item\s*\{([^}]+)\}/.exec(css)?.[1];
+assert.match(pickerBase,/color:\s*var\(--text\)/);
+assert.match(css,/\.picker-suggestion strong\s*\{[^}]*color:\s*var\(--text\)/);
+const pickerHover=/\.meal-picker-item:hover\s*\{([^}]+)\}/.exec(css)?.[1];
+assert.doesNotMatch(pickerHover,/border-color/,'Hover must never mimic the selected border');
+assert.match(css,/@media \(hover: hover\) and \(pointer: fine\)\s*\{\s*\.meal-picker-item:hover/);
+assert.match(css,/\.meal-picker-item:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--brand\)/);
+assert.match(css,/\.meal-picker-item:focus:not\(:focus-visible\)\s*\{[^}]*outline:\s*none/);
+const namePattern=/(?<![\p{L}\p{N}_-])(?:Line|Espen|Floan|Syversen|Viig)(?![\p{L}\p{N}_-])/iu;
+const {readdirSync}=await import('node:fs');
+function checkAnonymous(dir){for(const entry of readdirSync(dir,{withFileTypes:true})){const file=new URL(entry.name,dir);if(entry.isDirectory())checkAnonymous(new URL(entry.name+'/',dir));else assert.doesNotMatch(readFileSync(file,'utf8'),namePattern,file.pathname);}}
+checkAnonymous(new URL('../../src/',import.meta.url));
+for(const path of ['../../app.js','../../index.html'])assert.doesNotMatch(readFileSync(new URL(path,import.meta.url),'utf8'),namePattern,path);
+
 console.log("week render tests ok");

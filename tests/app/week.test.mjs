@@ -68,7 +68,7 @@ run('openMealPicker(1,true)');flush();assert.equal(run('state.plannerDaySheet.op
 click('[data-day-portions]',{dayPortions:'1',delta:'1'});assert.equal(run('currentServings()[1]'),5);
 click('[data-day-portions]',{dayPortions:'1',delta:'-1'});assert.equal(run('currentServings()[1]'),null);
 click('[data-lock-day]',{lockDay:'1'});assert.equal(run('currentLocks()[1]'),false);
-const note=button({dayNote:'1'});note.value='Line på trening';selectors.set('[data-day-note]',[note]);run('bindEvents()');note.handlers.keydown({key:'Enter',preventDefault(){}});selectors.delete('[data-day-note]');assert.equal(run('currentDayNotes()[1]'),'Line på trening');
+const note=button({dayNote:'1'});note.value='Trening – spiser tidlig';selectors.set('[data-day-note]',[note]);run('bindEvents()');note.handlers.keydown({key:'Enter',preventDefault(){}});selectors.delete('[data-day-note]');assert.equal(run('currentDayNotes()[1]'),'Trening – spiser tidlig');
 click('[data-remove-day-meal]',{removeDayMeal:'1'});assert.equal(run('currentPlan()[1]'),'');
 history.go(-1);flush();
 // Opening a recipe from the sheet closes the sheet and returns to the same week.
@@ -96,4 +96,13 @@ swipe(100,100,100,200);assert.equal(run('state.weekOffset'),1);swipe(10,100,110,
 swipe(100,100,180,110);assert.equal(run('state.weekOffset'),0);
 run('openDaySheet(0)');flush();swipe(100,100,20,100);assert.equal(run('state.weekOffset'),0);history.go(-1);flush();
 run('saveState()');assert.doesNotMatch(storage.get('middagsapp-state'),/weekClearConfirmation|pickerOtherPlans/);
+
+// v113: only today's actual selection owns the selected class, never the first result.
+run('state.meals=normalizeMeals([{...emptyMeal(),id:"fish-a",title:"Fisk A",categories:["fish"]},{...emptyMeal(),id:"fish-b",title:"Fisk B",categories:["fish"]}]); state.plansByWeek[getWeekKey()]={...emptyWeekPlan()};');
+assert.doesNotMatch(run('renderMealPickerListItems("",0)'),/class="meal-picker-item selected"/);
+run('state.plansByWeek[getWeekKey()][0]="fish-b"');
+const selectionHtml=run('renderMealPickerListItems("",0)');
+const selectedIds=[...selectionHtml.matchAll(/class="meal-picker-item selected"[^>]*data-select-meal="([^"]+)"/g)].map(match=>match[1]);
+assert.deepEqual(selectedIds,['fish-b']);
+
 console.log('week app tests ok');
