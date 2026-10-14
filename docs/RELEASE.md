@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v122 – Porsjonsvelgeren reagerer på hvert trykk
+
+Publiser filene i docs/LEVERANSE_V122.md sammen, inkludert src/ui/recipe-servings.js i begge asset-listene. V122/cache 122, minimum fortsatt 120. Ingen server-/regelpublisering. Alle 60 testskript og 48 kildefilers syntakskontroller består.
+
+På iPhone: prøv 11 raske + fra 4 til 15, −, direkte tall/Enter, ugyldig tekst, grenser og 48 px knapper. Mengdene skal endres straks med dagens avrunding. Knappene skal stå i ro også ved første justering, og knipe-zoom skal fortsatt virke. Prøv dagskontekst og 500 ms ro, Tilbake/tilbake-sveip, fanebytte, Rediger, Legg i handleliste og skjuling før 500 ms. Kontroller på annen enhet at én sluttskriving kommer fram, og at samtidige skyendringer ikke overstyrer tallet mens man trykker. Ekte Safari/PWA/touch og faktisk synk på nett gjenstår på enhet; lokal Chrome og stubber er kontrollert.
+
 ### v121 – Søk og filtre i Oppskrifter
 
 Publiser filene i docs/LEVERANSE_V121.md sammen, med src/render/meal-filters.js i begge asset-listene. App/cache v121, minimum fortsatt 120. Ingen server-/regelpublisering. Alle 58 testskript og 47 kildefilers syntakskontroller består.

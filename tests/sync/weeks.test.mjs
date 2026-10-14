@@ -70,6 +70,20 @@ try {
   merged.snapshot({ [w]: { plan: { 1: "b", 4: "c" }, dayNotes: { 1: "først", 2: "andre" } } });
   assert.equal(merged.statuses.at(-1), "Synket"); merged.sync.stop();
 
+  // Already-debounced recipe portions send now; other weeks keep their window.
+  const immediate = fixture(); await immediate.start(); immediate.snapshot({[w]:{},[other]:{}});
+  immediate.sync.enqueue({[w]:{dayNotes:{0:"Behold"}},[other]:{plan:{1:"senere"}}});
+  immediate.sync.enqueue({[w]:{servings:{0:15}}},{immediate:true});
+  assert.deepEqual(immediate.calls,[[`weeks/${w}`,{dayNotes:{0:"Behold"},servings:{0:15},updatedAt:"server"},{merge:true}]]);
+  await settle(); assert.equal(immediate.statuses.at(-1),"Synker");
+  immediate.snapshot({[w]:{dayNotes:{0:"Behold"},servings:{0:7}},[other]:{}});
+  assert.equal(immediate.received.at(-1).servingsByWeek[w][0],7);
+  advance(499);assert.equal(immediate.calls.length,1);advance(1);assert.equal(immediate.calls.length,2);
+  immediate.sync.stop();
+  const beforeStart = fixture(); beforeStart.sync.enqueue({[w]:{servings:{0:15}}},{immediate:true});
+  assert.equal(beforeStart.calls.length,0);await beforeStart.start();assert.equal(beforeStart.calls.length,1);
+  advance(500);assert.equal(beforeStart.calls.length,1);beforeStart.sync.stop();
+
   const ack = deferred(), concurrent = fixture(() => ack.promise); await concurrent.start();
   concurrent.snapshot({ [w]: { plan: { 1: "a0" } } }, { fromCache: true }); assert.equal(concurrent.received.length, 0);
   concurrent.snapshot({ [w]: { plan: { 1: "a0" } } });

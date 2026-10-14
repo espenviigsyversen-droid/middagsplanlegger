@@ -116,7 +116,7 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {},
     });
   }
 
-  function enqueue(changes = {}) {
+  function enqueue(changes = {}, { immediate = false } = {}) {
     if (stopped) return;
     let changed = false;
     for (const [weekKey, fields] of Object.entries(changes)) {
@@ -138,6 +138,9 @@ export function createWeeksSync({ onWeeks = () => {}, onStatus = () => {},
         }
       }
     }
+    // Recipe portions have already waited for 500 ms of quiet in the UI.
+    // Also flush on departure/hide, rather than starting a second wait window.
+    if (immediate) for (const weekKey of Object.keys(changes)) flush(weekKey);
     if (changed) publishStatus();
   }
 

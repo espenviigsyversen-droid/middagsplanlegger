@@ -527,3 +527,15 @@ Den doble søkeforslagslisten, Only-rendereren, binding og CSS er fjernet. Oppsk
 Brikker bruker aria-pressed og stabile fokusnøkler inne i meal-filters-scrollområdet; v108 bevarer horisontal posisjon/fokus ved render. Samme skjermnøkkel gjør at v119 ikke ruller siden ved brikketrykk eller Nullstill. Listen er flat og alfabetisk ved aktivt søk/brikker; ellers bestemmer filters.sort kategori/alfabetisk. Trefflinjen viser antall + Nullstill ved aktive filtre, ellers oppskriftsantall + Kategori/A–Å. Begge tomtilstands-/linjeknapper nullstiller søk/brikker, aldri sort.
 
 Bare filters.sort serialiseres lokalt. UI-søk/brikker beholdes i state.filters gjennom økten og ignoreres ved oppstart fra eldre kopier. Ingen nye synk-/backup-/domenefelter. App/cache v121/121, minimum 120; ny renderer ligger i begge asset-listene.
+
+## Porsjonsvelger uten full re-tegning fra v122
+
+changeRecipeServings/setRecipeServings oppdaterer det synlige tallet, knappgrenser, oppskriftens porsjons-/konteksttekst og ingredienstabell gjennom refreshRecipeServings. Knapper, tallfelt, øvrig oppskrift, fokus og hovedsidens rulleposisjon beholdes. Tallfeltet aksepterer bare heltall 1–30 ved Enter/blur, markerer hele verdien ved fokus og gjenoppretter ugyldig inndata. Samme scaleAmount og avrunding brukes.
+
+createRecipeServingsBuffer i src/ui/recipe-servings.js har kun pending/timer/generasjon i minnet. Fra en dag ligger siste verdi over serversnapshotet og sendes etter 500 ms uten nye endringer. Render av samme oppskrift under venting eller redigering av tallfeltet oppdaterer bare porsjonsdelene; synkcallbacks bytter ikke knappene. Skykart tas fortsatt inn. Ved flush bygges dagsendringen fra de nyeste kartene, så andre dagers verdier beholdes.
+
+setState registrerer avgang fra oppskrift/bytte av kontekst og åpning av handlelistegjennomgang; feltet valideres og bufferet tømmes før avgang. Rediger, fanebytte og både app-/nettlesertilbake følger denne flyten. Handleliste-handleren flusher før mengdene beregnes. visibilitychange flusher ved skjuling. stopAllSync canceller ved konto-/tilgangsstopp og forhindrer gamle timerwrites.
+
+updateDayServings har valgfri redraw:false for den allerede oppdaterte oppskriftsvisningen. Den samme state/diff/write-flyten beholdes. weeksSync.enqueue har immediate:true for slike ferdig ventede verdier og for avgang/skjuling. Den eksisterende flush-funksjonen brukes: nested merge, sequence ved sending, SDK-kvittering + nyere serverbilde, ingen getDoc/batch/transaksjon. Dermed sendes én write etter 500 ms, uten dobbelt ventetid. Pågående usendte felt i samme uke flettes med; andre uker beholder 500 ms-vinduet. Før start venter operasjonen på vanlig start. Øvrige enqueue-kall er uendret.
+
+Alle interaktive elementer har touch-action:manipulation, uten viewport-begrensning. −/+ i oppskrift og dagsark er 48 px. Fast inputbredde forhindrer horisontal flytting, og mobilens porsjonstekst har plass til to linjer før justering. App/cache v122/122, minimum 120. Ingen endring i lagret datamodell, server eller regler.

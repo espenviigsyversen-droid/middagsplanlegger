@@ -2,6 +2,7 @@ import { mealEditorFingerprint, socialRecipeSource } from "./src/domain/meal-edi
 import { renderSocialImportNotice } from "./src/render/recipe-import.js";
 import { pageScreenKey, createPageScroll } from "./src/ui/page-scroll.js";
 import { renderMealFilters, mealFiltersActive, toggleMealFilter } from "./src/render/meal-filters.js";
+import { createRecipeServingsBuffer, parseRecipeServings } from "./src/ui/recipe-servings.js";
 import { renderPickerPlansView } from "./src/render/picker-plans.js";
 import { canonicalView, weekHeading, weekEligibleDays, weekSwipeDirection, lastPlannedLabel } from "./src/domain/week-view.js";
 import { renderWeekView, renderWeekRow, renderDaySheet, renderWeekMenu, renderWeekClear, weekIcon } from "./src/render/week.js";
@@ -101,6 +102,7 @@ import {
   renderMealDetailView,
   renderMealEditorView,
   renderMealResultsView,
+  renderIngredientList,
   renderMealEmptyView,
   renderMealsView,
   renderIngredientEditorRowView,
@@ -223,8 +225,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v121";
-const APP_VERSION_NUMBER = 121;
+const APP_VERSION = "v122";
+const APP_VERSION_NUMBER = 122;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -252,6 +254,10 @@ let mealsSyncStatus = null;
 let weeksSyncStatus = null;
 let servingsTransition = null, weeksServerReady = false, profileServerReady = false;
 let recipeServingsView = { key: null, value: null };
+const recipeServingsBuffer = createRecipeServingsBuffer({
+  commit: ({ weekKey, dayIndex, value }) => updateDayServings(dayIndex, value, weekKey, { redraw: false, immediateWeeks: true }),
+  setTimer: setTimeout, clearTimer: clearTimeout,
+});
 let editorRowMenu = null;
 let accessState = { kind: "checking" };
 let firebaseConnection = null;
@@ -705,7 +711,10 @@ function patchTouchesSyncedData(patch) {
   return syncPatchTouchesSyncedData(patch);
 }
 
-function setState(patch) {
+function setState(patch, { redraw = true, immediateWeeks = false } = {}) {
+  if (state.activeView === "recipe" && (("activeView" in patch && patch.activeView !== "recipe")
+    || ("selectedMealId" in patch && patch.selectedMealId !== state.selectedMealId)
+    || "selectedRecipeContext" in patch || patch.shoppingReview?.open)) flushRecipeServings();
   if ("activeView" in patch) patch = { ...patch, activeView: canonicalView(patch.activeView) };
   if ("previousView" in patch) patch = { ...patch, previousView: canonicalView(patch.previousView) };
   const previousState = state;
@@ -725,7 +734,7 @@ function setState(patch) {
     state.pendingLocalSync = true;
   }
   saveState();
-  render(false);
+  if (redraw) render(false);
   syncWakeLock();
   if ("shoppingList" in patch && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
     shoppingSync.enqueue(diffShoppingItems(previousState.shoppingList.items, state.shoppingList.items));
@@ -734,7 +743,7 @@ function setState(patch) {
     mealsSync.enqueue(diffMeals(previousState.meals, state.meals));
   }
   if (WEEK_SYNC_FIELDS.some(field => field in patch) && !applyingRemoteState && accessState.kind === "ready" && !accessState.offline) {
-    weeksSync.enqueue(diffWeeks(previousState, state));
+    weeksSync.enqueue(diffWeeks(previousState, state), { immediate: immediateWeeks });
   }
   scheduleRemoteSaveForPatch(patch);
 }
@@ -1175,15 +1184,65 @@ function servingsForDay(weekKey, dayIndex) { return resolveServingsForDay(state,
 
 function recipeTargetServings() {
   const context = state.selectedRecipeContext;
+  const pending = recipeServingsBuffer.pending;
+  if (context && pending?.mealId === state.selectedMealId && pending.weekKey === context.weekKey && pending.dayIndex === context.dayIndex) return pending.value;
   if (context) return servingsForDay(context.weekKey, context.dayIndex);
   if (recipeServingsView.key !== state.selectedMealId) recipeServingsView = { key: state.selectedMealId, value: null };
   return recipeServingsView.value ?? state.family.familySize;
 }
 
 function changeRecipeServings(delta) {
-  const value = Math.max(1, Math.min(30, recipeTargetServings() + delta)), context = state.selectedRecipeContext;
-  if (context) updateDayServings(context.dayIndex, value, context.weekKey);
-  else { recipeServingsView.value = value === state.family.familySize ? null : value; render(); }
+  setRecipeServings(Math.max(1, Math.min(30, recipeTargetServings() + delta)));
+}
+
+function setRecipeServings(value) {
+  if (value !== recipeTargetServings()) {
+    const context = state.selectedRecipeContext;
+    if (context) recipeServingsBuffer.queue({ ...context, mealId: state.selectedMealId, value });
+    else recipeServingsView.value = value === state.family.familySize ? null : value;
+  }
+  refreshRecipeServings(true);
+}
+
+function commitRecipeServingsInput() {
+  const input = app.querySelector("[data-recipe-servings-input]");
+  if (!input || state.activeView !== "recipe") return;
+  const value = parseRecipeServings(input.value);
+  if (value !== null) setRecipeServings(value);
+  else input.value = String(recipeTargetServings());
+}
+
+function flushRecipeServings() {
+  commitRecipeServingsInput();
+  recipeServingsBuffer.flush();
+}
+
+function recipeServingCopy(meal, targetServings) {
+  const base = mealBaseServings(meal), context = state.selectedRecipeContext;
+  return {
+    text: targetServings === base ? `Oppskrift til ${targetServings} porsjoner.`
+      : `Justert til ${targetServings} porsjoner fra en oppskrift på ${base}.`,
+    scope: context ? `Gjelder ${dayNames[context.dayIndex].toLowerCase()} ${formatDate(dateForWeekDay(context.weekKey, context.dayIndex)).replace(/\.$/, "")}.`
+      : targetServings !== state.family.familySize ? "Gjelder bare denne visningen." : "",
+  };
+}
+
+function refreshRecipeServings(forceInput = false) {
+  const meal = getMeal(state.selectedMealId);
+  if (!meal || state.activeView !== "recipe") return;
+  const value = recipeTargetServings(), copy = recipeServingCopy(meal, value);
+  const input = app.querySelector("[data-recipe-servings-input]");
+  if (input && (forceInput || document.activeElement !== input)) input.value = String(value);
+  app.querySelectorAll("[data-recipe-servings]").forEach(button => {
+    button.disabled = Number(button.dataset.recipeServings) < 0 ? value <= 1 : value >= 30;
+  });
+  const note = app.querySelector("[data-recipe-serving-note]"); if (note) note.textContent = copy.text;
+  const scope = app.querySelector("[data-recipe-serving-scope]"); if (scope) { scope.textContent = copy.scope; scope.hidden = !copy.scope; }
+  app.querySelector("[data-toggle-wake]")?.setAttribute?.("aria-checked", String(state.keepScreenAwake));
+  const ingredients = app.querySelector("[data-recipe-ingredients]");
+  if (ingredients) ingredients.innerHTML = renderIngredientList(normalizeIngredients(meal.ingredients, meal.keyIngredients), {
+    scaleAmount, baseServings: mealBaseServings(meal), targetServings: value, escapeHtml,
+  });
 }
 
 // ── Handleliste ──────────────────────────────────────────────
@@ -1710,13 +1769,7 @@ function renderMealDetail() {
   const leftoversText = leftoversLabel(meal.leftovers);
   const baseServings = mealBaseServings(meal);
   const targetServings = recipeTargetServings();
-  const displayServings = targetServings;
-  const servingText = targetServings === baseServings
-    ? `Oppskrift til ${displayServings} porsjoner.`
-    : `Justert til ${displayServings} porsjoner fra en oppskrift på ${baseServings}.`;
-  const context = state.selectedRecipeContext;
-  const servingScope = context ? `Gjelder ${dayNames[context.dayIndex].toLowerCase()} ${formatDate(dateForWeekDay(context.weekKey, context.dayIndex)).replace(/\.$/, "")}.`
-    : targetServings !== state.family.familySize ? "Gjelder bare denne visningen." : "";
+  const { text: servingText, scope: servingScope } = recipeServingCopy(meal, targetServings);
 
   return renderMealDetailView({
     meal,
@@ -3070,10 +3123,10 @@ function updateDayNote(dayIndex, note) {
   setCurrentDayNotes({ ...currentDayNotes(), [dayIndex]: String(note || "").trim() });
 }
 
-function updateDayServings(dayIndex, servings, weekKey = getWeekKey()) {
+function updateDayServings(dayIndex, servings, weekKey = getWeekKey(), options) {
   const value = servings === null ? null : Math.max(1, Math.min(30, Number(servings) || 1));
   setState({ servingsByWeek: { ...state.servingsByWeek, [weekKey]: { ...emptyWeekServings(), ...state.servingsByWeek?.[weekKey],
-    [dayIndex]: value === state.family.familySize ? null : value } } });
+    [dayIndex]: value === state.family.familySize ? null : value } } }, options);
 }
 
 function fillWeek() {
@@ -3138,6 +3191,12 @@ function bindEvents() {
   }));
   app.querySelectorAll("[data-add-ingredient-group]").forEach(button => button.addEventListener("click", () => changeIngredientEditorRows("add-group", Number(button.dataset.addIngredientGroup))));
   app.querySelectorAll("[data-recipe-servings]").forEach(button => button.addEventListener("click", () => changeRecipeServings(Number(button.dataset.recipeServings))));
+  const servingsInput = app.querySelector("[data-recipe-servings-input]");
+  servingsInput?.addEventListener("focus", () => servingsInput.select());
+  servingsInput?.addEventListener("blur", commitRecipeServingsInput);
+  servingsInput?.addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); commitRecipeServingsInput(); servingsInput.blur(); }
+  });
   app.querySelectorAll("[data-use-standard-servings]").forEach(button => button.addEventListener("click", () => updateDayServings(Number(button.dataset.useStandardServings), null)));
   app.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -3358,6 +3417,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const meal = getMeal(button.dataset.addToShopping);
       if (!meal?.ingredients?.length) return;
+      flushRecipeServings();
       const review = createMealShoppingReview(meal);
       if (review) navigate({ shoppingReview: review });
     });
@@ -3787,6 +3847,14 @@ function restoreWindowPositions(positions) {
 }
 
 function render(preserveShoppingInput = true) {
+  // Sync/status callbacks during rapid taps must not replace the touched controls.
+  if ((recipeServingsBuffer.pending || document.activeElement === app.querySelector("[data-recipe-servings-input]"))
+    && accessState.kind === "ready" && state.activeView === "recipe" && !state.shoppingReview?.open
+    && pageScroll.key === `recipe:${state.selectedMealId}` && app.querySelector("[data-recipe-servings-input]")) {
+    refreshRecipeServings();
+    const status = app.querySelector(".sync-status-label"); if (status) status.textContent = syncStatusText();
+    return;
+  }
   state.activeView = canonicalView(state.activeView); state.previousView = canonicalView(state.previousView);
   const screenKey = accessState.kind === "ready" ? pageScreenKey(state) : null;
   const screenChanged = screenKey !== pageScroll.key;
@@ -3799,7 +3867,7 @@ function render(preserveShoppingInput = true) {
   if (!state.mealPicker?.open || canonicalView(state.activeView) !== "week" || accessState.kind !== "ready") mealPickerReturn = null;
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
-  if (state.activeView !== "recipe" || accessState.kind !== "ready") recipeServingsView = { key: null, value: null };
+  if (state.activeView !== "recipe" || accessState.kind !== "ready") { recipeServingsView = { key: null, value: null }; recipeServingsBuffer.cancel(); }
   if (!state.editingMealId || accessState.kind!=="ready" || (state.activeView!=="meals" && !aiKeyEditorReturn)) {mealEditorSession=null;editorDiscardOpen=false;}
   if (!state.editingMealId || accessState.kind !== "ready" || (state.activeView !== "meals" && !aiKeyEditorReturn)) mealEditorReturn = null;
   syncAiKeyContext();
@@ -3925,7 +3993,7 @@ function syncWakeLock() {
 }
 
 function handleVisibilityChange(now = Date.now()) {
-  if (document.visibilityState !== "visible") { if (backgroundAt === null) backgroundAt = now; return; }
+  if (document.visibilityState !== "visible") { if (accessState.kind === "ready" && state.activeView === "recipe") flushRecipeServings(); if (backgroundAt === null) backgroundAt = now; return; }
   const currentWeek = getWeekKeyForOffset(0, new Date(now));
   if ((backgroundAt !== null && now - backgroundAt > 30 * 60000) || currentWeek !== lastVisibleWeekKey) {
     state.weekOffset = 0; saveState(); render();
@@ -3972,6 +4040,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  recipeServingsBuffer.cancel();
   mealEditorSession=null;editorDiscardOpen=false;
   planningWindowWeekKey = null; pickerFilters = emptyPickerFilters();
   pickerOtherPlans = false; pickerNote = null; weekClearConfirmation = null;

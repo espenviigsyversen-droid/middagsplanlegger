@@ -346,3 +346,9 @@ Minsteversjonen er nå 120. Meta-heving er fortsatt bare for administrator på n
 state.filters har query, quick, kidFriendly, favorite, needsRecipe, én suitability, én category og sort. Søk/brikker er UI-tilstand i minnet og beholdes gjennom oppskrift/tilbake og fanebytte. normalizeStateForStartup bruker tomme standardverdier og tar bare med gyldig sort (category/alpha) fra lokal kopi. Gamle query/category/flag ignoreres. localStateForStorage skriver filters:{sort} og ingen søk-/brikkefelt. Synk og backup inneholder ingen oppskriftsfiltre som før.
 
 pickerFilters er separat, nullstilles fortsatt ved lukking og påvirkes ikke av Oppskrifter. Begge bruker samme renderer og mealMatchesPickerFilters; needsRecipe er avledet fra mealNeedsRecipe, ikke lagret i oppskriften. Minsteversjonen forblir 120.
+
+## Porsjonsbuffer fra v122
+
+recipeServingsBuffer.pending inneholder midlertidig mealId, weekKey, dayIndex og value med en timer/generasjon. Det er separat runtime, ikke state, lokal kopi, Firestore eller sikkerhetskopi. Før 500 ms er day-servings uendret; visningen bruker pending-verdi foran snapshotet. Etter ro, eller ved avgang/skjuling, lagres bare eksisterende servingsByWeek-celle gjennom updateDayServings. Verdi lik standard blir fortsatt null.
+
+recipeServingsView er fortsatt bare minnejustering for en oppskrift fra listen. Tallfeltets uferdige tekst finnes bare i DOM og valideres ved Enter/blur/avgang. Konto-/tilgangsstopp canceller pending uten skriving. Ukesynkens nye valgfri immediate-parameter endrer kun sendetidspunkt for allerede ventede porsjonspatcher, ikke dokument-, celle-, kvitterings- eller generasjonsformat. Minimum forblir 120.

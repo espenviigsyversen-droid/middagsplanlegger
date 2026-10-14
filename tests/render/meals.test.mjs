@@ -252,7 +252,7 @@ for (const [busy, preparing, available] of [[false, false, true], [true, false, 
 console.log("meals render tests ok");
 const portionsHtml=renderMealDetailView({meal:{id:"a",title:"Test"},targetServings:5,baseServings:4,servingScope:"Gjelder mandag 12. okt."});
 assert.match(portionsHtml,/data-recipe-servings="-1"/);assert.match(portionsHtml,/data-recipe-servings="1"/);
-assert.match(portionsHtml,/5 porsjoner/);assert.match(portionsHtml,/Gjelder mandag 12\. okt\./);
+assert.match(portionsHtml,/data-recipe-servings-input[^>]*value="5"/);assert.ok(portionsHtml.includes(">porsjoner</span>"));assert.match(portionsHtml,/Gjelder mandag 12\. okt\./);
 assert.match(renderMealDetailView({meal:{title:"Test"},targetServings:1}),/aria-label="Færre porsjoner" disabled/);
 assert.match(renderMealDetailView({meal:{title:"Test"},targetServings:30}),/aria-label="Flere porsjoner" disabled/);
 for (const remainingToday of [0, 1, 30, 31, 150, null, -1, 2.5]) {

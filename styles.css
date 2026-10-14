@@ -2485,8 +2485,13 @@ button {
 .recipe-import-choice h4 { margin: 0 0 8px; font-size: 1.05rem; }
 .recipe-import-choice .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Recipe-only portion changes stay in memory; the controls also work on mobile. */
-.recipe-servings-control { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
-.recipe-servings-control .button { min-width: 44px; min-height: 44px; }
+.recipe-servings-control { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.recipe-servings-control .button { width: 48px; height: 48px; min-width: 48px; min-height: 48px; padding: 0; flex-shrink: 0; }
+.recipe-servings-value { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.recipe-servings-value input { width: 3ch; box-sizing: content-box; padding: 0 8px; height: 46px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 16px; text-align: center; }
+@media (max-width: 640px) {
+  .recipe-serving-note { min-height: 2lh; }
+}
 
 /* Radvalg i oppskriftseditoren, kun i minnet. */
 /* Uke v112: ett innholdskort og ett vindu om gangen. */
@@ -2546,7 +2551,7 @@ button {
 .week-setting-choice { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--muted); }
 .week-setting select { min-height: 44px; max-width: 190px; border: none; background: transparent; color: var(--muted); appearance: none; text-align: right; padding: 0 2px; font: inherit; font-size: 14px; }
 .week-portions { display: flex; align-items: center; gap: 8px; }
-.week-portions .week-outline { width: 44px; min-height: 44px; height: 44px; }
+.week-portions .week-outline { width: 48px; min-height: 48px; height: 48px; padding: 0; flex-shrink: 0; }
 .week-portions strong { min-width: 20px; text-align: center; }
 .week-setting .wake-switch { min-width: 44px; }
 .week-note-setting { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 15px; }
@@ -2690,3 +2695,6 @@ button {
 
 /* Recipe filters share the picker component without its modal inset. */
 .filters > .meal-filters { margin: 0; }
+
+/* Remove double-tap delay/zoom while retaining pinch zoom. */
+button, a, input, select, textarea, label, summary, [role="button"], [role="switch"] { touch-action: manipulation; }
