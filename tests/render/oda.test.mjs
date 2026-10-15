@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { renderShoppingListView } from "../../src/render/shopping.js";
+import { renderOdaView } from "../../src/render/oda.js";
+const e=v=>String(v).replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+const base={amount:"2",unit:"l",category:"dairy",checked:false,custom:true};
+const items=[{...base,id:"milk",name:"Melk",oda:true},{...base,id:"flour",name:"Sammalt hvete, fin",oda:true},...Array.from({length:3},(_,i)=>({...base,id:"oda"+i,name:"Vare "+i,oda:true})),{...base,id:"rest",name:"Egg"},{...base,id:"done",name:"Smør",checked:true}];
+const options={items,storeCategories:[{key:"dairy",label:"Meieri"}],escapeHtml:e};
+const closed=renderShoppingListView(options);assert.match(closed,/oda-count">5</);assert.match(closed,/Til Oda · 5 varer/);assert.match(closed,/Melk, Sammalt hvete, fin, Vare 0, Vare 1, …/);assert.doesNotMatch(closed,/data-toggle-item="milk"/);
+assert.ok(closed.indexOf("shopping-oda")<closed.indexOf("checked-section"));
+const open=renderShoppingListView({...options,odaExpanded:true});assert.equal((open.match(/data-toggle-item="milk"/g)||[]).length,1);assert.match(open,/aria-expanded="true"/);
+assert.doesNotMatch(renderShoppingListView({...options,items:[items.at(-1)]}),/shopping-oda-summary|oda-count/);
+const page=renderOdaView({...options,searched:new Set(["milk"])});
+assert.match(page,/TIL ODA \(5\)/);assert.match(page,/RESTEN AV HANDLELISTEN \(1\)/);assert.match(page,/Merk 5 som bestilt/);assert.doesNotMatch(page,/data-oda-item="done"/);
+assert.match(page,/q=sammalt%20hvete/);assert.match(page,/target="_blank" rel="noopener noreferrer"/);assert.match(page,/Søk etter sammalt hvete på Oda \(åpnes i ny fane\)/);assert.match(page,/søker etter «sammalt hvete»/);assert.doesNotMatch(page,/søker etter «melk»/);assert.match(page,/Søkt ✓/);
+assert.match(renderOdaView({...options,items:[items.at(-2)]}),/data-oda-order[^>]*disabled/);
+const empty=renderOdaView({...options,items:[items.at(-1)]});assert.match(empty,/Handlelisten er tom/);assert.doesNotMatch(empty,/data-oda-order/);
+const sw=readFileSync(new URL('../../service-worker.js',import.meta.url),'utf8');for(const file of ['src/domain/oda.js','src/render/oda.js'])assert.equal(sw.split(file).length-1,2);
+console.log("Oda rendering tests ok (groups, collapsed box, preview, counters, links and empty state)");
+
+const css=readFileSync(new URL('../../styles.css',import.meta.url),'utf8');
+assert.match(css,/\.shopping-view-header \{ display: block; \}/);
+assert.match(css,/\.shopping-header-actions \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);

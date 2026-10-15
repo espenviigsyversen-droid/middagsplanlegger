@@ -47,6 +47,7 @@ function connection({ archive = old, migrationError, writeResult = () => Promise
   const api = {
     doc: (collection, id) => `${collection}/${id}`,
     serverTimestamp: () => "server",
+    deleteField: () => "DELETE_FIELD",
     runTransaction: async (callback) => {
       calls.push(["transaction"]);
       if (migrationError) throw migrationError;
@@ -213,3 +214,12 @@ await consumerSync.start({ ...consumerCon, skipMigration: true });
 assert.doesNotThrow(() => consumerCon.snapshot([item("a")])); assert.equal(consumerStatuses.at(-1), "Synk feilet");
 deliveryThrows = false; assert.doesNotThrow(() => consumerCon.snapshot([item("b")]));
 assert.equal(delivered, 1); assert.equal(consumerStatuses.at(-1), "Synket"); consumerSync.stop();
+
+// Oda changes use the existing per-item update; removal deletes the optional field.
+assert.deepEqual(diffShoppingItems([item("oda")],[item("oda",{oda:true})]).updated,[{id:"oda",fields:{oda:true}}]);
+assert.deepEqual(diffShoppingItems([item("oda",{oda:true})],[item("oda",{checked:true})]).updated,[{id:"oda",fields:{checked:true,oda:null}}]);
+const odaConnection=connection(),odaSync=createShoppingSync();await odaSync.start(odaConnection);
+odaSync.enqueue(diffShoppingItems([item("oda",{oda:true})],[item("oda")]));await settle();
+assert.deepEqual(odaConnection.calls.find(([kind])=>kind==="update"),["update","items/oda",{oda:"DELETE_FIELD",updatedAt:"server"}]);
+assert.equal(shoppingItemsFromDocs([doc(item("oda",{oda:true}))])[0].oda,true);
+odaSync.stop();

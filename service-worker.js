@@ -1,4 +1,4 @@
-const CACHE_NAME = "middagsplan-v124";
+const CACHE_NAME = "middagsplan-v125";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "./src/domain/recipe-yield.js",
   "./src/domain/meal-editor.js",
   "./src/domain/shopping.js",
+  "./src/domain/oda.js",
   "./src/domain/backup.js",
   "./src/domain/recipe-import.js",
   "./src/domain/image-prepare.js",
@@ -30,6 +31,7 @@ const ASSETS = [
   "./src/render/meal-filters.js",
   "./src/render/setup.js",
   "./src/render/shopping.js",
+  "./src/render/oda.js",
   "./src/sync/firebase.js",
   "./src/sync/state.js",
   "./src/sync/writes.js",
@@ -58,6 +60,7 @@ const NETWORK_FIRST_ASSETS = [
   "src/domain/recipe-yield.js",
   "src/domain/meal-editor.js",
   "src/domain/shopping.js",
+  "src/domain/oda.js",
   "src/domain/backup.js",
   "src/domain/recipe-import.js",
   "src/domain/image-prepare.js",
@@ -80,6 +83,7 @@ const NETWORK_FIRST_ASSETS = [
   "src/render/meal-filters.js",
   "src/render/setup.js",
   "src/render/shopping.js",
+  "src/render/oda.js",
   "src/sync/firebase.js",
   "src/sync/state.js",
   "src/sync/writes.js",

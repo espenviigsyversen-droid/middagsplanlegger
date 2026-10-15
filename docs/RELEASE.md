@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v125 – Handle på Oda
+
+Ta med filene i docs/LEVERANSE_V125.md samlet, inkludert de to nye oda-modulene i begge asset-listene. App/cache/minimum er 125. Eldre v120–v124 må oppdatere før de kan skrive handlevarer igjen. Administrator hever minimum via den eksisterende tilgangsflyten; restore skriver 125. Ingen funksjons-/regelpublisering eller datamigrering.
+
+Kontroller på iPhone og PC: Oda-knappens teller, sammenfoldet/utfoldet Til Oda-boks, veksling av varer, søkeord før komma/uten parenteser, ekte ny fane og Søkt-merking. Appen legger ingen varer i Oda-kurven. Merk som bestilt huker av bare Oda-varene og viser toast; angret avhuking er vanlig vare. Prøv synk mellom to oppdaterte klienter, generering/tillegging med en allerede merket vare og backup/restore. Native Oda-søk og fysisk iPhone er ikke testet lokalt, siden nettverk er forbudt. Tre 375 px-visninger ligger i docs/screenshots.
+
 ### v124 – Kompakt rad og grupperte filtre
 
 Ta med filene i docs/LEVERANSE_V124.md samlet. App/cache 124, minimum fortsatt 120. Ingen nye produksjonsmoduler eller endret cache-strategi. Alle 62 testskript og 51 syntakskontroller består. Ingen publisering er utført av agenten.

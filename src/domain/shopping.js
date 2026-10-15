@@ -71,6 +71,7 @@ export function normalizeShoppingList(shoppingList = {}) {
       category: String(item.category || "other"),
       checked: Boolean(item.checked),
       custom: Boolean(item.custom),
+      ...(item.oda === true && !item.checked ? { oda: true } : {}),
       ...(Number.isFinite(item.createdAt) ? { createdAt: item.createdAt } : {}),
     })).filter((item) => item.name),
   };

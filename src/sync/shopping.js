@@ -18,6 +18,7 @@ export function diffShoppingItems(prevItems = [], nextItems = []) {
     for (const key of ITEM_FIELDS) {
       if (old[key] !== item[key]) fields[key] = item[key];
     }
+    if ((old.oda === true) !== (item.oda === true)) fields.oda = item.oda === true ? true : null;
     if (Object.keys(fields).length) updated.push({ id: item.id, fields });
   }
   for (const item of prevItems) {
@@ -80,7 +81,10 @@ export function createShoppingSync({ onItems = () => {}, onStatus = () => {} } =
       if (operation.type === "added") {
         result = api.setDoc(ref, { ...operation.fields, updatedAt: api.serverTimestamp() });
       } else if (operation.type === "updated") {
-        result = api.updateDoc(ref, { ...operation.fields, updatedAt: api.serverTimestamp() });
+        // null is only an internal removal marker; never store false/null Oda fields.
+        const fields = { ...operation.fields };
+        if (fields.oda === null) fields.oda = api.deleteField();
+        result = api.updateDoc(ref, { ...fields, updatedAt: api.serverTimestamp() });
       } else {
         result = api.deleteDoc(ref);
       }

@@ -104,3 +104,6 @@ for(const test of [f,shopping,setup,locked,saved,week,fromShopping,newRecipe]) {
   assert.doesNotMatch(JSON.stringify(test.run('syncPayload()')),/pageScroll|mealEditorReturn|scrollY/);
 }
 console.log("page scroll app tests ok");
+
+const oda=fixture("shopping");oda.window.scrollY=600;oda.event("[data-view]",{view:"oda"});assert.equal(oda.window.scrollY,0);
+oda.window.scrollY=250;oda.back();assert.equal(oda.run("state.activeView"),"shopping");assert.equal(oda.window.scrollY,600);

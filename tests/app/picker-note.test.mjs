@@ -97,12 +97,12 @@ assert.doesNotMatch(storage.get('middagsapp-state'),/pickerNote/);
 assert.equal(JSON.parse(storage.get('middagsapp-state')).dayModesByWeek[run('noteWeek')][1],'_note');
 selectors.delete('[data-picker-note-input]');
 
-// Backup/restore preserve the existing string fields, and restore requires v120.
+// Backup/restore preserve the existing string fields, and restore requires v125.
 const {buildRestoreDocuments,validateBackup}=await import('../../src/sync/restore.js');
 const exported=json('buildBackup({data:syncPayload(),appVersion:APP_VERSION,familyId:FAMILY_ID})');
 const restored=validateBackup(exported),docs=buildRestoreDocuments(restored,{email:'admin@example.com'});
 const weekDoc=docs.find(d=>d.path[0]==='weeks'&&d.path[1]===run('noteWeek'));
-assert.equal(weekDoc.data.dayModes[1],'_note');assert.equal(weekDoc.data.dayNotes[1],'Bursdag');assert.equal(docs.at(-1).data.minAppVersion,120);
+assert.equal(weekDoc.data.dayModes[1],'_note');assert.equal(weekDoc.data.dayNotes[1],'Bursdag');assert.equal(docs.at(-1).data.minAppVersion,125);
 assert.equal(run('currentDayModes()[1]'),'_note');assert.equal(json('normalizeState({...state})').dayModesByWeek[run('noteWeek')][1],'_note');
 run('state.weekOffset=1;openMealPicker(2)');flush();const boundWeek=run('getWeekKey()');
 selectors.set('[data-picker-note-input]',[input]);click('[data-picker-other-plans]');click('[data-picker-own-note]');

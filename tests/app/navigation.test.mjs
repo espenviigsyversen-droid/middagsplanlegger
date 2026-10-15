@@ -114,6 +114,13 @@ click('[data-picker-filters-toggle]');assert.equal(index,2);assert.equal(run('pi
 history.go(-1);flush();assert.equal(run('pickerFilterGroupsOpen'),false);assert.equal(run('state.mealPicker.open'),true);assert.equal(index,1);
 history.go(-1);flush();assert.equal(run('state.mealPicker.open'),false);assert.equal(index,0);
 
+// v125: Oda is a shopping subpage, with the same browser and in-app Back path.
+run('navigate({activeView:"shopping"});navigate({activeView:"oda"})');flush();assert.equal(index,1);
+assert.deepEqual(json('navigationLevels()'),['page:oda']);assert.match(app.innerHTML,/Handle på Oda/);
+history.go(-1);flush();assert.equal(run('state.activeView'),'shopping');assert.equal(index,0);
+run('navigate({activeView:"oda"})');flush();click('[data-subpage-back]');assert.equal(run('state.activeView'),'shopping');assert.equal(index,0);
+run('navigate({activeView:"oda"})');flush();click('[data-view]',{view:'week'});assert.equal(run('state.activeView'),'week');assert.equal(index,0);
+
 // Editor guard: collect unsaved DOM values, restore history entry and leave the editor intact.
 click("[data-edit-meal]",{editMeal:"wok"});
 selectors.set("[data-meal-form]",[form]);

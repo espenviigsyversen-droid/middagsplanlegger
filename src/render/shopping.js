@@ -1,3 +1,5 @@
+import { orderedShoppingItems } from "../domain/oda.js";
+
 export function renderShoppingSuggestionsView(options = {}) {
   const { suggestions = [], categories = {}, escapeHtml = String } = options;
   if (!suggestions.length) return "";
@@ -148,9 +150,11 @@ export function renderShoppingListView(options = {}) {
     generateModalHtml = "",
     itemEditorHtml = "",
     shoppingIconHtml = "",
+    odaExpanded = false,
     escapeHtml = String,
   } = options;
-  const unchecked = items.filter((item) => !item.checked);
+  const odaItems = orderedShoppingItems(items.filter(item => !item.checked && item.oda === true), storeCategories);
+  const unchecked = items.filter((item) => !item.checked && item.oda !== true);
   const checked = items.filter((item) => item.checked);
   const categoryGroups = storeCategories
     .map((cat) => ({ ...cat, items: unchecked.filter((item) => item.category === cat.key) }))
@@ -160,9 +164,10 @@ export function renderShoppingListView(options = {}) {
   return `
     ${generateModalHtml}${itemEditorHtml}
     <section class="view-header meals-view-header shopping-view-header">
-      <div class="meals-header-row">
-        <h2 class="view-title">Handleliste</h2>
-        <button class="button compact" data-generate-list>${shoppingIconHtml} Generer fra plan</button>
+      <h2 class="view-title">Handleliste</h2>
+      <div class="shopping-header-actions">
+        <button type="button" class="button compact" data-generate-list>Generer fra plan</button>
+        <button type="button" class="button secondary compact oda-open" data-view="oda">Handle på Oda${odaItems.length ? `<span class="oda-count">${odaItems.length}</span>` : ""}</button>
       </div>
     </section>
 
@@ -187,6 +192,7 @@ export function renderShoppingListView(options = {}) {
             ${cat.items.map((item) => renderShoppingItemView(item, escapeHtml)).join("")}
           </div>
         `).join("")}
+        ${odaItems.length ? `<section class="shopping-oda"><button type="button" class="shopping-oda-summary" data-toggle-oda-box data-focus-key="oda-box" aria-expanded="${odaExpanded}"${odaExpanded ? ' aria-controls="shopping-oda-items"' : ""}><span><strong>Til Oda · ${odaItems.length} ${odaItems.length === 1 ? "vare" : "varer"}</strong><small>${escapeHtml(odaItems.slice(0, 4).map(item => item.name).join(", "))}${odaItems.length > 4 ? ", …" : ""}</small></span><span aria-hidden="true">${odaExpanded ? "⌃" : "⌄"}</span></button>${odaExpanded ? `<div id="shopping-oda-items">${odaItems.map(item => renderShoppingItemView(item, escapeHtml)).join("")}</div>` : ""}</section>` : ""}
         ${checked.length > 0 ? `
           <div class="shopping-category checked-section">
             <h4 class="shopping-category-heading">I kurven (${checked.length})</h4>

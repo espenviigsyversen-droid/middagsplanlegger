@@ -61,6 +61,7 @@ export function validateBackup(backup) {
   for (const item of d.shoppingList.items) {
     if (!["name", "amount", "unit", "category"].every((key) => typeof item[key] === "string")
       || !item.name.trim() || typeof item.checked !== "boolean" || typeof item.custom !== "boolean") reject();
+    if (item.oda !== undefined && typeof item.oda !== "boolean") reject();
   }
   for (const field of WEEK_SYNC_FIELDS) {
     if (!object(d[field])) reject();
@@ -121,6 +122,7 @@ export function buildRestoreDocuments(backup, { email } = {}) {
     ...d.shoppingList.items.map((item, index) => ({ path: ["shoppingItems", item.id], data: {
       name: item.name, amount: item.amount, unit: item.unit, category: item.category,
       checked: item.checked, custom: item.custom, createdAt: index,
+      ...(item.oda === true && !item.checked ? { oda: true } : {}),
     } })),
     { path: ["app", "shopping"], data: {}, marker: "shopping" },
     { path: ["app", "meta"], data: { schemaVersion: 1, initializedBy: email, minAppVersion: REQUIRED_MIN_APP_VERSION, servingsDefaultsV106: true }, marker: "meta" },

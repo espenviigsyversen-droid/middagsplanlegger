@@ -371,3 +371,14 @@ Backup/restore bevarer yield-feltene i eksisterende eksportformat 1. Restore val
 state.filters utvides med frameOpen: boolean (standard true), som bare er lokal preferanse for Oppskrifters PC-ramme. localStateForStorage skriver filters:{sort,frameOpen}; normalizeStateForStartup leser bare disse to verdiene og nullstiller fortsatt query/brikker. Gamle lokale kopier uten frameOpen gir åpen PC-ramme. Synk og sikkerhetskopi inneholder ingen filtervalg eller denne preferansen.
 
 mealFilterSheetOpen og pickerFilterGroupsOpen er runtime-flagg utenfor state. Arket åpnes bare i oppskriftslisten under 900 px; picker-panelet ligger inne i Velg middag på alle bredder og nullstilles ved hver åpning/lukking. Visnings-/tilgangsbytte forkaster aktuelle flater. Resize over 900 lukker mobilarket og viser rammen i tråd med den lagrede preferansen, uten å endre valgte filtre. Historikknivåene meal-filters og picker-filter-groups inneholder bare UI-identiteter. Ingen nye oppskrifts-, uke- eller Firestore-felt; minimum 120 beholdes.
+
+
+## Oda-valg fra v125
+
+shoppingItems/<id> og shoppingList.items kan ha det additive, valgfrie feltet oda:true. Manglende felt betyr vanlig vare. normalizeShoppingList bevarer bare strengt true på uavhukede varer; avhuking fjerner det. Angret avhuking gir vanlig vare. Eksisterende vares merke beholdes ved både manuell/enkeltoppskrift-sammenslåing og generering fra plan; nye varer får ikke noe merke basert på navn eller tidligere kjøp.
+
+Appen lagrer fortsatt handlelisten i lokal kopi/sikkerhetskopi, inkludert eksisterende varers oda. Det finnes ingen preferanse om at et varenavn alltid skal til Oda. ExportVersion/schemaVersion og dokumentstier er uendret. Restore validerer oda som valgfri boolsk verdi; falsk eller avhuket verdi utelates fra dokumentbyggingen.
+
+odaExpanded (standard false) og odaSearched:Set<itemId> er separat runtime, aldri state, localStorage, synk eller backup. De beholdes gjennom visningsbytte i økten og tømmes ved konto-/tilgangsstopp. activeView=oda er en vanlig underside med page:oda i UI-historikken og retur til shopping. Ny økt starter fortsatt på Handle.
+
+Minsteversjonen er nå 125 fordi v120–v124 normaliserer bort det nye feltet. access hever minimum for administrator som før; restore skriver minimum 125; servings-defaults venter fortsatt på serverbekreftet minimum fra samme konstant. Ingen ny overgang eller migrering. Synken oppdaterer oda som ett varefelt og bruker deleteField når det fjernes; null er bare intern diff-markør og lagres aldri.

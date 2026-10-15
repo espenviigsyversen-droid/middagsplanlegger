@@ -27,12 +27,12 @@ export async function initFirebaseClient(options = {}) {
   ]);
 
   const { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } = authModule;
-  const { getFirestore, doc, collection, getDoc, getDocs, getDocFromServer, getDocsFromServer, onSnapshot, setDoc, updateDoc, runTransaction, deleteDoc, serverTimestamp } = firestoreModule;
+  const { getFirestore, doc, collection, getDoc, getDocs, getDocFromServer, getDocsFromServer, onSnapshot, setDoc, updateDoc, runTransaction, deleteDoc, deleteField, serverTimestamp } = firestoreModule;
   const firebaseApp = initializeApp(firebaseConfig);
   const auth = getAuth(firebaseApp);
   const db = getFirestore(firebaseApp);
   const refs = createRemoteRefs({ db, doc, collection, familyId });
-  const firestoreApi = { doc, getDoc, getDocs, getDocFromServer, getDocsFromServer, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp,
+  const firestoreApi = { doc, getDoc, getDocs, getDocFromServer, getDocsFromServer, onSnapshot, setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp,
     runTransaction: (callback) => runTransaction(db, callback),
   };
 

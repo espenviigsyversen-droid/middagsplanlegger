@@ -1,3 +1,5 @@
+import { toggleOdaItem, markOdaOrdered } from "./src/domain/oda.js";
+import { renderOdaView } from "./src/render/oda.js";
 import { mealEditorFingerprint, socialRecipeSource } from "./src/domain/meal-editor.js";
 import { renderSocialImportNotice } from "./src/render/recipe-import.js";
 import { pageScreenKey, createPageScroll } from "./src/ui/page-scroll.js";
@@ -227,8 +229,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v124";
-const APP_VERSION_NUMBER = 124;
+const APP_VERSION = "v125";
+const APP_VERSION_NUMBER = 125;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -251,6 +253,8 @@ let pageScrollDirection = "same";
 const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, suitability: "", category: "all" });
 let pickerFilters = emptyPickerFilters(), planningWindowWeekKey = null;
 let pickerFilterGroupsOpen = false, mealFilterSheetOpen = false;
+let odaExpanded = false;
+const odaSearched = new Set();
 const mealFiltersMedia = window.matchMedia?.("(min-width: 900px)");
 const mealFiltersDesktop = () => mealFiltersMedia?.matches ?? ((window.innerWidth || 0) >= 900);
 let backgroundAt = null, lastVisibleWeekKey = getWeekKeyForOffset(0);
@@ -288,7 +292,7 @@ let shoppingSync = makeShoppingSync();
 let mealsSync = makeMealsSync();
 let weeksSync = makeWeeksSync();
 
-const SUBPAGE_VIEWS = new Set(["account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences",
+const SUBPAGE_VIEWS = new Set(["oda", "account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences",
   "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
 const uiHistory = createNavigationHistory({ history: window.history, getLevels: navigationLevels, onBack: backInApp });
 window.addEventListener("popstate", event => uiHistory.pop(event));
@@ -356,6 +360,7 @@ function performBackInApp() {
   if (state.activeView === "recipe") {
     setState({ activeView: state.previousView || "meals", selectedMealId: null, selectedRecipeContext: null, keepScreenAwake: false }); return true;
   }
+  if (state.activeView === "oda") { setState({ activeView: "shopping" }); return true; }
   if (SUBPAGE_VIEWS.has(state.activeView)) { setState({ activeView: "setup" }); return true; }
   return false;
 }
@@ -1324,6 +1329,7 @@ function mergeGeneratedShoppingItems(generatedItems) {
       id: previous?.id || item.id,
       category: previous?.category || item.category,
       checked: Boolean(previous?.checked),
+      ...(previous?.oda === true && !previous.checked ? { oda: true } : {}),
       custom: false,
     };
   });
@@ -1594,8 +1600,13 @@ function renderShoppingList() {
     generateModalHtml: state.generateModal?.open ? renderGenerateModal() : "",
     itemEditorHtml: state.editingShoppingItemId ? renderShoppingItemEditor() : "",
     shoppingIconHtml: icon("shopping"),
+    odaExpanded,
     escapeHtml,
   });
+}
+
+function renderOda() {
+  return renderOdaView({ items: state.shoppingList.items, storeCategories: getStoreCategories(), searched: odaSearched, escapeHtml });
 }
 
 function renderShell(viewHtml) {
@@ -1604,7 +1615,7 @@ function renderShell(viewHtml) {
   const isEditorView = state.activeView === "meals" && Boolean(state.editingMealId);
   const settingsViews = new Set(["setup", "account-settings", "ai-settings", "family-settings", "app-settings", "meal-preferences", "categories", "units", "prep-times", "suitability", "plan-modes", "ingredient-mappings", "store-categories"]);
   const isSettingsView = settingsViews.has(state.activeView);
-  const isSubpage = isEditorView || isRecipeView || (isSettingsView && state.activeView !== "setup");
+  const isSubpage = state.activeView === "oda" || isEditorView || isRecipeView || (isSettingsView && state.activeView !== "setup");
   const pickerModal = state.mealPicker?.open ? renderMealPickerModal() : "";
   const shoppingReviewModal = state.shoppingReview?.open ? renderShoppingReviewModal() : "";
   const toast = renderToast();
@@ -1643,7 +1654,7 @@ function renderShell(viewHtml) {
 }
 
 function navButton(view, label, iconName) {
-  const activeView = state.activeView === "recipe" ? state.previousView : state.activeView;
+  const activeView = state.activeView === "oda" ? "shopping" : state.activeView === "recipe" ? state.previousView : state.activeView;
   return `<button class="nav-button ${activeView === view ? "active" : ""}" data-view="${view}" aria-label="${label}">
     ${icon(iconName)}<span>${label}</span>
   </button>`;
@@ -3313,6 +3324,26 @@ function bindMealResultActions(root = app) {
 }
 
 function bindEvents() {
+  app.querySelector("[data-toggle-oda-box]")?.addEventListener("click", () => {
+    odaExpanded = !odaExpanded; render();
+  });
+  app.querySelectorAll("[data-oda-item]").forEach(input => input.addEventListener("change", () => {
+    const y = window.scrollY || 0;
+    setState({ shoppingList: { ...state.shoppingList, items: toggleOdaItem(state.shoppingList.items, input.dataset.odaItem) } });
+    window.scrollTo?.(0, y);
+  }));
+  app.querySelectorAll("[data-oda-search]").forEach(link => link.addEventListener("click", () => {
+    // Leave the native link and new-tab behavior intact; no Oda requests from the app.
+    odaSearched.add(link.dataset.odaSearch);
+    link.textContent = "Søkt ✓"; link.classList?.add("searched");
+  }));
+  app.querySelector("[data-oda-order]")?.addEventListener("click", () => {
+    const count = state.shoppingList.items.filter(item => !item.checked && item.oda === true).length;
+    if (!count) return;
+    navigate({ activeView: "shopping", shoppingList: { ...state.shoppingList, items: markOdaOrdered(state.shoppingList.items) } }, "back");
+    showToast(`${count} ${count === 1 ? "vare" : "varer"} merket som bestilt`);
+  });
+
   app.querySelector("[data-meal-filters-toggle]")?.addEventListener("click", openMealFilters);
   app.querySelectorAll("[data-meal-filters-close]").forEach(button => button.addEventListener("click", closeMealFilters));
   app.querySelector("[data-meal-filters-backdrop]")?.addEventListener("click", event => {
@@ -4013,7 +4044,7 @@ function render(preserveShoppingInput = true) {
   if (state.activeView !== "week" || accessState.kind !== "ready") weekClearConfirmation = null;
   if (!state.mealPicker?.open || canonicalView(state.activeView) !== "week" || accessState.kind !== "ready") mealPickerReturn = null;
   if (accessState.kind !== "ready" || state.activeView !== "meals" || state.editingMealId) mealFilterSheetOpen = false;
-  const filterFocusKey = /^(meal|picker)-(group-filter:|filter:|remove:|filters-)/.test(document.activeElement?.dataset?.focusKey || "") ? document.activeElement.dataset.focusKey : null;
+  const retainedUiFocusKey = /^(?:(meal|picker)-(group-filter:|filter:|remove:|filters-)|oda-)/.test(document.activeElement?.dataset?.focusKey || "") ? document.activeElement.dataset.focusKey : null;
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") { recipeServingsView = { key: null, value: null }; recipeServingsBuffer.cancel(); }
@@ -4041,6 +4072,7 @@ function render(preserveShoppingInput = true) {
     week: renderWeek,
     meals: renderMeals,
     shopping: renderShoppingList,
+    oda: renderOda,
     recipe: renderMealDetail,
     setup: renderSetup,
     "account-settings": () => renderAccountView({ email: accessState.user?.email || "", role: accessState.role, members: accountMembers, message: accountMessage, offline: accessState.offline, busy: accountBusy, escapeHtml }),
@@ -4077,10 +4109,10 @@ function render(preserveShoppingInput = true) {
     }
   }
   restoreWindowPositions(windowPositions);
-  if (filterFocusKey) {
-    const previousFilterControl = [...app.querySelectorAll("[data-focus-key]")].find(control => control.dataset.focusKey === filterFocusKey);
-    const fallback = filterFocusKey.startsWith("meal-remove:") ? app.querySelector("[data-meal-filters-toggle]")
-      : filterFocusKey.startsWith("picker-remove:") ? app.querySelector("[data-picker-filters-toggle]") : null;
+  if (retainedUiFocusKey) {
+    const previousFilterControl = [...app.querySelectorAll("[data-focus-key]")].find(control => control.dataset.focusKey === retainedUiFocusKey);
+    const fallback = retainedUiFocusKey.startsWith("meal-remove:") ? app.querySelector("[data-meal-filters-toggle]")
+      : retainedUiFocusKey.startsWith("picker-remove:") ? app.querySelector("[data-picker-filters-toggle]") : null;
     (previousFilterControl || fallback)?.focus({ preventScroll: true });
   }
   hideLoadingScreen();
@@ -4195,6 +4227,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  odaExpanded = false; odaSearched.clear();
   mealFilterSheetOpen = false; pickerFilterGroupsOpen = false;
   recipeYieldAmounts.clear();
   recipeServingsBuffer.cancel();

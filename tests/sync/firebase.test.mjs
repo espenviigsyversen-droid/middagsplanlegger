@@ -35,6 +35,7 @@ let transactionDb;
 let popupCalls = 0;
 let logoutCalls = 0;
 const updateDoc = () => {};
+const deleteField = () => "DELETE_FIELD";
 const getDocFromServer = () => {};
 const getDocsFromServer = () => {};
 const sdk = {
@@ -44,7 +45,7 @@ const sdk = {
   signInWithPopup: async () => { popupCalls += 1; return { user: { uid: "stub-user" } }; },
   signOut: async () => { logoutCalls += 1; }, getFirestore: () => db,
   doc: (...parts) => parts, collection: (...parts) => parts,
-  updateDoc, getDocFromServer, getDocsFromServer, runTransaction: (database, callback) => { transactionDb = database; return callback("transaction"); },
+  updateDoc, deleteField, getDocFromServer, getDocsFromServer, runTransaction: (database, callback) => { transactionDb = database; return callback("transaction"); },
 };
 const source = (await readFile(new URL("../../src/sync/firebase.js", import.meta.url), "utf8"))
   .replaceAll("export ", "").replaceAll("import(`", "sdkImport(`");
@@ -62,6 +63,7 @@ await client.signOut();
 assert.equal(logoutCalls, 1);
 await authCallback({ uid: "stub-user" });
 assert.equal(ready.firestoreApi.updateDoc, updateDoc);
+assert.equal(ready.firestoreApi.deleteField, deleteField);
 assert.equal(ready.firestoreApi.getDocFromServer, getDocFromServer);
 assert.equal(ready.firestoreApi.getDocsFromServer, getDocsFromServer);
 assert.equal(await ready.firestoreApi.runTransaction(async (transaction) => transaction), "transaction");

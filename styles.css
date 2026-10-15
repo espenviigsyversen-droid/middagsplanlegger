@@ -2742,3 +2742,38 @@ button, a, input, select, textarea, label, summary, [role="button"], [role="swit
 .meal-filter-frame .filter-group { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: start; }
 .meal-filter-frame .filter-group h4 { padding-top: 14px; margin: 0; }
 .meal-filter-frame .filter-group + .filter-group { margin-top: 12px; }
+
+/* v125: manual Oda selection; the normal shopping rows keep their existing behavior. */
+.shopping-view-header { display: block; }
+.shopping-header-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.shopping-header-actions .button { min-height: 48px; padding: 8px; gap: 6px; font-size: 14px; white-space: nowrap; }
+.shopping-header-actions .oda-open { border-color: var(--brand); color: var(--brand-dark); background: var(--surface); }
+.oda-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 50%; background: var(--brand); color: white; font-size: 12px; }
+.shopping-oda { margin: 20px 0; }
+.shopping-oda-summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 14px 16px; border: 1px solid var(--brand); border-radius: 14px; background: #e3efe8; color: var(--brand-dark); text-align: left; font: inherit; }
+.shopping-oda-summary strong, .shopping-oda-summary small { display: block; }
+.shopping-oda-summary small { margin-top: 4px; font-size: 13px; font-weight: 400; overflow-wrap: anywhere; }
+#shopping-oda-items { margin-top: 8px; }
+.oda-page { max-width: 720px; margin: 0 auto; padding-bottom: 154px; overflow-anchor: none; }
+.oda-title { margin: 0; color: var(--text); font-size: 19px; font-weight: 800; }
+.oda-page .subpage-bar { gap: 8px; }
+.oda-intro { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 20px 0; }
+.oda-page > section { margin: 20px 0; }
+.oda-page #oda-selected { color: var(--brand-dark); }
+.oda-items { display: grid; gap: 10px; }
+.oda-row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); min-width: 0; }
+.oda-row.selected { border-color: var(--brand); }
+.oda-row-main { display: flex; align-items: center; flex: 1; gap: 12px; min-width: 0; min-height: 68px; padding: 12px; cursor: pointer; }
+.oda-item-copy { min-width: 0; overflow-wrap: anywhere; }
+.oda-item-copy strong { display: block; font-size: 16px; }
+.oda-item-copy small { display: block; color: var(--muted); margin-top: 3px; font-size: 13px; line-height: 1.4; }
+.oda-search { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 88px; min-height: 44px; margin: 6px 8px 6px 0; padding: 6px; border: 1px solid var(--brand); border-radius: 10px; color: var(--brand-dark); font-size: 13px; font-weight: 700; text-align: center; text-decoration: none; }
+.oda-search.searched { color: var(--muted); border-color: var(--line); background: var(--bg); }
+.oda-row-main:focus-within, .oda-search:focus-visible, .shopping-oda-summary:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; }
+.oda-order-footer { position: fixed; bottom: calc(72px + env(safe-area-inset-bottom)); left: 0; right: 0; z-index: 30; padding: 12px 18px; border-top: 1px solid var(--line); background: #fffaf3; box-shadow: 0 -6px 16px rgba(0,0,0,.06); }
+.oda-order-footer > div { max-width: 720px; margin: 0 auto; }
+.oda-order-footer .button { width: 100%; min-height: 50px; }
+.oda-order-footer p { margin: 8px 0 0; text-align: center; color: var(--muted); font-size: 13px; }
+
+#shopping-oda-items { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.oda-page .shopping-category-heading { margin: 0 0 12px; padding: 0; border: 0; background: transparent; font-size: 12px; font-weight: 800; }
