@@ -89,6 +89,8 @@ export function renderMealsView(options = {}) {
     filters = {},
     grouped = false,
     showNeedsRecipe = false,
+    filtersDesktop = false,
+    filtersExpanded = false,
     categoryEntries = [],
     categoryLabels = {},
     suitabilityEntries = [],
@@ -112,7 +114,7 @@ export function renderMealsView(options = {}) {
         <input class="input meal-search-input" type="search" enterkeyhint="search" data-focus-key="meal-search" data-meal-search value="${escapeHtml(filters.query || "")}" placeholder="Søk etter oppskrift eller ingrediens" autocomplete="off">
         <button class="search-clear-btn meal-search-clear" type="button" data-clear-meal-search style="${filters.query ? "" : "display: none;"}" aria-label="Tøm søk">×</button>
       </div>
-      ${renderMealFilters({filters, suitabilityEntries, categoryEntries, showNeedsRecipe, scope:"meal", escapeHtml})}
+      ${renderMealFilters({filters, suitabilityEntries, categoryEntries, showNeedsRecipe, scope:"meal", desktop:filtersDesktop, expanded:filtersExpanded, count:meals.length, escapeHtml})}
       <div class="meal-results-bar" data-meal-results>${renderMealResultsView({count:meals.length,filters})}</div>
     </section>
     <section class="meal-list" data-meal-list>

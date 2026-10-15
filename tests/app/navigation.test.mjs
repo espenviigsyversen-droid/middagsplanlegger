@@ -103,6 +103,17 @@ for(const fromCalendar of [false,true]) {
 run('openMealPicker(1)');flush();assert.equal(index,1);assert.equal(run("mealPickerReturn"),null);
 chooseDinner("wok");assert.equal(run("currentPlan()[1]"),"wok");assert.equal(run("state.plannerDaySheet.open"),false);assert.equal(index,0);
 
+// v124: filter surfaces get their own history level; back keeps selections.
+run('navigate({activeView:"meals"});openMealFilters()');flush();assert.equal(index,1);
+assert.deepEqual(json('navigationLevels()'),['meal-filters']);
+run('state.filters.category="fisk";render()');assert.equal(index,1);
+history.go(-1);flush();assert.equal(run('mealFilterSheetOpen'),false);assert.equal(run('state.filters.category'),'fisk');assert.equal(index,0);
+run('openMealFilters();closeMealFilters()');flush();assert.equal(index,0);
+run('navigate({activeView:"week"});openMealPicker(1)');flush();
+click('[data-picker-filters-toggle]');assert.equal(index,2);assert.equal(run('pickerFilterGroupsOpen'),true);
+history.go(-1);flush();assert.equal(run('pickerFilterGroupsOpen'),false);assert.equal(run('state.mealPicker.open'),true);assert.equal(index,1);
+history.go(-1);flush();assert.equal(run('state.mealPicker.open'),false);assert.equal(index,0);
+
 // Editor guard: collect unsaved DOM values, restore history entry and leave the editor intact.
 click("[data-edit-meal]",{editMeal:"wok"});
 selectors.set("[data-meal-form]",[form]);

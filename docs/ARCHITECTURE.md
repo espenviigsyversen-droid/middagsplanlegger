@@ -551,3 +551,18 @@ src/render/recipe-yield.js tegner Oppskriften gir, fritekstenhet/brikker og Hold
 recipeYieldAmounts er en Map med stykktall per oppskrift i økten. Den serialiseres aldri. Dagskontekst og vanlige porsjonsoppskrifter beholder sine tidligere porsjonsregler; v122-buffer og direkte DOM-oppdatering er videreført. Tilgangsstopp tømmer både denne Map-en og eksisterende buffer.
 
 Restore avviser ugyldige yield-typer før writes, normaliserer paret og bevarer det i samme oppskriftsdokument. Sikkerhetskopi er fortsatt eksportformat 1. Arkivert v122 normalisering/lagringsfunksjon bevarer ukjente additive felt via ...meal/...existing; test bekrefter yield-feltene og korrekt uke-skalering etter slik lagring. AI-importen foreslår ingen enhet ennå; enhetsfeltet velges av brukeren. App/cache v123/123. To nye klientmoduler står i begge asset-listene, mens testarkiv og dokumentasjonsbilder ikke gjør det.
+
+
+## Filterflater fra v124
+
+Den felles rendereren src/render/meal-filters.js bygger både den kompakte raden, navngitte grupper, mobilarket og PC-rammen. mealFilterGroups gir samme innhold og rekkefølge overalt: EGENSKAPER i fast rekkefølge, PASSER TIL fra innstillingene, KATEGORI alfabetisk med norsk sortering og valgfritt ANNET i Oppskrifter. Gruppene har role="group" og aria-labelledby. mealMatchesPickerFilters og toggleMealFilter beholder eksisterende matching og kombinasjonsregler.
+
+Kompakt rad viser Filtre med antallet valgte dagstype-/kategori-/annetfiltre, fjernbare valgte brikker og de tre faste flaggene. Raden ruller vannrett ved behov; uten valg passer fire 40 px høye kontroller på 375 px. Oppskrifters trefflinje og sorteringsvalg fra v121 er uendret.
+
+I Oppskrifter under 900 px åpner mealFilterSheetOpen et eget modalark. Valg oppdaterer listen og Vis N oppskrifter umiddelbart. Arket har eget historikknivå meal-filters, fokus innenfor dialogen og retur til Filtre ved lukking. Tilbake/popstate, Escape, ×, bakgrunn og resultatknappen lukker uten å nullstille valg. Fra 900 px vises i stedet en ramme med 110 px etikettkolonne og brikker som brytes. Mangler oppskrift ligger på EGENSKAPER-raden etter en skillestrek. Skjul/vis lagres som filters.frameOpen; standard er åpen. matchMedia-change bytter variant ved 899/900 og fjerner et eventuelt ark-nivå gjennom dagens historikkontroller. Andre visninger og ulagrede editorer tegnes ikke på nytt ved dette bruddpunktet.
+
+I Velg middag åpner pickerFilterGroupsOpen et panel inne i det eksisterende vinduet, mellom kompakt rad og listen. Panelet er maksimalt 45vh/45dvh og har Ferdig nederst. Nivået picker-filter-groups lukkes før selve velgeren. Det er lukket ved hver åpning og etter tilgangsstopp; søk, forslag, plan-footer og filterlogikk er videreført.
+
+Bare reelt rullende beholdere har data-scroll-key: meal-filters/picker-filters for raden og meal-filter-groups/picker-filter-groups for vertikale grupper. V108 bevarer posisjoner og fokus synkront. PC-rammen bruker i tillegg filterfokusnøkkelen som tas lokalt i samme render-kall; ingen falsk rullebeholder innføres. Nøklene skiller kompakte flagg, fjernbrikker og grupper, slik at identiteten er entydig. Fjernes fokusert fjernbrikke, går fokus til Filtre med preventScroll. Åpneflagg og rulle-/fokusminne ligger aldri i lokal kopi, skydata eller backup. V119-skjermnøkkelen er uendret mens filterflaten åpnes/lukkes.
+
+App/cache er v124/124; minimum er fortsatt 120. Ingen nye produksjonsmoduler eller endring i service worker-strategien. Eksisterende meal-filters.js står fortsatt i begge asset-listene.

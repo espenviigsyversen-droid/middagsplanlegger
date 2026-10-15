@@ -5,7 +5,7 @@ import { PROJECT_DOMAIN_KEYS } from "./access.js";
 export function localStateForStorage(state, projectId) {
   const keys = PROJECT_DOMAIN_KEYS;
   return { ...Object.fromEntries(keys.filter(key => Object.hasOwn(state, key)).map(key => [key, state[key]])),
-    filters: { sort: state.filters?.sort === "alpha" ? "alpha" : "category" }, projectId };
+    filters: { sort: state.filters?.sort === "alpha" ? "alpha" : "category", frameOpen: state.filters?.frameOpen !== false }, projectId };
 }
 
 export function createLocalStore({ getStorage = () => globalThis.localStorage, onWrite = () => {} } = {}) {

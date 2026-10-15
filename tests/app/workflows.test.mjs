@@ -30,7 +30,7 @@ const app = {
 const navigator = {};
 const window = {
   scrollY: 330, addEventListener() {}, scrollTo: (x, y) => { window.scrollY = y; },
-  matchMedia: (query) => { assert.equal(query, "(pointer: coarse)"); return { matches: coarsePointer }; },
+  matchMedia: (query) => { if (query === "(min-width: 900px)") return {matches:false}; assert.equal(query, "(pointer: coarse)"); return { matches: coarsePointer }; },
 };
 const context = vm.createContext({
   ...bindings, structuredClone, Date, Blob, File, navigator, window,
@@ -170,7 +170,7 @@ context.button = { disabled: false };
 await run("downloadBackup(button)");
 const blob = downloads.find((entry) => entry instanceof Blob);
 const exported = JSON.parse(await blob.text());
-assert.equal(exported.appVersion, "v123");
+assert.equal(exported.appVersion, "v124");
 const { servingsByWeek: exportedServings, ...exportedDomain } = exported.data;
 const { servingsByWeek: localServings, ...localDomain } = snapshot("syncPayload()");
 assert.deepEqual(exportedDomain, localDomain);

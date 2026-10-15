@@ -2714,3 +2714,31 @@ button, a, input, select, textarea, label, summary, [role="button"], [role="swit
 .recipe-servings-value span { overflow-wrap: anywhere; min-width: 0; }
 .recipe-hero .recipe-yield-estimate { display: inline-block; margin: 8px 0; padding: 8px 12px; background: #e3efe8; border-radius: 10px; color: var(--brand-dark); font-weight: 700; }
 .recipe-hero [data-recipe-yield-note] { font-size: 14px; margin-bottom: 8px; }
+
+/* v124: shared compact filters, grouped picker panel and responsive recipe sheet/frame. */
+.filter-compact { gap: 5px; padding-block: 2px; }
+.filter-compact .picker-filter { min-height: 40px; height: 40px; padding: 0 7px; font-size: 13px; }
+.filter-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.filter-toggle svg { width: 16px; height: 16px; flex-shrink: 0; }
+.filter-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 20px; padding: 0 3px; background: var(--brand); color: white; font-size: 11px; }
+.filter-group { min-width: 0; }
+.filter-group h4 { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 800; }
+.filter-group-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filter-group-scroll { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding: 16px; }
+.filter-group-scroll .filter-group + .filter-group { margin-top: 22px; }
+.filter-text-button { min-height: 44px; border: 0; background: transparent; color: var(--brand-dark); font: inherit; font-size: 14px; font-weight: 600; padding: 0 8px; }
+.filter-text-button:focus-visible, .filter-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; }
+.picker-filter-panel { flex-shrink: 0; display: flex; flex-direction: column; max-height: 45vh; max-height: 45dvh; margin: 0 16px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.picker-filter-panel > .filter-text-button { flex-shrink: 0; border-top: 1px solid var(--line); }
+.filter-sheet-backdrop { display: flex; align-items: flex-end; justify-content: center; padding: 0; }
+.meal-filter-sheet { display: flex; flex-direction: column; width: 100%; max-width: 720px; max-height: 90vh; max-height: 90dvh; border-radius: 20px 20px 0 0; background: var(--surface); color: var(--text); overflow: hidden; }
+.filter-sheet-header { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; border-bottom: 1px solid var(--line); }
+.filter-sheet-header h3 { flex: 1; font-size: 20px; font-weight: 800; margin: 0; }
+.filter-sheet-header .modal-close { position: static; flex-shrink: 0; width: 44px; height: 44px; }
+.meal-filter-sheet footer { flex-shrink: 0; padding: 12px 16px max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+.filter-show-results { width: 100%; min-height: 48px; }
+.meal-filter-frame { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 4px 16px 16px; }
+.filter-frame-tools { display: flex; justify-content: flex-end; }
+.meal-filter-frame .filter-group { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: start; }
+.meal-filter-frame .filter-group h4 { padding-top: 14px; margin: 0; }
+.meal-filter-frame .filter-group + .filter-group { margin-top: 12px; }

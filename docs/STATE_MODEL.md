@@ -345,7 +345,7 @@ Minsteversjonen er nå 120. Meta-heving er fortsatt bare for administrator på n
 
 ## Oppskriftssøk og brikker fra v121
 
-state.filters har query, quick, kidFriendly, favorite, needsRecipe, én suitability, én category og sort. Søk/brikker er UI-tilstand i minnet og beholdes gjennom oppskrift/tilbake og fanebytte. normalizeStateForStartup bruker tomme standardverdier og tar bare med gyldig sort (category/alpha) fra lokal kopi. Gamle query/category/flag ignoreres. localStateForStorage skriver filters:{sort} og ingen søk-/brikkefelt. Synk og backup inneholder ingen oppskriftsfiltre som før.
+state.filters har query, quick, kidFriendly, favorite, needsRecipe, én suitability, én category og sort. Søk/brikker er UI-tilstand i minnet og beholdes gjennom oppskrift/tilbake og fanebytte. normalizeStateForStartup bruker tomme standardverdier og tar med gyldig sort (category/alpha), og fra v124 også frameOpen, fra lokal kopi. Gamle query/category/flag ignoreres. localStateForStorage skrev filters:{sort}; fra v124 tas også frameOpen med, men ingen søk-/brikkefelt. Synk og backup inneholder ingen oppskriftsfiltre som før.
 
 pickerFilters er separat, nullstilles fortsatt ved lukking og påvirkes ikke av Oppskrifter. Begge bruker samme renderer og mealMatchesPickerFilters; needsRecipe er avledet fra mealNeedsRecipe, ikke lagret i oppskriften. Minsteversjonen forblir 120.
 
@@ -364,3 +364,10 @@ Skjemaet bruker _yieldAmountInput, _yieldUnitInput og _yieldApproxServings kun i
 recipeYieldAmounts og recipeServingsView.mode/value er kun øktminne for valgt stykktall uten dagskontekst. Slikt stykktall skriver aldri days.servings. Dagskonteksten bruker eksisterende porsjonsbuffer og servingsByWeek, med null når standard følges. Konto-/tilgangsstopp tømmer visningsvalgene.
 
 Backup/restore bevarer yield-feltene i eksisterende eksportformat 1. Restore validerer typer/grenser og normaliserer paret før dokumentbygging. SchemaVersion, firestore.rules, dokumentstier, synkmønstre og REQUIRED_MIN_APP_VERSION=120 beholdes. Eldre ...existing-lagring bevarer de additive feltene og bruker baseServings til dagsmengdene. AI-importens svarformat er uendret og inneholder ingen yield-enhet.
+
+
+## Filtervisning fra v124
+
+state.filters utvides med frameOpen: boolean (standard true), som bare er lokal preferanse for Oppskrifters PC-ramme. localStateForStorage skriver filters:{sort,frameOpen}; normalizeStateForStartup leser bare disse to verdiene og nullstiller fortsatt query/brikker. Gamle lokale kopier uten frameOpen gir åpen PC-ramme. Synk og sikkerhetskopi inneholder ingen filtervalg eller denne preferansen.
+
+mealFilterSheetOpen og pickerFilterGroupsOpen er runtime-flagg utenfor state. Arket åpnes bare i oppskriftslisten under 900 px; picker-panelet ligger inne i Velg middag på alle bredder og nullstilles ved hver åpning/lukking. Visnings-/tilgangsbytte forkaster aktuelle flater. Resize over 900 lukker mobilarket og viser rammen i tråd med den lagrede preferansen, uten å endre valgte filtre. Historikknivåene meal-filters og picker-filter-groups inneholder bare UI-identiteter. Ingen nye oppskrifts-, uke- eller Firestore-felt; minimum 120 beholdes.

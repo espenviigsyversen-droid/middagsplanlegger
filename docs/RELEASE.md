@@ -4,6 +4,12 @@ Dette prosjektet publiseres som statiske filer. Det finnes ikke et byggsteg.
 
 ## Før publisering
 
+### v124 – Kompakt rad og grupperte filtre
+
+Ta med filene i docs/LEVERANSE_V124.md samlet. App/cache 124, minimum fortsatt 120. Ingen nye produksjonsmoduler eller endret cache-strategi. Alle 62 testskript og 51 syntakskontroller består. Ingen publisering er utført av agenten.
+
+Kontroller på iPhone og PC: fire kompakte knapper uten valg, antallsmerke/fjernbare brikker, navngitte grupper og norsk kategorisortering. Mobilarket skal oppdatere treff straks og gi fokus tilbake etter Vis/×/bakgrunn/tilbake. PC-rammen er åpen fra start; Skjul/vis huskes, mens søk/brikker fortsatt nullstilles ved ny økt. Prøv 899/900 px og en åpen ulagret editor ved breddebytte. I Velg middag skal Filtre/Ferdig og tilbake lukke gruppene før vinduet. Kontroller rulling/fokus med mange egendefinerte valg. Sju lokale 375/1280 px-visninger ligger i docs/screenshots. Ekte Safari/PWA, touch-rulling og iPhone-tilbakesveip gjenstår på enhet.
+
 ### v123 – Oppskriften gir antall og enhet
 
 Publiser filene i docs/LEVERANSE_V123.md sammen, med src/domain/recipe-yield.js og src/render/recipe-yield.js i begge asset-listene. V123/cache 123, minimum fortsatt 120. Ingen server-/regelpublisering eller massemigrering. Alle 62 testskript og 51 syntakskontroller består (inkludert arkivert v122-testkode).

@@ -186,7 +186,7 @@ const defaultState = {
   keepScreenAwake: false,
   previousView: "shopping",
   weekOffset: 0,
-  filters: { query: "", category: "all", suitability: "", quick: false, kidFriendly: false, favorite: false, needsRecipe: false, sort: "category" },
+  filters: { query: "", category: "all", suitability: "", quick: false, kidFriendly: false, favorite: false, needsRecipe: false, sort: "category", frameOpen: true },
   metadata: {
     categoryLabels,
     units: defaultUnitOptions,
@@ -227,8 +227,8 @@ const defaultState = {
   plannerActionsOpen: false,
 };
 
-const APP_VERSION = "v123";
-const APP_VERSION_NUMBER = 123;
+const APP_VERSION = "v124";
+const APP_VERSION_NUMBER = 124;
 
 let localStoreFailed = false;
 const localStore = createLocalStore({ getStorage: () => localStorage, onWrite: ok => { localStoreFailed = !ok; } });
@@ -250,6 +250,9 @@ const pageScroll = createPageScroll({ history: window.history });
 let pageScrollDirection = "same";
 const emptyPickerFilters = () => ({ quick: false, kidFriendly: false, favorite: false, suitability: "", category: "all" });
 let pickerFilters = emptyPickerFilters(), planningWindowWeekKey = null;
+let pickerFilterGroupsOpen = false, mealFilterSheetOpen = false;
+const mealFiltersMedia = window.matchMedia?.("(min-width: 900px)");
+const mealFiltersDesktop = () => mealFiltersMedia?.matches ?? ((window.innerWidth || 0) >= 900);
 let backgroundAt = null, lastVisibleWeekKey = getWeekKeyForOffset(0);
 let shoppingSyncStatus = null;
 let mealsSyncStatus = null;
@@ -307,6 +310,8 @@ function navigationLevels() {
     if (sheetDay !== null && sheetDay !== undefined) levels.push(`planner-day:${sheetDay}`);
   }
   if (state.mealPicker?.open) levels.push(`picker:${state.mealPicker.dayIndex}`);
+  if (mealFilterSheetOpen) levels.push("meal-filters");
+  if (state.mealPicker?.open && pickerFilterGroupsOpen) levels.push("picker-filter-groups");
   if (state.mealPicker?.open && pickerNote) levels.push("picker-note");
   if (state.generateModal?.open && state.activeView === "shopping") levels.push("generate-days");
   if (state.shoppingReview?.open) levels.push("shopping-review");
@@ -332,10 +337,12 @@ function backInApp() {
 
 function performBackInApp() {
   if (accessState.kind !== "ready") return false;
+  if (mealFilterSheetOpen) { closeMealFilters(); return true; }
   if (editorDiscardOpen) { continueMealEditing(); return true; }
   if (weekClearConfirmation) { cancelWeekClear(); return true; }
   if (editorRowMenu) { closeEditorRowMenu(); return true; }
   if (pickerNote) { closePickerNote(); return true; }
+  if (pickerFilterGroupsOpen) { closePickerFilters(); return true; }
   if (state.shoppingReview?.open) { closeShoppingReview(); return true; }
   if (state.generateModal?.open && state.activeView === "shopping") { setState({ generateModal: { open: false, selectedDays: [] } }); return true; }
   if (state.mealPicker?.open) { closeMealPicker(); return true; }
@@ -357,7 +364,7 @@ function navigateBack() { backInApp(); uiHistory.sync(); }
 
 function openMealPicker(dayIndex, fromDaySheet = false) {
   if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex > 6) return;
-  planningWindowWeekKey = getWeekKey(); pickerFilters = emptyPickerFilters();
+  planningWindowWeekKey = getWeekKey(); pickerFilters = emptyPickerFilters(); pickerFilterGroupsOpen = false;
   pickerOtherPlans = false; pickerNote = null; weekClearConfirmation = null;
   const returnsToSheet = fromDaySheet && canonicalView(state.activeView) === "week" && state.plannerDaySheet?.open
     && state.plannerDaySheet.dayIndex === dayIndex;
@@ -375,7 +382,7 @@ function openMealPicker(dayIndex, fromDaySheet = false) {
 
 function closeMealPicker(patch = {}) {
   if (!state.mealPicker?.open) return;
-  pickerOtherPlans = false; pickerNote = null; pickerFilters = emptyPickerFilters();
+  pickerOtherPlans = false; pickerNote = null; pickerFilters = emptyPickerFilters(); pickerFilterGroupsOpen = false;
   const returnTo = mealPickerReturn;
   mealPickerReturn = null;
   navigate({ ...patch, mealPicker: { open: false, dayIndex: null, query: "" },
@@ -521,7 +528,7 @@ function normalizeStateForStartup(nextState) {
   const normalized = normalizeState({ ...nextState, weekOffset: 0 });
   return {
     ...normalized,
-    filters: { ...defaultState.filters, sort: nextState.filters?.sort === "alpha" ? "alpha" : "category" },
+    filters: { ...defaultState.filters, sort: nextState.filters?.sort === "alpha" ? "alpha" : "category", frameOpen: nextState.filters?.frameOpen !== false },
     activeView: "shopping",
     previousView: "shopping",
     selectedMealId: null,
@@ -904,7 +911,7 @@ function pickerFiltersActive() { return pickerFilters.quick || pickerFilters.kid
 
 function renderPickerFilters() {
   return renderMealFilters({ filters: pickerFilters, suitabilityEntries: suitabilityEntries(),
-    categoryEntries: Object.entries(getCategoryLabels()), escapeHtml });
+    categoryEntries: Object.entries(getCategoryLabels()), expanded: pickerFilterGroupsOpen, escapeHtml });
 }
 
 function renderPickerPlans() {
@@ -1721,6 +1728,8 @@ function renderMeals() {
     meals,
     filters: state.filters,
     showNeedsRecipe: state.meals.some(mealNeedsRecipe),
+    filtersDesktop: mealFiltersDesktop(),
+    filtersExpanded: mealFilterSheetOpen,
     grouped,
     categoryEntries: categoryEntries(),
     categoryLabels: getCategoryLabels(),
@@ -1746,9 +1755,37 @@ function filteredMeals() {
     && (!query || [meal.title, meal.description, ...(meal.keyIngredients || []).map(ingredientBaseName)].join(" ").toLowerCase().includes(query)));
 }
 
+// UI-only filter surfaces. History is updated only by explicit opening/closing.
+function openMealFilters() {
+  if (mealFiltersDesktop()) {
+    state.filters = { ...state.filters, frameOpen: true }; saveState(); render();
+    app.querySelector("[data-meal-filters-close]")?.focus({ preventScroll: true });
+  } else {
+    mealFilterSheetOpen = true; render(); uiHistory.sync();
+    app.querySelector("[data-meal-filters-reset]")?.focus({ preventScroll: true });
+  }
+}
+function closeMealFilters() {
+  if (mealFilterSheetOpen) { mealFilterSheetOpen = false; render(); uiHistory.sync(); }
+  else { state.filters = { ...state.filters, frameOpen: false }; saveState(); render(); }
+  app.querySelector("[data-meal-filters-toggle]")?.focus({ preventScroll: true });
+}
+function closePickerFilters() {
+  pickerFilterGroupsOpen = false; render(); uiHistory.sync();
+  app.querySelector("[data-picker-filters-toggle]")?.focus({ preventScroll: true });
+}
+mealFiltersMedia?.addEventListener?.("change", () => {
+  // Other views (especially unsaved editors) need no new markup at this breakpoint.
+  if (accessState.kind !== "ready" || state.activeView !== "meals" || state.editingMealId) return;
+  const closingSheet = mealFilterSheetOpen && mealFiltersDesktop();
+  if (closingSheet) mealFilterSheetOpen = false;
+  render();
+  if (closingSheet) uiHistory.sync();
+});
+
 function bindMealListControls(root = app) {
   root.querySelectorAll("[data-reset-meal-filters]").forEach(button => button.addEventListener("click", () => {
-    state.filters = { ...defaultState.filters, sort: state.filters.sort }; render();
+    state.filters = { ...defaultState.filters, sort: state.filters.sort, frameOpen: state.filters.frameOpen }; render();
   }));
   root.querySelectorAll("[data-meal-sort]").forEach(button => button.addEventListener("click", () => {
     state.filters = { ...state.filters, sort: button.dataset.mealSort }; saveState(); render();
@@ -2067,6 +2104,20 @@ function chooseEditorRowAction(action, groupIndex) {
 }
 
 document.addEventListener("keydown", event => {
+  if (mealFilterSheetOpen) {
+    if (event.key === "Escape") { event.preventDefault(); closeMealFilters(); return; }
+    if (event.key === "Tab") {
+      const dialog = app.querySelector("#meal-filter-panel");
+      const buttons = [...(dialog?.querySelectorAll("button") || [])];
+      const first = buttons[0], last = buttons.at(-1);
+      if (first && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus({ preventScroll: true });
+      }
+    }
+    return;
+  }
+  if (pickerFilterGroupsOpen && event.key === "Escape") { event.preventDefault(); closePickerFilters(); return; }
+
   if (editorDiscardOpen) {
     if (event.key === "Escape") {event.preventDefault();continueMealEditing();return;}
     if (event.key === "Tab") {const first=app.querySelector("[data-editor-continue]"),last=app.querySelector("[data-editor-discard]");if(first&&last&&(event.shiftKey?document.activeElement===first:document.activeElement===last)){event.preventDefault();(event.shiftKey?last:first).focus({preventScroll:true});}}
@@ -3262,6 +3313,21 @@ function bindMealResultActions(root = app) {
 }
 
 function bindEvents() {
+  app.querySelector("[data-meal-filters-toggle]")?.addEventListener("click", openMealFilters);
+  app.querySelectorAll("[data-meal-filters-close]").forEach(button => button.addEventListener("click", closeMealFilters));
+  app.querySelector("[data-meal-filters-backdrop]")?.addEventListener("click", event => {
+    if (event.target === event.currentTarget) closeMealFilters();
+  });
+  app.querySelector("[data-meal-filters-reset]")?.addEventListener("click", () => {
+    state.filters = { ...defaultState.filters, sort: state.filters.sort, frameOpen: state.filters.frameOpen }; render();
+  });
+  app.querySelector("[data-picker-filters-toggle]")?.addEventListener("click", () => {
+    if (pickerFilterGroupsOpen) { closePickerFilters(); return; }
+    pickerFilterGroupsOpen = true; render(); uiHistory.sync();
+    app.querySelector("#picker-filter-panel")?.querySelector("[data-picker-filter]")?.focus({ preventScroll: true });
+  });
+  app.querySelector("[data-picker-filters-close]")?.addEventListener("click", closePickerFilters);
+
   bindYieldEditorEvents();
   app.querySelectorAll("[data-subpage-back]").forEach(button => button.addEventListener("click", navigateBack));
   app.querySelectorAll("[data-calendar-day]").forEach(button => button.addEventListener("click", () => openDaySheet(Number(button.dataset.calendarDay))));
@@ -3943,9 +4009,11 @@ function render(preserveShoppingInput = true) {
   const pageTarget = screenKey === null ? null
     : pageScroll.beforeRender(screenKey, window.scrollY ?? document.documentElement?.scrollTop ?? 0, pageScrollDirection);
   if (!planningWindowOpen() || accessState.kind !== "ready") planningWindowWeekKey = null;
-  if (!state.mealPicker?.open || accessState.kind !== "ready" || state.activeView !== "week") { pickerFilters = emptyPickerFilters(); pickerOtherPlans = false; pickerNote = null; }
+  if (!state.mealPicker?.open || accessState.kind !== "ready" || state.activeView !== "week") { pickerFilters = emptyPickerFilters(); pickerOtherPlans = false; pickerNote = null; pickerFilterGroupsOpen = false; }
   if (state.activeView !== "week" || accessState.kind !== "ready") weekClearConfirmation = null;
   if (!state.mealPicker?.open || canonicalView(state.activeView) !== "week" || accessState.kind !== "ready") mealPickerReturn = null;
+  if (accessState.kind !== "ready" || state.activeView !== "meals" || state.editingMealId) mealFilterSheetOpen = false;
+  const filterFocusKey = /^(meal|picker)-(group-filter:|filter:|remove:|filters-)/.test(document.activeElement?.dataset?.focusKey || "") ? document.activeElement.dataset.focusKey : null;
   const windowPositions = captureWindowPositions();
   if (accessState.kind !== "ready" || state.activeView !== "meals" || editorRowMenu?.editorId !== state.editingMealId) editorRowMenu = null;
   if (state.activeView !== "recipe" || accessState.kind !== "ready") { recipeServingsView = { key: null, value: null }; recipeServingsBuffer.cancel(); }
@@ -4009,6 +4077,12 @@ function render(preserveShoppingInput = true) {
     }
   }
   restoreWindowPositions(windowPositions);
+  if (filterFocusKey) {
+    const previousFilterControl = [...app.querySelectorAll("[data-focus-key]")].find(control => control.dataset.focusKey === filterFocusKey);
+    const fallback = filterFocusKey.startsWith("meal-remove:") ? app.querySelector("[data-meal-filters-toggle]")
+      : filterFocusKey.startsWith("picker-remove:") ? app.querySelector("[data-picker-filters-toggle]") : null;
+    (previousFilterControl || fallback)?.focus({ preventScroll: true });
+  }
   hideLoadingScreen();
   if (pageTarget !== null) window.scrollTo?.(0, pageTarget);
   if (screenChanged && pickerOpen) syncMealPickerScrollLock(true);
@@ -4121,6 +4195,7 @@ function showOfflineStartup() {
   render();
 }
 function stopAllSync() {
+  mealFilterSheetOpen = false; pickerFilterGroupsOpen = false;
   recipeYieldAmounts.clear();
   recipeServingsBuffer.cancel();
   mealEditorSession=null;editorDiscardOpen=false;

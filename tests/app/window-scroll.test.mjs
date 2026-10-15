@@ -260,9 +260,9 @@ assert.equal(control('picker-filter:quick').attrs['aria-pressed'],'true');
 activate('picker-filter:kidFriendly');
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("").map(m=>m.id))')),['fast-kid']);
 assert.doesNotMatch(run('renderMealPickerListItems("",0)'),/data-select-meal="fast-veg"|data-select-meal="slow-kid"/);
-activate('picker-filter:category:vegetar');assert.match(app.innerHTML,/Ingen middager passer filtrene/);assert.doesNotMatch(app.innerHTML,/FORSLAG TIL/);
-activate('picker-filter:category:fisk');assert.equal(run('pickerFilters.category'),'fisk');
-assert.equal(control('picker-filter:category:vegetar').attrs['aria-pressed'],'false');
+activate('picker-filters-toggle');activate('picker-group-filter:category:vegetar');assert.match(app.innerHTML,/Ingen middager passer filtrene/);assert.doesNotMatch(app.innerHTML,/FORSLAG TIL/);
+activate('picker-group-filter:category:fisk');assert.equal(run('pickerFilters.category'),'fisk');
+assert.equal(control('picker-group-filter:category:vegetar').attrs['aria-pressed'],'false');
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("rask").map(m=>m.id))')),['fast-kid']);
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("vegetar").map(m=>m.id))')),[]);
 activate('picker-filter:favorite');assert.match(app.innerHTML,/Fjern filtre/);
@@ -295,18 +295,18 @@ run('saveState()');assert.doesNotMatch(storage.get('middagsapp-state'),/pickerFi
 
 // v115: dynamic suitability buttons between flags and categories, with two dividers.
 run('state.meals=normalizeMeals([{...emptyMeal(),id:"weekend-fast",title:"Rask helgefisk",prepTime:"quick",categories:["fisk"],suitability:["weekend"]},{...emptyMeal(),id:"weekday-fast",title:"Rask hverdagsfisk",prepTime:"quick",categories:["fisk"],suitability:["weekday"]},{...emptyMeal(),id:"weekend-slow",title:"Langsom helgefisk",prepTime:"long",categories:["fisk"],suitability:["weekend"]},{...emptyMeal(),id:"unmarked",title:"Rask uten merker",prepTime:"quick",categories:["fisk"],suitability:[]},{...emptyMeal(),id:"weekend-veg",title:"Rask helgevegetar",prepTime:"quick",categories:["vegetar"],suitability:["weekend"]}]);state.plansByWeek[getWeekKey()]={...emptyWeekPlan()};openMealPicker(0)');
-const filterKeys=()=>scroller('picker-filters').querySelectorAll('[data-picker-filter]').map(node=>node.dataset.pickerFilter);
-assert.deepEqual(filterKeys(),['quick','kidFriendly','favorite',...JSON.parse(run('JSON.stringify(suitabilityEntries().map(([key])=>"suitability:"+key))')),...JSON.parse(run('JSON.stringify(Object.keys(getCategoryLabels()).map(key=>"category:"+key))'))]);
-const dividers=scroller('picker-filters').querySelectorAll('.picker-filter-divider');assert.equal(dividers.length,2);assert.ok(dividers.every(node=>node.attrs['aria-hidden']==='true'));
+activate('picker-filters-toggle');
+const filterKeys=()=>scroller('picker-filter-groups').querySelectorAll('[data-picker-filter]').map(node=>node.dataset.pickerFilter);
+assert.deepEqual(filterKeys(),['quick','kidFriendly','favorite',...JSON.parse(run('JSON.stringify(suitabilityEntries().map(([key])=>"suitability:"+key))')),...JSON.parse(run('JSON.stringify(Object.entries(getCategoryLabels()).sort((a,b)=>a[1].localeCompare(b[1],"nb")).map(([key])=>"category:"+key))'))]);
 scroller('picker-filters').scrollLeft=180;
-activate('picker-filter:suitability:weekend');
-assert.equal(control('picker-filter:suitability:weekend').attrs['aria-pressed'],'true');assert.equal(scroller('picker-filters').scrollLeft,180);expectFocus('picker-filter:suitability:weekend');
+activate('picker-group-filter:suitability:weekend');
+assert.equal(control('picker-group-filter:suitability:weekend').attrs['aria-pressed'],'true');assert.equal(scroller('picker-filters').scrollLeft,180);expectFocus('picker-group-filter:suitability:weekend');
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("").map(m=>m.id).sort())')),['weekend-fast','weekend-slow','weekend-veg']);
 assert.doesNotMatch(run('renderMealPickerListItems("",0)'),/data-select-meal="unmarked"|data-select-meal="weekday-fast"/);
-activate('picker-filter:suitability:weekday');assert.equal(run('pickerFilters.suitability'),'weekday');assert.equal(control('picker-filter:suitability:weekend').attrs['aria-pressed'],'false');
+activate('picker-group-filter:suitability:weekday');assert.equal(run('pickerFilters.suitability'),'weekday');assert.equal(control('picker-group-filter:suitability:weekend').attrs['aria-pressed'],'false');
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("").map(m=>m.id))')),['weekday-fast']);
-activate('picker-filter:suitability:weekday');assert.equal(run('pickerFilters.suitability'),'');assert.equal(run('pickerFiltersActive()'),false);
-activate('picker-filter:suitability:weekend');activate('picker-filter:quick');activate('picker-filter:category:fisk');
+activate('picker-group-filter:suitability:weekday');assert.equal(run('pickerFilters.suitability'),'');assert.equal(run('pickerFiltersActive()'),false);
+activate('picker-group-filter:suitability:weekend');activate('picker-filter:quick');activate('picker-group-filter:category:fisk');
 const suitSearch=control('picker-search');suitSearch.value='helge';suitSearch.handlers.input({target:suitSearch});
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery(state.mealPicker.query).map(m=>m.id))')),['weekend-fast']);
 assert.doesNotMatch(run('renderMealPickerListItems("",0)'),/data-select-meal="weekend-slow"|data-select-meal="unmarked"|data-select-meal="weekday-fast"|data-select-meal="weekend-veg"/);
@@ -314,13 +314,13 @@ activate('picker-filter:favorite');assert.match(app.innerHTML,/Ingen middager pa
 scroller('meal-picker').handlers.click({target:control('picker-clear-filters')});assert.equal(run('pickerFilters.suitability'),'');assert.equal(run('pickerFiltersActive()'),false);
 // The same metadata used by Settings determines filter names/order, including new options.
 run('setState({metadata:{...state.metadata,suitabilityLabels:{...getSuitabilityLabels(),custom_day:"Turdag"}}})');
-assert.ok(control('picker-filter:suitability:custom_day'));assert.match(run('renderPickerFilters()'),/data-picker-filter="suitability:custom_day" aria-pressed="false">Turdag/);
+assert.ok(control('picker-group-filter:suitability:custom_day'));assert.match(run('renderPickerFilters()'),/data-picker-filter="suitability:custom_day" aria-pressed="false">Turdag/);
 const settingsSuitOrder=JSON.parse(run('JSON.stringify(suitabilityEntries().map(([key])=>"suitability:"+key))'));
 assert.deepEqual(filterKeys().filter(key=>key.startsWith('suitability:')),settingsSuitOrder);
-run('state.mealPicker.query=""; render()');activate('picker-filter:suitability:custom_day');assert.match(app.innerHTML,/Ingen middager passer filtrene/);
+run('state.mealPicker.query=""; render()');activate('picker-group-filter:suitability:custom_day');assert.match(app.innerHTML,/Ingen middager passer filtrene/);
 run('setState({meals:[...state.meals,{...emptyMeal(),id:"custom-suit",title:"Turmiddag",suitability:["custom_day"]}]})');
 assert.deepEqual(JSON.parse(run('JSON.stringify(mealsMatchingPickerQuery("").map(m=>m.id))')),['custom-suit']);
-run('closeMealPicker();openMealPicker(0)');assert.equal(run('pickerFilters.suitability'),'');assert.equal(control('picker-filter:suitability:custom_day').attrs['aria-pressed'],'false');
+run('closeMealPicker();openMealPicker(0)');assert.equal(run('pickerFilters.suitability'),'');activate('picker-filters-toggle');assert.equal(control('picker-group-filter:suitability:custom_day').attrs['aria-pressed'],'false');
 run('saveState()');assert.doesNotMatch(storage.get('middagsapp-state'),/pickerFilters/);
 
 

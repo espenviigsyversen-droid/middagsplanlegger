@@ -69,7 +69,7 @@ testRecipeImportRender();
 function testMealsViewRender() {
   const html = renderMealsView({
     meals: [{ id: "pasta", title: "Pasta", description: "", categories: ["pasta"], suitability: [] }],
-    filters: { query: "pas", category: "pasta", sort: "alpha" }, showNeedsRecipe: true,
+    filters: { query: "pas", category: "pasta", sort: "alpha" }, showNeedsRecipe: true, filtersExpanded: true,
     categoryEntries: [["pasta", "Pasta"]],
     categoryLabels: { pasta: "Pasta" },
     suitabilityEntries: [["weekday", "Hverdag"]],
